@@ -23,6 +23,11 @@ const pageNames: Record<string, string> = {
   '/syllabus': 'Syllabus',
   '/reports': 'Reports',
   '/notices': 'Notices',
+  '/assignments': 'Assignments',
+  '/exams': 'Exams',
+  '/fees': 'Fee Management',
+  '/institutes': 'Institutes',
+  '/grading': 'Grading',
   '/feedback': 'Feedback',
   '/settings': 'Settings',
 };

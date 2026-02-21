@@ -1,144 +1,103 @@
+import { useState, useEffect, useCallback } from "react";
+import { Clock, MapPin, AlertCircle, Loader2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, MapPin } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getTimetable, getClasses } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import type { TimetableEntry, Class as ClassType } from "@/types";
 
-interface Period {
-  time: string;
-  subject: string;
-  teacher: string;
-  room: string;
-  type: 'lecture' | 'lab' | 'break' | 'free';
-}
-
-interface DaySchedule {
-  day: string;
-  periods: Period[];
-}
-
-const weeklySchedule: DaySchedule[] = [
-  {
-    day: "Monday",
-    periods: [
-      { time: "8:00 - 8:45", subject: "Mathematics", teacher: "Mr. Smith", room: "Room 101", type: "lecture" },
-      { time: "8:50 - 9:35", subject: "Physics", teacher: "Mrs. Johnson", room: "Room 102", type: "lecture" },
-      { time: "9:40 - 10:25", subject: "Chemistry", teacher: "Mr. Chen", room: "Lab 1", type: "lab" },
-      { time: "10:25 - 10:45", subject: "Break", teacher: "", room: "", type: "break" },
-      { time: "10:45 - 11:30", subject: "English", teacher: "Mrs. Davis", room: "Room 103", type: "lecture" },
-      { time: "11:35 - 12:20", subject: "Biology", teacher: "Mr. Wilson", room: "Lab 2", type: "lab" },
-      { time: "12:20 - 1:00", subject: "Lunch", teacher: "", room: "", type: "break" },
-      { time: "1:00 - 1:45", subject: "History", teacher: "Mrs. Brown", room: "Room 104", type: "lecture" },
-    ],
-  },
-  {
-    day: "Tuesday",
-    periods: [
-      { time: "8:00 - 8:45", subject: "English", teacher: "Mrs. Davis", room: "Room 103", type: "lecture" },
-      { time: "8:50 - 9:35", subject: "Mathematics", teacher: "Mr. Smith", room: "Room 101", type: "lecture" },
-      { time: "9:40 - 10:25", subject: "Physics Lab", teacher: "Mrs. Johnson", room: "Lab 1", type: "lab" },
-      { time: "10:25 - 10:45", subject: "Break", teacher: "", room: "", type: "break" },
-      { time: "10:45 - 11:30", subject: "Chemistry", teacher: "Mr. Chen", room: "Room 102", type: "lecture" },
-      { time: "11:35 - 12:20", subject: "Computer Science", teacher: "Mr. Patel", room: "Computer Lab", type: "lab" },
-      { time: "12:20 - 1:00", subject: "Lunch", teacher: "", room: "", type: "break" },
-      { time: "1:00 - 1:45", subject: "Free Period", teacher: "", room: "", type: "free" },
-    ],
-  },
-  {
-    day: "Wednesday",
-    periods: [
-      { time: "8:00 - 8:45", subject: "Biology", teacher: "Mr. Wilson", room: "Room 105", type: "lecture" },
-      { time: "8:50 - 9:35", subject: "Chemistry", teacher: "Mr. Chen", room: "Room 102", type: "lecture" },
-      { time: "9:40 - 10:25", subject: "Mathematics", teacher: "Mr. Smith", room: "Room 101", type: "lecture" },
-      { time: "10:25 - 10:45", subject: "Break", teacher: "", room: "", type: "break" },
-      { time: "10:45 - 11:30", subject: "Physics", teacher: "Mrs. Johnson", room: "Room 102", type: "lecture" },
-      { time: "11:35 - 12:20", subject: "English", teacher: "Mrs. Davis", room: "Room 103", type: "lecture" },
-      { time: "12:20 - 1:00", subject: "Lunch", teacher: "", room: "", type: "break" },
-      { time: "1:00 - 1:45", subject: "Physical Education", teacher: "Mr. Kumar", room: "Sports Ground", type: "lecture" },
-    ],
-  },
-  {
-    day: "Thursday",
-    periods: [
-      { time: "8:00 - 8:45", subject: "Physics", teacher: "Mrs. Johnson", room: "Room 102", type: "lecture" },
-      { time: "8:50 - 9:35", subject: "Biology Lab", teacher: "Mr. Wilson", room: "Lab 2", type: "lab" },
-      { time: "9:40 - 10:25", subject: "English", teacher: "Mrs. Davis", room: "Room 103", type: "lecture" },
-      { time: "10:25 - 10:45", subject: "Break", teacher: "", room: "", type: "break" },
-      { time: "10:45 - 11:30", subject: "Mathematics", teacher: "Mr. Smith", room: "Room 101", type: "lecture" },
-      { time: "11:35 - 12:20", subject: "Chemistry Lab", teacher: "Mr. Chen", room: "Lab 1", type: "lab" },
-      { time: "12:20 - 1:00", subject: "Lunch", teacher: "", room: "", type: "break" },
-      { time: "1:00 - 1:45", subject: "History", teacher: "Mrs. Brown", room: "Room 104", type: "lecture" },
-    ],
-  },
-  {
-    day: "Friday",
-    periods: [
-      { time: "8:00 - 8:45", subject: "Chemistry", teacher: "Mr. Chen", room: "Room 102", type: "lecture" },
-      { time: "8:50 - 9:35", subject: "English", teacher: "Mrs. Davis", room: "Room 103", type: "lecture" },
-      { time: "9:40 - 10:25", subject: "Physics", teacher: "Mrs. Johnson", room: "Room 102", type: "lecture" },
-      { time: "10:25 - 10:45", subject: "Break", teacher: "", room: "", type: "break" },
-      { time: "10:45 - 11:30", subject: "Biology", teacher: "Mr. Wilson", room: "Room 105", type: "lecture" },
-      { time: "11:35 - 12:20", subject: "Mathematics", teacher: "Mr. Smith", room: "Room 101", type: "lecture" },
-      { time: "12:20 - 1:00", subject: "Lunch", teacher: "", room: "", type: "break" },
-      { time: "1:00 - 1:45", subject: "Arts/Music", teacher: "Mrs. Sharma", room: "Room 106", type: "lecture" },
-    ],
-  },
-  {
-    day: "Saturday",
-    periods: [
-      { time: "8:00 - 8:45", subject: "Mathematics", teacher: "Mr. Smith", room: "Room 101", type: "lecture" },
-      { time: "8:50 - 9:35", subject: "Physics", teacher: "Mrs. Johnson", room: "Room 102", type: "lecture" },
-      { time: "9:40 - 10:25", subject: "Chemistry", teacher: "Mr. Chen", room: "Room 102", type: "lecture" },
-      { time: "10:25 - 10:45", subject: "Break", teacher: "", room: "", type: "break" },
-      { time: "10:45 - 11:30", subject: "English", teacher: "Mrs. Davis", room: "Room 103", type: "lecture" },
-      { time: "11:35 - 12:20", subject: "Free Period", teacher: "", room: "", type: "free" },
-    ],
-  },
-];
-
-const getTypeColor = (type: Period['type']) => {
-  switch (type) {
-    case 'lecture':
-      return 'bg-primary/10 border-primary/20 text-primary';
-    case 'lab':
-      return 'bg-accent/10 border-accent/20 text-accent';
-    case 'break':
-      return 'bg-muted border-muted-foreground/20 text-muted-foreground';
-    case 'free':
-      return 'bg-secondary border-secondary-foreground/20 text-secondary-foreground';
-    default:
-      return 'bg-muted';
-  }
-};
-
-const getTypeBadge = (type: Period['type']) => {
-  switch (type) {
-    case 'lecture':
-      return <Badge variant="default" className="text-xs">Lecture</Badge>;
-    case 'lab':
-      return <Badge variant="secondary" className="text-xs bg-accent text-accent-foreground">Lab</Badge>;
-    case 'break':
-      return <Badge variant="outline" className="text-xs">Break</Badge>;
-    case 'free':
-      return <Badge variant="outline" className="text-xs">Free</Badge>;
-    default:
-      return null;
-  }
-};
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export default function Timetable() {
+  const { isRole } = useAuth();
+  const [entries, setEntries] = useState<TimetableEntry[]>([]);
+  const [classes, setClasses] = useState<ClassType[]>([]);
+  const [classFilter, setClassFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const showClassFilter = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const params: Record<string, string> = {};
+      if (classFilter !== "all") params.class_id = classFilter;
+
+      const [ttRes, clsRes] = await Promise.all([
+        getTimetable(params),
+        showClassFilter ? getClasses() : Promise.resolve(null),
+      ]);
+
+      if (ttRes.success && ttRes.data) {
+        setEntries((ttRes.data as { timetable: TimetableEntry[] }).timetable || []);
+      }
+      if (clsRes?.success && clsRes.data) {
+        setClasses((clsRes.data as { classes: ClassType[] }).classes || []);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load timetable");
+    } finally {
+      setLoading(false);
+    }
+  }, [classFilter, showClassFilter]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Group entries by day
+  const dayMap = new Map<number, TimetableEntry[]>();
+  entries.forEach(e => {
+    const list = dayMap.get(e.day_of_week) || [];
+    list.push(e);
+    dayMap.set(e.day_of_week, list);
+  });
+
+  // Sorted unique days
+  const days = Array.from(dayMap.keys()).sort((a, b) => a - b);
+
+  // All unique periods across all days for table header alignment
+  const allPeriods = Array.from(new Set(entries.map(e => e.period_number))).sort((a, b) => a - b);
+
+  const getPeriodColor = (entry?: TimetableEntry) => {
+    if (!entry) return "bg-muted/30 border-muted-foreground/10 text-muted-foreground";
+    if (entry.room?.toLowerCase().includes("lab")) return "bg-accent/10 border-accent/20 text-accent";
+    return "bg-primary/10 border-primary/20 text-primary";
+  };
+
   return (
     <DashboardLayout>
-      <div className="space-y-6 animate-fade-in">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Weekly Timetable</h1>
-          <p className="text-muted-foreground mt-1">Class 10th - Section A</p>
+      <div className="space-y-6 page-enter">
+        {/* Header */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Weekly Timetable</h1>
+            <p className="text-muted-foreground text-sm">View class schedules and period timings.</p>
+          </div>
+          {showClassFilter && (
+            <Select value={classFilter} onValueChange={setClassFilter}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Classes</SelectItem>
+                {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* Legend */}
         <div className="flex flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded bg-primary/20 border border-primary/40" />
-            <span className="text-sm text-muted-foreground">Lecture</span>
+            <span className="text-sm text-muted-foreground">Class</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded bg-accent/20 border border-accent/40" />
@@ -146,102 +105,133 @@ export default function Timetable() {
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded bg-muted border border-muted-foreground/20" />
-            <span className="text-sm text-muted-foreground">Break</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-secondary border border-secondary-foreground/20" />
-            <span className="text-sm text-muted-foreground">Free Period</span>
+            <span className="text-sm text-muted-foreground">Free / No Class</span>
           </div>
         </div>
 
-        {/* Mobile View - Cards per day */}
-        <div className="md:hidden space-y-4">
-          {weeklySchedule.map((daySchedule) => (
-            <Card key={daySchedule.day} className="shadow-card">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">{daySchedule.day}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {daySchedule.periods.map((period, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-3 rounded-lg border ${getTypeColor(period.type)}`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium">{period.subject}</span>
-                      {getTypeBadge(period.type)}
-                    </div>
-                    <div className="flex items-center gap-4 text-sm opacity-80">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {period.time}
-                      </span>
-                      {period.room && (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {period.room}
-                        </span>
-                      )}
-                    </div>
-                    {period.teacher && (
-                      <p className="text-sm opacity-70 mt-1">{period.teacher}</p>
-                    )}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center h-40 gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-muted-foreground text-sm">Loading timetable...</p>
+          </div>
+        )}
 
-        {/* Desktop View - Table */}
-        <div className="hidden md:block">
-          <Card className="shadow-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left p-4 font-semibold text-muted-foreground">Time</th>
-                    {weeklySchedule.map((day) => (
-                      <th key={day.day} className="text-left p-4 font-semibold text-muted-foreground min-w-[150px]">
-                        {day.day}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {weeklySchedule[0].periods.map((_, periodIdx) => (
-                    <tr key={periodIdx} className="border-b last:border-0">
-                      <td className="p-4 text-sm font-medium text-muted-foreground whitespace-nowrap">
-                        {weeklySchedule[0].periods[periodIdx]?.time}
-                      </td>
-                      {weeklySchedule.map((day) => {
-                        const period = day.periods[periodIdx];
-                        if (!period) return <td key={day.day} className="p-2" />;
-                        
-                        return (
-                          <td key={day.day} className="p-2">
-                            <div className={`p-3 rounded-lg border ${getTypeColor(period.type)} h-full`}>
-                              <div className="font-medium text-sm">{period.subject}</div>
-                              {period.teacher && (
-                                <div className="text-xs opacity-70 mt-1">{period.teacher}</div>
-                              )}
-                              {period.room && (
-                                <div className="text-xs opacity-60 flex items-center gap-1 mt-1">
-                                  <MapPin className="h-3 w-3" />
-                                  {period.room}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* Error */}
+        {error && !loading && (
+          <div className="flex flex-col items-center justify-center h-40 text-center gap-3">
+            <AlertCircle className="h-8 w-8 text-destructive/60" />
+            <p className="text-muted-foreground text-sm">{error}</p>
+          </div>
+        )}
+
+        {/* Empty */}
+        {!loading && !error && entries.length === 0 && (
+          <div className="text-center py-16">
+            <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
+              <Clock className="h-8 w-8 text-muted-foreground/30" />
             </div>
-          </Card>
-        </div>
+            <h3 className="text-lg font-semibold">No Timetable Entries</h3>
+            <p className="text-muted-foreground text-sm mt-1">No schedule found for the selected class.</p>
+          </div>
+        )}
+
+        {!loading && !error && entries.length > 0 && (
+          <>
+            {/* Mobile View — cards per day */}
+            <div className="md:hidden space-y-4">
+              {days.map(dayNum => {
+                const dayEntries = (dayMap.get(dayNum) || []).sort((a, b) => a.period_number - b.period_number);
+                return (
+                  <Card key={dayNum} className="shadow-card">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">{DAY_NAMES[dayNum] || `Day ${dayNum}`}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {dayEntries.map(entry => (
+                        <div key={entry.id} className={`p-3 rounded-lg border ${getPeriodColor(entry)}`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium">{entry.subject_name || "—"}</span>
+                            <Badge variant="outline" className="text-xs">P{entry.period_number}</Badge>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm opacity-80">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {entry.start_time?.slice(0, 5)} – {entry.end_time?.slice(0, 5)}
+                            </span>
+                            {entry.room && (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="h-3 w-3" />
+                                {entry.room}
+                              </span>
+                            )}
+                          </div>
+                          {entry.teacher_name && (
+                            <p className="text-sm opacity-70 mt-1">{entry.teacher_name}</p>
+                          )}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* Desktop View — grid table */}
+            <div className="hidden md:block">
+              <Card className="shadow-card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-4 font-semibold text-muted-foreground">Period</th>
+                        {days.map(d => (
+                          <th key={d} className="text-left p-4 font-semibold text-muted-foreground min-w-[150px]">
+                            {DAY_NAMES[d] || `Day ${d}`}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allPeriods.map(pNum => (
+                        <tr key={pNum} className="border-b last:border-0">
+                          <td className="p-4 text-sm font-medium text-muted-foreground whitespace-nowrap">
+                            Period {pNum}
+                          </td>
+                          {days.map(d => {
+                            const entry = (dayMap.get(d) || []).find(e => e.period_number === pNum);
+                            return (
+                              <td key={d} className="p-2">
+                                <div className={`p-3 rounded-lg border ${getPeriodColor(entry)} h-full`}>
+                                  {entry ? (
+                                    <>
+                                      <div className="font-medium text-sm">{entry.subject_name || "—"}</div>
+                                      {entry.teacher_name && (
+                                        <div className="text-xs opacity-70 mt-1">{entry.teacher_name}</div>
+                                      )}
+                                      <div className="flex items-center gap-2 mt-1 text-xs opacity-60">
+                                        <span>{entry.start_time?.slice(0, 5)} – {entry.end_time?.slice(0, 5)}</span>
+                                        {entry.room && (
+                                          <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{entry.room}</span>
+                                        )}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="text-xs text-muted-foreground">—</div>
+                                  )}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

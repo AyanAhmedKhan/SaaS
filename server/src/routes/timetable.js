@@ -22,7 +22,7 @@ router.get('/', asyncHandler(async (req, res) => {
   const params = [instId];
 
   if (class_id) { params.push(class_id); sql += ` AND tt.class_id = $${params.length}`; }
-  if (day) { params.push(day); sql += ` AND tt.day = $${params.length}`; }
+  if (day) { params.push(day); sql += ` AND tt.day_of_week = $${params.length}`; }
   if (teacher_id) { params.push(teacher_id); sql += ` AND tt.teacher_id = $${params.length}`; }
 
   // scope for teachers
@@ -43,7 +43,7 @@ router.get('/', asyncHandler(async (req, res) => {
     sql += ` AND tt.class_id IN (SELECT class_id FROM students WHERE parent_user_id = $${params.length})`;
   }
 
-  sql += ' ORDER BY CASE tt.day WHEN \'Monday\' THEN 1 WHEN \'Tuesday\' THEN 2 WHEN \'Wednesday\' THEN 3 WHEN \'Thursday\' THEN 4 WHEN \'Friday\' THEN 5 WHEN \'Saturday\' THEN 6 ELSE 7 END, tt.period';
+  sql += ' ORDER BY tt.day_of_week, tt.period_number';
 
   const { rows } = await query(sql, params);
   res.json({ success: true, data: { timetable: rows } });
@@ -62,14 +62,14 @@ router.get('/classes', asyncHandler(async (req, res) => {
 // POST /api/timetable — create entry
 router.post('/', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
-  const { class_id, subject_id, teacher_id, day, period, start_time, end_time, room } = req.body;
-  if (!class_id || !day || period === undefined) throw new AppError('class_id, day and period required', 400);
+  const { class_id, subject_id, teacher_id, day_of_week, period_number, start_time, end_time, room, academic_year_id } = req.body;
+  if (!class_id || day_of_week === undefined || period_number === undefined) throw new AppError('class_id, day_of_week and period_number required', 400);
 
   const id = `tt_${randomUUID().replace(/-/g, '').substring(0, 12)}`;
   await query(
-    `INSERT INTO timetable (id, institute_id, class_id, subject_id, teacher_id, day, period, start_time, end_time, room)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-    [id, instId, class_id, subject_id || null, teacher_id || null, day, period, start_time || null, end_time || null, room || null]
+    `INSERT INTO timetable (id, institute_id, class_id, subject_id, teacher_id, day_of_week, period_number, start_time, end_time, room, academic_year_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    [id, instId, class_id, subject_id || null, teacher_id || null, day_of_week, period_number, start_time || null, end_time || null, room || null, academic_year_id || null]
   );
 
   const { rows } = await query('SELECT * FROM timetable WHERE id=$1', [id]);
@@ -88,9 +88,9 @@ router.post('/bulk', authorize('institute_admin', 'super_admin'), asyncHandler(a
   for (const e of entries) {
     const id = `tt_${randomUUID().replace(/-/g, '').substring(0, 12)}`;
     await query(
-      `INSERT INTO timetable (id, institute_id, class_id, subject_id, teacher_id, day, period, start_time, end_time, room)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [id, instId, class_id, e.subject_id||null, e.teacher_id||null, e.day, e.period, e.start_time||null, e.end_time||null, e.room||null]
+      `INSERT INTO timetable (id, institute_id, class_id, subject_id, teacher_id, day_of_week, period_number, start_time, end_time, room, academic_year_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [id, instId, class_id, e.subject_id||null, e.teacher_id||null, e.day_of_week, e.period_number, e.start_time||null, e.end_time||null, e.room||null, e.academic_year_id||null]
     );
   }
 
@@ -101,17 +101,17 @@ router.post('/bulk', authorize('institute_admin', 'super_admin'), asyncHandler(a
 // PUT /api/timetable/:id
 router.put('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
-  const { subject_id, teacher_id, day, period, start_time, end_time, room } = req.body;
+  const { subject_id, teacher_id, day_of_week, period_number, start_time, end_time, room } = req.body;
 
   const existing = await query('SELECT * FROM timetable WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Timetable entry not found', 404);
 
   await query(
     `UPDATE timetable SET subject_id=COALESCE($1,subject_id), teacher_id=COALESCE($2,teacher_id),
-     day=COALESCE($3,day), period=COALESCE($4,period), start_time=COALESCE($5,start_time),
+     day_of_week=COALESCE($3,day_of_week), period_number=COALESCE($4,period_number), start_time=COALESCE($5,start_time),
      end_time=COALESCE($6,end_time), room=COALESCE($7,room), updated_at=NOW()
      WHERE id=$8 AND institute_id=$9`,
-    [subject_id, teacher_id, day, period, start_time, end_time, room, req.params.id, instId]
+    [subject_id, teacher_id, day_of_week, period_number, start_time, end_time, room, req.params.id, instId]
   );
 
   const { rows } = await query('SELECT * FROM timetable WHERE id=$1', [req.params.id]);

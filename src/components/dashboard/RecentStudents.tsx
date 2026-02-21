@@ -10,9 +10,9 @@ interface Student {
   name: string;
   avatar?: string;
   class?: string;
+  class_name?: string;
   section?: string;
   attendance?: number;
-  // Support snake_case from API
   roll_number?: string;
   enrollment_date?: string;
 }
@@ -65,9 +65,9 @@ export function RecentStudents({ students }: RecentStudentsProps) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-semibold text-sm truncate">{student.name}</p>
-                  {student.class && (
+                  {(student.class || student.class_name) && (
                     <Badge variant="secondary" className="shrink-0 text-[10px] font-semibold">
-                      {student.class}{student.section ? ` - ${student.section}` : ''}
+                      {student.class || student.class_name}{student.section ? ` - ${student.section}` : ''}
                     </Badge>
                   )}
                 </div>

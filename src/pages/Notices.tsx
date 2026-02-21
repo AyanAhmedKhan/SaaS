@@ -5,43 +5,52 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getNotices } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-
-interface Notice {
-  id: string | number;
-  title: string;
-  content: string;
-  date: string;
-  priority: 'high' | 'medium' | 'low';
-}
+import type { Notice } from "@/types";
 
 export default function Notices() {
+  const { isRole } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("all");
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const canCreate = isRole('super_admin', 'institute_admin', 'class_teacher');
 
   const fetchNotices = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await getNotices();
+      const params: Record<string, string> = {};
+      if (priorityFilter !== "all") params.priority = priorityFilter;
+      if (searchQuery) params.search = searchQuery;
+
+      const response = await getNotices(params);
       if (response.success && response.data) {
         const noticesData = (response.data as { notices: Notice[] })?.notices ?? [];
         setNotices(noticesData);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load notices';
-      console.error('[Notices] Error:', message);
       setError(message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [priorityFilter, searchQuery]);
 
   useEffect(() => {
-    fetchNotices();
+    const debounce = setTimeout(fetchNotices, 300);
+    return () => clearTimeout(debounce);
   }, [fetchNotices]);
 
   const filteredNotices = notices.filter(notice =>
@@ -49,11 +58,16 @@ export default function Notices() {
     notice.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const priorityStyles = {
+  const priorityStyles: Record<string, { border: string; badge: string; icon: string }> = {
     high: {
       border: "border-l-red-500",
       badge: "bg-red-500/10 text-red-600 dark:text-red-400",
       icon: "text-red-500",
+    },
+    urgent: {
+      border: "border-l-red-700",
+      badge: "bg-red-700/10 text-red-700 dark:text-red-300",
+      icon: "text-red-700",
     },
     medium: {
       border: "border-l-amber-500",
@@ -78,21 +92,35 @@ export default function Notices() {
               Announcements and important updates for the institution.
             </p>
           </div>
-          <Button className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md hover:shadow-lg transition-all duration-200">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Notice
-          </Button>
+          {canCreate && (
+            <Button className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md hover:shadow-lg transition-all duration-200">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Notice
+            </Button>
+          )}
         </div>
 
-        {/* Search */}
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
-          <Input
-            placeholder="Search notices..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 rounded-xl border-border/50 focus-visible:ring-primary/30"
-          />
+        {/* Search & Filter */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
+            <Input
+              placeholder="Search notices..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 rounded-xl border-border/50 focus-visible:ring-primary/30"
+            />
+          </div>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="w-[160px]"><SelectValue placeholder="All Priorities" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Priorities</SelectItem>
+              <SelectItem value="urgent">Urgent</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Loading */}
@@ -138,7 +166,7 @@ export default function Notices() {
                           <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                             <CalendarDays className="h-3.5 w-3.5" />
                             <span className="text-xs">
-                              {new Date(notice.date).toLocaleDateString('en-US', {
+                              {new Date(notice.created_at).toLocaleDateString('en-US', {
                                 weekday: 'short',
                                 month: 'short',
                                 day: 'numeric',

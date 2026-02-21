@@ -1,10 +1,9 @@
-import { useState } from "react";
-import { Calendar, Check, X, Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Calendar, Check, X, Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, Save } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -12,51 +11,135 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { mockStudents } from "@/data/mockData";
+import { getStudents, getClasses, markAttendance as markAttendanceApi, getAttendance } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import type { Student, Class as ClassType, AttendanceRecord } from "@/types";
 
-type AttendanceStatus = 'present' | 'absent' | 'late' | null;
+type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | null;
 
 export default function Attendance() {
-  const [selectedClass, setSelectedClass] = useState("10th A");
+  const { isRole } = useAuth();
+  const [classes, setClasses] = useState<ClassType[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState("");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const students = mockStudents.filter(s => `${s.class} ${s.section}` === selectedClass.replace(' ', ' '));
+  const canMark = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
+  const dateStr = currentDate.toISOString().slice(0, 10);
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
+  // Load classes on mount
+  useEffect(() => {
+    getClasses().then(res => {
+      if (res.success && res.data) {
+        const classList = (res.data as { classes: ClassType[] }).classes || [];
+        setClasses(classList);
+        if (classList.length > 0 && !selectedClassId) {
+          setSelectedClassId(classList[0].id);
+        }
+      }
+    }).finally(() => setLoading(false));
+  }, []);
+
+  // Load students + existing attendance when class or date changes
+  const fetchData = useCallback(async () => {
+    if (!selectedClassId) return;
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [studentRes, attRes] = await Promise.all([
+        getStudents({ class_id: selectedClassId, status: 'active' }),
+        getAttendance({ class_id: selectedClassId, date: dateStr }),
+      ]);
+
+      if (studentRes.success && studentRes.data) {
+        setStudents((studentRes.data as { students: Student[] }).students || []);
+      }
+
+      // Prefill attendance from existing records
+      const existing: Record<string, AttendanceStatus> = {};
+      if (attRes.success && attRes.data) {
+        const records = (attRes.data as { records: AttendanceRecord[] }).records || [];
+        records.forEach(r => {
+          existing[r.student_id] = r.status as AttendanceStatus;
+        });
+      }
+      setAttendance(existing);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load data";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedClassId, dateStr]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const formatDate = (date: Date) =>
+    date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   const prevDay = () => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() - 1);
-    setCurrentDate(newDate);
+    const d = new Date(currentDate);
+    d.setDate(d.getDate() - 1);
+    setCurrentDate(d);
   };
 
   const nextDay = () => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + 1);
-    setCurrentDate(newDate);
+    const d = new Date(currentDate);
+    d.setDate(d.getDate() + 1);
+    if (d <= new Date()) setCurrentDate(d);
   };
 
-  const markAttendance = (studentId: string, status: AttendanceStatus) => {
+  const toggleAttendance = (studentId: string, status: AttendanceStatus) => {
     setAttendance(prev => ({
       ...prev,
-      [studentId]: prev[studentId] === status ? null : status
+      [studentId]: prev[studentId] === status ? null : status,
     }));
+  };
+
+  const handleSave = async () => {
+    const records = Object.entries(attendance)
+      .filter(([, status]) => status !== null)
+      .map(([student_id, status]) => ({
+        student_id,
+        class_id: selectedClassId,
+        date: dateStr,
+        status: status as string,
+      }));
+
+    if (records.length === 0) {
+      toast.warning("Mark at least one student before saving.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const res = await markAttendanceApi(records);
+      if (res.success) {
+        toast.success(`Attendance saved for ${records.length} students.`);
+      } else {
+        toast.error("Failed to save attendance.");
+      }
+    } catch {
+      toast.error("Failed to save attendance.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const getStatusColor = (status: AttendanceStatus) => {
     switch (status) {
-      case 'present': return 'bg-success text-success-foreground';
+      case 'present': return 'bg-emerald-500 text-white';
       case 'absent': return 'bg-destructive text-destructive-foreground';
-      case 'late': return 'bg-warning text-warning-foreground';
+      case 'late': return 'bg-amber-500 text-white';
       default: return 'bg-muted text-muted-foreground';
     }
   };
@@ -67,48 +150,49 @@ export default function Attendance() {
     late: Object.values(attendance).filter(s => s === 'late').length,
   };
 
+  const selectedClass = classes.find(c => c.id === selectedClassId);
+
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 page-enter">
         {/* Page Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Attendance</h1>
-            <p className="text-muted-foreground">
-              Track and manage student attendance records.
-            </p>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Attendance</h1>
+            <p className="text-muted-foreground text-sm">Track and manage student attendance records.</p>
           </div>
           <div className="flex items-center gap-3">
-            <Select value={selectedClass} onValueChange={setSelectedClass}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Select Class" />
-              </SelectTrigger>
+            <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Select Class" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="10th A">10th A</SelectItem>
-                <SelectItem value="10th B">10th B</SelectItem>
-                <SelectItem value="9th A">9th A</SelectItem>
-                <SelectItem value="9th B">9th B</SelectItem>
-                <SelectItem value="11th A">11th A</SelectItem>
+                {classes.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Button variant="accent">
-              Save Attendance
-            </Button>
+            {canMark && (
+              <Button
+                onClick={handleSave}
+                disabled={saving || Object.values(attendance).every(s => s === null)}
+                className="rounded-xl bg-gradient-to-r from-primary to-blue-600"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Save Attendance
+              </Button>
+            )}
           </div>
         </div>
 
         {/* Date Navigation */}
-        <Card className="shadow-card">
+        <Card className="shadow-card border-border/40">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <Button variant="ghost" size="icon" onClick={prevDay}>
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
+              <Button variant="ghost" size="icon" onClick={prevDay}><ChevronLeft className="h-5 w-5" /></Button>
               <div className="flex items-center gap-3">
                 <Calendar className="h-5 w-5 text-primary" />
                 <span className="font-semibold">{formatDate(currentDate)}</span>
               </div>
-              <Button variant="ghost" size="icon" onClick={nextDay}>
+              <Button variant="ghost" size="icon" onClick={nextDay} disabled={currentDate >= new Date()}>
                 <ChevronRight className="h-5 w-5" />
               </Button>
             </div>
@@ -116,107 +200,131 @@ export default function Attendance() {
         </Card>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card className="shadow-card">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-success/10 flex items-center justify-center">
-                <Check className="h-6 w-6 text-success" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-success">{stats.present}</p>
-                <p className="text-sm text-muted-foreground">Present</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-card">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-destructive/10 flex items-center justify-center">
-                <X className="h-6 w-6 text-destructive" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-destructive">{stats.absent}</p>
-                <p className="text-sm text-muted-foreground">Absent</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-card">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-warning/10 flex items-center justify-center">
-                <Clock className="h-6 w-6 text-warning" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-warning">{stats.late}</p>
-                <p className="text-sm text-muted-foreground">Late</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {students.length > 0 && (
+          <div className="grid grid-cols-3 gap-4">
+            <Card className="shadow-card border-border/40">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                  <Check className="h-6 w-6 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-emerald-600">{stats.present}</p>
+                  <p className="text-sm text-muted-foreground">Present</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="shadow-card border-border/40">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="h-12 w-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+                  <X className="h-6 w-6 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-destructive">{stats.absent}</p>
+                  <p className="text-sm text-muted-foreground">Absent</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="shadow-card border-border/40">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                  <Clock className="h-6 w-6 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-amber-600">{stats.late}</p>
+                  <p className="text-sm text-muted-foreground">Late</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center h-40 gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-muted-foreground text-sm">Loading students...</p>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && !loading && (
+          <div className="flex flex-col items-center justify-center h-40 text-center gap-3">
+            <AlertCircle className="h-8 w-8 text-destructive/60" />
+            <p className="text-muted-foreground text-sm">{error}</p>
+          </div>
+        )}
 
         {/* Student List */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="text-lg">Mark Attendance - {selectedClass}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {mockStudents.slice(0, 6).map((student, index) => (
-                <div 
-                  key={student.id}
-                  className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/30 transition-colors animate-scale-in"
-                  style={{ animationDelay: `${index * 30}ms` }}
-                >
-                  <div className="flex items-center gap-4">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={student.avatar} />
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        {student.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium">{student.name}</p>
-                      <p className="text-sm text-muted-foreground">Roll No: {student.rollNumber}</p>
+        {!loading && !error && students.length > 0 && (
+          <Card className="shadow-card border-border/40">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">
+                Mark Attendance — {selectedClass ? `${selectedClass.name} ${selectedClass.section}` : ''}
+                <span className="text-sm font-normal text-muted-foreground ml-2">({students.length} students)</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {students.map((student, index) => (
+                  <div
+                    key={student.id}
+                    className="flex items-center justify-between p-3 rounded-xl border border-border/40 hover:bg-muted/30 transition-colors animate-scale-in"
+                    style={{ animationDelay: `${index * 20}ms` }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                          {student.name.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium text-sm">{student.name}</p>
+                        <p className="text-xs text-muted-foreground">Roll: {student.roll_number}</p>
+                      </div>
                     </div>
+                    {canMark ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => toggleAttendance(student.id, 'present')}
+                          className={cn("h-9 w-9 p-0 rounded-lg", attendance[student.id] === 'present' && getStatusColor('present'))}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => toggleAttendance(student.id, 'absent')}
+                          className={cn("h-9 w-9 p-0 rounded-lg", attendance[student.id] === 'absent' && getStatusColor('absent'))}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => toggleAttendance(student.id, 'late')}
+                          className={cn("h-9 w-9 p-0 rounded-lg", attendance[student.id] === 'late' && getStatusColor('late'))}
+                        >
+                          <Clock className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className={cn("text-xs font-medium px-2 py-1 rounded-md capitalize",
+                        attendance[student.id] ? getStatusColor(attendance[student.id]) : "bg-muted text-muted-foreground"
+                      )}>
+                        {attendance[student.id] || 'Not marked'}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => markAttendance(student.id, 'present')}
-                      className={cn(
-                        "h-9 w-9 p-0",
-                        attendance[student.id] === 'present' && getStatusColor('present')
-                      )}
-                    >
-                      <Check className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => markAttendance(student.id, 'absent')}
-                      className={cn(
-                        "h-9 w-9 p-0",
-                        attendance[student.id] === 'absent' && getStatusColor('absent')
-                      )}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => markAttendance(student.id, 'late')}
-                      className={cn(
-                        "h-9 w-9 p-0",
-                        attendance[student.id] === 'late' && getStatusColor('late')
-                      )}
-                    >
-                      <Clock className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!loading && !error && students.length === 0 && selectedClassId && (
+          <div className="text-center py-16">
+            <p className="text-muted-foreground text-sm">No active students in this class.</p>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );
