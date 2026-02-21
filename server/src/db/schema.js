@@ -38,6 +38,8 @@ export async function createSchema() {
         avatar TEXT,
         phone TEXT,
         is_active BOOLEAN DEFAULT true,
+        email_notifications BOOLEAN DEFAULT true,
+        whatsapp_notifications BOOLEAN DEFAULT false,
         last_login TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -418,6 +420,34 @@ export async function createSchema() {
       );
     `);
 
+    // ── PASSWORD RESETS ──
+    await query(`
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        used BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+    // ── NOTIFICATION LOG (email / whatsapp delivery tracking) ──
+    await query(`
+      CREATE TABLE IF NOT EXISTS notification_log (
+        id TEXT PRIMARY KEY,
+        institute_id TEXT REFERENCES institutes(id) ON DELETE CASCADE,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        channel TEXT NOT NULL CHECK(channel IN ('email','whatsapp','in_app')),
+        subject TEXT,
+        body TEXT NOT NULL,
+        status TEXT DEFAULT 'pending' CHECK(status IN ('pending','sent','failed')),
+        error_message TEXT,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
     // ── STUDENT PROMOTION HISTORY ──
     await query(`
       CREATE TABLE IF NOT EXISTS student_promotions (
@@ -473,6 +503,10 @@ export async function createSchema() {
       'CREATE INDEX IF NOT EXISTS idx_ai_insights_expires ON ai_insights(expires_at)',
       'CREATE INDEX IF NOT EXISTS idx_remarks_student ON teacher_remarks(student_id)',
       'CREATE INDEX IF NOT EXISTS idx_remarks_teacher ON teacher_remarks(teacher_id)',
+      'CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token)',
+      'CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_notification_log_user ON notification_log(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_notification_log_channel ON notification_log(channel, status)',
     ];
 
     for (const idx of indexes) {

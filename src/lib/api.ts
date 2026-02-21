@@ -271,6 +271,26 @@ export async function changePasswordApi(currentPassword: string, newPassword: st
   return api.post('/auth/change-password', { currentPassword, newPassword });
 }
 
+export async function forgotPasswordApi(email: string, instituteCode?: string) {
+  return api.post('/auth/forgot-password', { email, institute_code: instituteCode });
+}
+
+export async function resetPasswordApi(token: string, newPassword: string) {
+  return api.post('/auth/reset-password', { token, newPassword });
+}
+
+export async function getNotificationPreferences() {
+  return api.get('/auth/notification-preferences');
+}
+
+export async function updateNotificationPreferences(data: {
+  email_notifications?: boolean;
+  whatsapp_notifications?: boolean;
+  phone?: string;
+}) {
+  return api.put('/auth/notification-preferences', data);
+}
+
 // ═══════════════════════════════════════════
 // DASHBOARD API
 // ═══════════════════════════════════════════
