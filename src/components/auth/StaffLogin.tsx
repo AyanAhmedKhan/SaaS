@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, ArrowLeft, User, Lock, Eye, EyeOff, Loader2, BookOpen } from "lucide-react";
+import { ShieldCheck, ArrowLeft, User, Lock, Eye, EyeOff, Loader2, BookOpen, Crown, School, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,18 +14,23 @@ interface StaffLoginProps {
 }
 
 const staffRoles = [
-  { id: 'admin' as UserRole, label: 'Admin', icon: ShieldCheck, color: 'from-violet-500 to-purple-600' },
-  { id: 'teacher' as UserRole, label: 'Teacher', icon: BookOpen, color: 'from-blue-500 to-indigo-600' },
+  { id: 'super_admin' as UserRole, label: 'Super Admin', icon: Crown, color: 'from-red-500 to-rose-600' },
+  { id: 'institute_admin' as UserRole, label: 'Admin', icon: School, color: 'from-violet-500 to-purple-600' },
+  { id: 'class_teacher' as UserRole, label: 'Class Teacher', icon: BookOpen, color: 'from-blue-500 to-indigo-600' },
+  { id: 'subject_teacher' as UserRole, label: 'Subject Teacher', icon: ShieldCheck, color: 'from-teal-500 to-cyan-600' },
 ];
 
 export default function StaffLogin({ onBack }: StaffLoginProps) {
-  const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('institute_admin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [instituteCode, setInstituteCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const needsInstituteCode = selectedRole !== 'super_admin';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,15 +38,19 @@ export default function StaffLogin({ onBack }: StaffLoginProps) {
       toast.error('Please fill all fields');
       return;
     }
+    if (needsInstituteCode && !instituteCode.trim()) {
+      toast.error('Institute code is required');
+      return;
+    }
 
     setIsLoading(true);
     try {
-      const success = await login(email, password, selectedRole);
+      const success = await login(email, password, needsInstituteCode ? instituteCode : undefined);
       if (success) {
-        toast.success('Welcome back!', { description: `Logged in as ${selectedRole}` });
+        toast.success('Welcome back!', { description: `Logged in as ${selectedRole.replace(/_/g, ' ')}` });
         navigate('/dashboard');
       } else {
-        toast.error('Login failed', { description: 'Invalid credentials' });
+        toast.error('Login failed', { description: 'Invalid credentials or institute code' });
       }
     } catch {
       toast.error('An error occurred');
@@ -109,11 +118,30 @@ export default function StaffLogin({ onBack }: StaffLoginProps) {
                       )}
                     >
                       <role.icon className="h-4 w-4" />
-                      <span className="font-medium text-sm">{role.label}</span>
+                      <span className="font-medium text-xs">{role.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
+
+              {/* Institute Code — hidden for super_admin */}
+              {needsInstituteCode && (
+                <div className="space-y-2">
+                  <Label htmlFor="instituteCode" className="text-sm font-medium">Institute Code</Label>
+                  <div className="relative group">
+                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-violet-500" />
+                    <Input
+                      id="instituteCode"
+                      type="text"
+                      placeholder="e.g. SPRING01"
+                      value={instituteCode}
+                      onChange={(e) => setInstituteCode(e.target.value.toUpperCase())}
+                      className="pl-10 h-12 rounded-xl border-border/50 focus:border-violet-400 transition-all duration-200 uppercase tracking-wider"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
@@ -177,7 +205,7 @@ export default function StaffLogin({ onBack }: StaffLoginProps) {
           {/* Demo hint */}
           <div className="text-center animate-fade-in" style={{ animationDelay: '300ms', opacity: 0 }}>
             <p className="text-xs text-muted-foreground/70">
-              Demo: Use any seeded email + <code className="bg-muted/80 px-1.5 py-0.5 rounded text-xs font-mono">demo123</code>
+              Demo: admin@springfield.edu + <code className="bg-muted/80 px-1.5 py-0.5 rounded text-xs font-mono">demo123</code> • Code: <code className="bg-muted/80 px-1.5 py-0.5 rounded text-xs font-mono">SPRING01</code>
             </p>
           </div>
         </div>

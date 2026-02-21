@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { UserPlus, ArrowLeft, User, Lock, Mail, Eye, EyeOff, Loader2, ShieldCheck, GraduationCap, Users } from "lucide-react";
+import { UserPlus, ArrowLeft, User, Lock, Mail, Eye, EyeOff, Loader2, ShieldCheck, GraduationCap, Users, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +12,7 @@ import { toast } from "sonner";
 const roles = [
     { id: 'student' as UserRole, label: 'Student', icon: GraduationCap, color: 'text-blue-600', bg: 'bg-blue-100 dark:bg-blue-900/30', border: 'border-blue-500' },
     { id: 'parent' as UserRole, label: 'Parent', icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/30', border: 'border-emerald-500' },
-    { id: 'teacher' as UserRole, label: 'Teacher', icon: ShieldCheck, color: 'text-violet-600', bg: 'bg-violet-100 dark:bg-violet-900/30', border: 'border-violet-500' },
+    { id: 'institute_admin' as UserRole, label: 'Admin', icon: ShieldCheck, color: 'text-violet-600', bg: 'bg-violet-100 dark:bg-violet-900/30', border: 'border-violet-500' },
 ];
 
 export default function Signup() {
@@ -20,11 +20,15 @@ export default function Signup() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [instituteName, setInstituteName] = useState('');
+    const [instituteCode, setInstituteCode] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     const { register } = useAuth();
     const navigate = useNavigate();
+
+    const isAdmin = selectedRole === 'institute_admin';
 
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -32,7 +36,14 @@ export default function Signup() {
             toast.error('Please fill all fields');
             return;
         }
-
+        if (isAdmin && !instituteName.trim()) {
+            toast.error('Institute name is required for admin registration');
+            return;
+        }
+        if (!isAdmin && !instituteCode.trim()) {
+            toast.error('Institute code is required');
+            return;
+        }
         if (password.length < 6) {
             toast.error('Password must be at least 6 characters');
             return;
@@ -40,7 +51,13 @@ export default function Signup() {
 
         setIsLoading(true);
         try {
-            const success = await register(name, email, password, selectedRole);
+            const success = await register({
+                name,
+                email,
+                password,
+                role: selectedRole,
+                ...(isAdmin ? { institute_name: instituteName } : { institute_code: instituteCode }),
+            });
             if (success) {
                 toast.success('Account created successfully!', { description: `Welcome, ${name}!` });
                 navigate('/dashboard');
@@ -132,6 +149,43 @@ export default function Signup() {
                                     />
                                 </div>
                             </div>
+
+                            {/* Institute Name (admin only) or Institute Code (others) */}
+                            {isAdmin ? (
+                                <div className="space-y-2">
+                                    <Label htmlFor="instituteName" className="text-sm font-medium">Institute Name</Label>
+                                    <div className="relative group">
+                                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                                        <Input
+                                            id="instituteName"
+                                            type="text"
+                                            placeholder="Springfield Academy"
+                                            value={instituteName}
+                                            onChange={(e) => setInstituteName(e.target.value)}
+                                            className="pl-10 h-12 rounded-xl border-border/50 focus:border-primary/50 transition-all duration-200"
+                                            required
+                                        />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">A unique code will be generated for your institute</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <Label htmlFor="instituteCode" className="text-sm font-medium">Institute Code</Label>
+                                    <div className="relative group">
+                                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                                        <Input
+                                            id="instituteCode"
+                                            type="text"
+                                            placeholder="e.g. SPRING01"
+                                            value={instituteCode}
+                                            onChange={(e) => setInstituteCode(e.target.value.toUpperCase())}
+                                            className="pl-10 h-12 rounded-xl border-border/50 focus:border-primary/50 transition-all duration-200 uppercase tracking-wider"
+                                            required
+                                        />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">Get this from your school/institute administrator</p>
+                                </div>
+                            )}
 
                             {/* Email */}
                             <div className="space-y-2">

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { GraduationCap, ArrowLeft, User, Lock, Smartphone, Eye, EyeOff, Loader2 } from "lucide-react";
+import { GraduationCap, ArrowLeft, User, Lock, Smartphone, Eye, EyeOff, Loader2, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,7 @@ export default function StudentLogin({ onBack }: StudentLoginProps) {
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('credentials');
   const [studentId, setStudentId] = useState('');
   const [password, setPassword] = useState('');
+  const [instituteCode, setInstituteCode] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -28,19 +29,19 @@ export default function StudentLogin({ onBack }: StudentLoginProps) {
 
   const handleCredentialsLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studentId.trim() || !password.trim()) {
-      toast.error('Please fill all fields');
+    if (!studentId.trim() || !password.trim() || !instituteCode.trim()) {
+      toast.error('Please fill all fields including Institute Code');
       return;
     }
 
     setIsLoading(true);
     try {
-      const success = await login(studentId, password, 'student');
+      const success = await login(studentId, password, instituteCode);
       if (success) {
         toast.success('Welcome back!', { description: 'Logged in as Student' });
         navigate('/dashboard');
       } else {
-        toast.error('Login failed', { description: 'Invalid Student ID or Password' });
+        toast.error('Login failed', { description: 'Invalid credentials or institute code' });
       }
     } catch {
       toast.error('An error occurred');
@@ -71,8 +72,7 @@ export default function StudentLogin({ onBack }: StudentLoginProps) {
 
     setIsLoading(true);
     try {
-      // For demo, accept any 4-6 digit OTP
-      const success = await login(mobileNumber, 'demo123', 'student');
+      const success = await login(mobileNumber, 'demo123', instituteCode || undefined);
       if (success) {
         toast.success('Welcome back!', { description: 'Logged in as Student' });
         navigate('/dashboard');
@@ -153,8 +153,25 @@ export default function StudentLogin({ onBack }: StudentLoginProps) {
           <div className="bg-white dark:bg-slate-800/80 rounded-2xl border border-border shadow-xl shadow-blue-500/5 p-6">
             {loginMethod === 'credentials' ? (
               <form onSubmit={handleCredentialsLogin} className="space-y-4">
+                {/* Institute Code */}
                 <div className="space-y-2">
-                  <Label htmlFor="studentId" className="text-sm font-medium">Student ID / Roll Number</Label>
+                  <Label htmlFor="instituteCode" className="text-sm font-medium">Institute Code</Label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="instituteCode"
+                      type="text"
+                      placeholder="e.g. SPRING01"
+                      value={instituteCode}
+                      onChange={(e) => setInstituteCode(e.target.value.toUpperCase())}
+                      className="pl-10 h-12 rounded-xl uppercase tracking-wider"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="studentId" className="text-sm font-medium">Email / Student ID</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -286,7 +303,7 @@ export default function StudentLogin({ onBack }: StudentLoginProps) {
 
           {/* Demo hint */}
           <p className="text-center text-xs text-muted-foreground">
-            Demo: Any ID + <code className="bg-muted px-1.5 py-0.5 rounded">demo123</code> or any OTP
+            Demo: arjun@springfield.edu + <code className="bg-muted px-1.5 py-0.5 rounded">demo123</code> • Code: <code className="bg-muted px-1.5 py-0.5 rounded">SPRING01</code>
           </p>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, ArrowLeft, Smartphone, User, Loader2, ShieldCheck } from "lucide-react";
+import { Users, ArrowLeft, Smartphone, User, Loader2, ShieldCheck, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ export default function ParentLogin({ onBack }: ParentLoginProps) {
   const [mobileNumber, setMobileNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [studentId, setStudentId] = useState('');
+  const [instituteCode, setInstituteCode] = useState('');
   const [showStudentId, setShowStudentId] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
@@ -43,7 +44,7 @@ export default function ParentLogin({ onBack }: ParentLoginProps) {
 
     setIsLoading(true);
     try {
-      const success = await login(mobileNumber, 'demo123', 'parent');
+      const success = await login(mobileNumber, 'demo123', instituteCode || undefined);
       if (success) {
         toast.success('Welcome!', { description: 'Logged in as Parent' });
         navigate('/dashboard');
@@ -101,6 +102,23 @@ export default function ParentLogin({ onBack }: ParentLoginProps) {
           {/* Login Form Card */}
           <div className="bg-white dark:bg-slate-800/80 rounded-2xl border border-border shadow-xl shadow-emerald-500/5 p-6">
             <form onSubmit={handleOtpLogin} className="space-y-4">
+              {/* Institute Code */}
+              <div className="space-y-2">
+                <Label htmlFor="instituteCode" className="text-sm font-medium">Institute Code</Label>
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="instituteCode"
+                    type="text"
+                    placeholder="e.g. SPRING01"
+                    value={instituteCode}
+                    onChange={(e) => setInstituteCode(e.target.value.toUpperCase())}
+                    className="pl-10 h-12 rounded-xl uppercase tracking-wider"
+                    required
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="mobile" className="text-sm font-medium">Registered Mobile Number</Label>
                 <div className="relative">

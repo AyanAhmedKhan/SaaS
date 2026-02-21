@@ -5,11 +5,16 @@ import {
   UserCheck,
   CalendarDays,
   FileText,
-  MessageSquare,
   Bell,
   Settings,
   LogOut,
-  BookOpen
+  BookOpen,
+  ClipboardList,
+  Award,
+  DollarSign,
+  Building2,
+  MessageCircle,
+  BarChart3,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -29,26 +34,50 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { UserRole } from "@/types";
 
-const menuItems = [
+interface MenuItem {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  roles?: UserRole[]; // if omitted, visible to all
+  module?: string;    // optional module-gate
+}
+
+const ADMIN: UserRole[] = ['super_admin', 'institute_admin'];
+const STAFF: UserRole[] = ['super_admin', 'institute_admin', 'class_teacher', 'subject_teacher'];
+
+const menuItems: MenuItem[] = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Students", url: "/students", icon: GraduationCap },
-  { title: "Teachers", url: "/teachers", icon: Users },
+  { title: "Students", url: "/students", icon: GraduationCap, roles: STAFF },
+  { title: "Teachers", url: "/teachers", icon: Users, roles: ADMIN },
   { title: "Attendance", url: "/attendance", icon: UserCheck },
   { title: "Timetable", url: "/timetable", icon: CalendarDays },
   { title: "Syllabus", url: "/syllabus", icon: BookOpen },
-  { title: "Reports", url: "/reports", icon: FileText },
+  { title: "Assignments", url: "/assignments", icon: ClipboardList },
+  { title: "Exams", url: "/exams", icon: Award },
+  { title: "Reports", url: "/reports", icon: BarChart3, roles: STAFF },
   { title: "Notices", url: "/notices", icon: Bell },
-  { title: "Feedback", url: "/feedback", icon: MessageSquare },
+  { title: "Fees", url: "/fees", icon: DollarSign, roles: [...ADMIN, 'student', 'parent'] },
+  { title: "Institutes", url: "/institutes", icon: Building2, roles: ['super_admin'] },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, isRole, hasModule } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Filter menu items by user role and module access
+  const visibleItems = menuItems.filter((item) => {
+    if (item.roles && user && !item.roles.includes(user.role)) return false;
+    if (item.module && !hasModule(item.module)) return false;
+    return true;
+  });
+
+  const roleLabel = user?.role?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'User';
 
   return (
     <Sidebar className="border-r-0" collapsible="icon">
@@ -77,7 +106,7 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-0.5">
-              {menuItems.map((item) => (
+              {visibleItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
@@ -152,8 +181,8 @@ export function AppSidebar() {
               <span className="truncate text-sm font-semibold text-sidebar-foreground">
                 {user?.name || 'Guest'}
               </span>
-              <span className="truncate text-[11px] text-sidebar-foreground/50 capitalize font-medium">
-                {user?.role || 'User'}
+              <span className="truncate text-[11px] text-sidebar-foreground/50 font-medium">
+                {roleLabel}
               </span>
             </div>
           )}
