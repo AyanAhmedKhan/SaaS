@@ -178,7 +178,7 @@ router.get('/student', asyncHandler(async (req, res) => {
     query(
       `SELECT tr.*, u.name AS teacher_name FROM teacher_remarks tr
        JOIN users u ON tr.teacher_id=(SELECT user_id FROM teachers WHERE id=tr.teacher_id)
-       WHERE tr.student_id=$1 AND tr.institute_id=$2 ORDER BY tr.date DESC LIMIT 5`,
+       WHERE tr.student_id=$1 AND tr.institute_id=$2 ORDER BY tr.created_at DESC LIMIT 5`,
       [student.id, instId]
     ),
     query("SELECT * FROM notices WHERE institute_id=$1 AND (target_roles IS NULL OR target_roles::jsonb ? 'student') ORDER BY date DESC LIMIT 5", [instId]),
