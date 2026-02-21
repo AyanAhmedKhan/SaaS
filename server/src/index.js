@@ -34,7 +34,7 @@ const PORT = process.env.PORT || 3001;
 // ── Security & parsing middleware ──
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
     credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -99,6 +99,16 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/timetable', timetableRoutes);
 app.use('/api/syllabus', syllabusRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/institutes', instituteRoutes);
+app.use('/api/academic-years', academicYearRoutes);
+app.use('/api/classes', classRoutes);
+app.use('/api/subjects', subjectRoutes);
+app.use('/api/assignments', assignmentRoutes);
+app.use('/api/exams', examRoutes);
+app.use('/api/fees', feeRoutes);
+app.use('/api/remarks', remarkRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/grading', gradingRoutes);
 
 // ── 404 & Error handlers ──
 app.use(notFoundHandler);

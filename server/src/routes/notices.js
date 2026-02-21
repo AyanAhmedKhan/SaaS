@@ -27,11 +27,11 @@ router.get('/', asyncHandler(async (req, res) => {
   // filter by target_roles for non-admin roles
   if (!['super_admin', 'institute_admin'].includes(req.user.role)) {
     params.push(req.user.role);
-    sql += ` AND (n.target_roles IS NULL OR n.target_roles::jsonb ? $${params.length})`;
+    sql += ` AND (n.target_roles IS NULL OR $${params.length} = ANY(n.target_roles))`;
   }
 
   const countSql = sql.replace(/SELECT n\.\*.*?FROM/, 'SELECT COUNT(*) FROM');
-  sql += ` ORDER BY n.date DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  sql += ` ORDER BY n.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
   params.push(parseInt(limit), offset);
 
   const [dataRes, countRes] = await Promise.all([
