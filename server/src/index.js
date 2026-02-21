@@ -17,6 +17,16 @@ import dashboardRoutes from './routes/dashboard.js';
 import timetableRoutes from './routes/timetable.js';
 import syllabusRoutes from './routes/syllabus.js';
 import reportRoutes from './routes/reports.js';
+import instituteRoutes from './routes/institutes.js';
+import academicYearRoutes from './routes/academicYears.js';
+import classRoutes from './routes/classes.js';
+import subjectRoutes from './routes/subjects.js';
+import assignmentRoutes from './routes/assignments.js';
+import examRoutes from './routes/exams.js';
+import feeRoutes from './routes/fees.js';
+import remarkRoutes from './routes/remarks.js';
+import notificationRoutes from './routes/notifications.js';
+import gradingRoutes from './routes/grading.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
