@@ -1,118 +1,167 @@
 import { Router } from 'express';
 import { query } from '../db/connection.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireInstitute } from '../middleware/auth.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
+router.use(authenticate, requireInstitute);
 
-// GET /api/reports/exam-results
-router.get('/exam-results', authenticate, asyncHandler(async (req, res) => {
-    try {
-        const { student_id, exam, subject } = req.query;
+// GET /api/reports/exam-results — with proper FK joins
+router.get('/exam-results', asyncHandler(async (req, res) => {
+  const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  const { student_id, exam_id, subject_id, class_id } = req.query;
+  const params = [instId];
 
-        let sql = `
-      SELECT er.*, s.name as student_name, s.class, s.section, s.roll_number
-      FROM exam_results er
-      JOIN students s ON er.student_id = s.id
-      WHERE 1=1
-    `;
-        const params = [];
-        let paramIdx = 0;
+  let sql = `SELECT er.*, s.name AS student_name, s.roll_number,
+             c.name AS class_name, c.section,
+             sub.name AS subject_name, e.name AS exam_name, e.exam_type
+             FROM exam_results er
+             JOIN students s ON er.student_id = s.id
+             JOIN classes c ON s.class_id = c.id
+             JOIN subjects sub ON er.subject_id = sub.id
+             JOIN exams e ON er.exam_id = e.id
+             WHERE er.institute_id = $1`;
 
-        if (student_id) {
-            paramIdx++;
-            sql += ` AND er.student_id = $${paramIdx}`;
-            params.push(student_id);
-        }
+  if (student_id) { params.push(student_id); sql += ` AND er.student_id = $${params.length}`; }
+  if (exam_id) { params.push(exam_id); sql += ` AND er.exam_id = $${params.length}`; }
+  if (subject_id) { params.push(subject_id); sql += ` AND er.subject_id = $${params.length}`; }
+  if (class_id) { params.push(class_id); sql += ` AND s.class_id = $${params.length}`; }
 
-        if (exam && exam !== 'all') {
-            paramIdx++;
-            sql += ` AND er.exam = $${paramIdx}`;
-            params.push(exam);
-        }
-
-        if (subject && subject !== 'all') {
-            paramIdx++;
-            sql += ` AND er.subject = $${paramIdx}`;
-            params.push(subject);
-        }
-
-        sql += ' ORDER BY er.date DESC, er.subject ASC';
-
-        const { rows } = await query(sql, params);
-
-        res.json({ success: true, data: { results: rows } });
-    } catch (error) {
-        if (error instanceof AppError) throw error;
-        throw new AppError('Failed to fetch exam results: ' + error.message, 500);
-    }
+  sql += ' ORDER BY e.start_date DESC, sub.name';
+  const { rows } = await query(sql, params);
+  res.json({ success: true, data: { results: rows } });
 }));
 
-// GET /api/reports/performance-trend
-router.get('/performance-trend', authenticate, asyncHandler(async (req, res) => {
-    try {
-        const { student_id } = req.query;
+// GET /api/reports/performance-trend — exam-over-exam trend
+router.get('/performance-trend', asyncHandler(async (req, res) => {
+  const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  const { student_id, class_id } = req.query;
+  const params = [instId];
 
-        let sql = `
-      SELECT 
-        exam,
-        subject,
-        ROUND(AVG(score)::numeric, 1) as avg_score,
-        MIN(date) as date
-      FROM exam_results
-    `;
-        const params = [];
+  let where = 'er.institute_id = $1';
+  if (student_id) { params.push(student_id); where += ` AND er.student_id = $${params.length}`; }
+  if (class_id) { params.push(class_id); where += ` AND s.class_id = $${params.length}`; }
 
-        if (student_id) {
-            sql += ' WHERE student_id = $1';
-            params.push(student_id);
-        }
+  const { rows } = await query(
+    `SELECT e.name AS exam, sub.name AS subject,
+       ROUND(AVG(er.marks_obtained::NUMERIC / NULLIF(er.max_marks,0) * 100), 1) AS avg_score,
+       MIN(e.start_date) AS exam_date
+     FROM exam_results er
+     JOIN exams e ON er.exam_id = e.id
+     JOIN subjects sub ON er.subject_id = sub.id
+     JOIN students s ON er.student_id = s.id
+     WHERE ${where}
+     GROUP BY e.name, sub.name, e.start_date ORDER BY e.start_date`,
+    params
+  );
 
-        sql += ' GROUP BY exam, subject ORDER BY MIN(date) ASC';
+  // pivot by exam
+  const examMap = {};
+  for (const r of rows) {
+    if (!examMap[r.exam]) examMap[r.exam] = { exam: r.exam };
+    examMap[r.exam][r.subject] = parseFloat(r.avg_score);
+  }
+  const performanceTrend = Object.values(examMap).map(e => {
+    const subjects = Object.keys(e).filter(k => k !== 'exam');
+    const avg = subjects.reduce((s, k) => s + e[k], 0) / (subjects.length || 1);
+    return { ...e, average: Math.round(avg * 10) / 10 };
+  });
 
-        const { rows: trends } = await query(sql, params);
-
-        // Pivot by exam
-        const examMap = {};
-        for (const t of trends) {
-            if (!examMap[t.exam]) examMap[t.exam] = { exam: t.exam };
-            examMap[t.exam][t.subject] = parseFloat(t.avg_score);
-        }
-
-        // Compute averages
-        const performanceTrend = Object.values(examMap).map((e) => {
-            const subjects = Object.keys(e).filter(k => k !== 'exam');
-            const avg = subjects.reduce((sum, s) => sum + e[s], 0) / subjects.length;
-            return { ...e, average: Math.round(avg * 10) / 10 };
-        });
-
-        res.json({ success: true, data: { performanceTrend } });
-    } catch (error) {
-        if (error instanceof AppError) throw error;
-        throw new AppError('Failed to fetch performance trend: ' + error.message, 500);
-    }
+  res.json({ success: true, data: { performanceTrend } });
 }));
 
-// GET /api/reports/class-summary
-router.get('/class-summary', authenticate, asyncHandler(async (req, res) => {
-    try {
-        const { rows } = await query(`
-      SELECT 
-        s.class,
-        s.section,
-        COUNT(DISTINCT s.id) as student_count,
-        ROUND(AVG(s.attendance)::numeric, 1) as avg_attendance,
-        ROUND(AVG(s.performance)::numeric, 1) as avg_performance
-      FROM students s
-      GROUP BY s.class, s.section
-      ORDER BY s.class, s.section
-    `);
+// GET /api/reports/class-summary — per-class multi-tenant overview
+router.get('/class-summary', asyncHandler(async (req, res) => {
+  const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
 
-        res.json({ success: true, data: { summary: rows } });
-    } catch (error) {
-        if (error instanceof AppError) throw error;
-        throw new AppError('Failed to fetch class summary: ' + error.message, 500);
-    }
+  const { rows } = await query(
+    `SELECT c.id, c.name AS class_name, c.section,
+       COUNT(DISTINCT s.id) AS student_count,
+       (SELECT ROUND(COUNT(*) FILTER (WHERE ar.status='present')::NUMERIC/NULLIF(COUNT(*),0)*100,1)
+        FROM attendance_records ar WHERE ar.class_id=c.id) AS avg_attendance,
+       (SELECT ROUND(AVG(er.marks_obtained::NUMERIC/NULLIF(er.max_marks,0)*100),1)
+        FROM exam_results er JOIN students st ON er.student_id=st.id WHERE st.class_id=c.id) AS avg_performance
+     FROM classes c
+     LEFT JOIN students s ON s.class_id=c.id AND s.status='active'
+     WHERE c.institute_id=$1
+     GROUP BY c.id, c.name, c.section ORDER BY c.name, c.section`,
+    [instId]
+  );
+
+  res.json({ success: true, data: { summary: rows } });
+}));
+
+// GET /api/reports/report-card/:studentId — full report card
+router.get('/report-card/:studentId', asyncHandler(async (req, res) => {
+  const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  const { studentId } = req.params;
+  const { exam_id } = req.query;
+
+  const student = await query(
+    `SELECT s.*, c.name AS class_name, c.section FROM students s
+     JOIN classes c ON s.class_id = c.id
+     WHERE s.id = $1 AND s.institute_id = $2`,
+    [studentId, instId]
+  );
+  if (!student.rows[0]) throw new AppError('Student not found', 404);
+
+  let examWhere = 'er.student_id = $1 AND er.institute_id = $2';
+  const params = [studentId, instId];
+  if (exam_id) { params.push(exam_id); examWhere += ` AND er.exam_id = $${params.length}`; }
+
+  const results = await query(
+    `SELECT er.*, sub.name AS subject_name, e.name AS exam_name, e.exam_type
+     FROM exam_results er
+     JOIN subjects sub ON er.subject_id = sub.id
+     JOIN exams e ON er.exam_id = e.id
+     WHERE ${examWhere}
+     ORDER BY e.start_date DESC, sub.name`,
+    params
+  );
+
+  const attendance = await query(
+    `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='present') AS present,
+       ROUND(COUNT(*) FILTER (WHERE status='present')::NUMERIC/NULLIF(COUNT(*),0)*100,1) AS percentage
+     FROM attendance_records WHERE student_id=$1 AND institute_id=$2`,
+    [studentId, instId]
+  );
+
+  const remarks = await query(
+    'SELECT * FROM teacher_remarks WHERE student_id=$1 AND institute_id=$2 ORDER BY date DESC LIMIT 5',
+    [studentId, instId]
+  );
+
+  res.json({
+    success: true,
+    data: {
+      student: student.rows[0],
+      examResults: results.rows,
+      attendance: attendance.rows[0],
+      remarks: remarks.rows,
+    },
+  });
+}));
+
+// GET /api/reports/fee-summary — institute-wide fee overview
+router.get('/fee-summary', asyncHandler(async (req, res) => {
+  const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+
+  const { rows } = await query(
+    `SELECT fs.fee_type, fs.class_id, c.name AS class_name,
+       COUNT(DISTINCT s.id) AS total_students,
+       fs.amount AS fee_amount,
+       COALESCE(SUM(fp.amount_paid),0) AS total_collected,
+       fs.amount * COUNT(DISTINCT s.id) - COALESCE(SUM(fp.amount_paid),0) AS total_pending
+     FROM fee_structures fs
+     JOIN classes c ON fs.class_id = c.id
+     LEFT JOIN students s ON s.class_id = c.id AND s.status='active'
+     LEFT JOIN fee_payments fp ON fp.fee_structure_id = fs.id AND fp.student_id = s.id AND fp.status='completed'
+     WHERE fs.institute_id = $1
+     GROUP BY fs.id, fs.fee_type, fs.class_id, c.name, fs.amount
+     ORDER BY c.name, fs.fee_type`,
+    [instId]
+  );
+  res.json({ success: true, data: { feeSummary: rows } });
 }));
 
 export default router;
