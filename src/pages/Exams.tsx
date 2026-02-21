@@ -171,8 +171,8 @@ export default function Exams() {
                           </div>
                           <div>
                             <p className="font-medium">{exam.name}</p>
-                            {exam.description && (
-                              <p className="text-xs text-muted-foreground line-clamp-1">{exam.description}</p>
+                            {exam.subject_name && (
+                              <p className="text-xs text-muted-foreground line-clamp-1">{exam.subject_name}</p>
                             )}
                           </div>
                         </div>
@@ -183,13 +183,13 @@ export default function Exams() {
                       <TableCell>
                         <div className="flex items-center gap-1.5 text-sm">
                           <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          {new Date(exam.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {exam.exam_date ? new Date(exam.exam_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5 text-sm">
                           <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                          {new Date(exam.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {exam.exam_date ? new Date(exam.exam_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                         </div>
                       </TableCell>
                       <TableCell>{getStatusBadge(exam.status)}</TableCell>

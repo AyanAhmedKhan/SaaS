@@ -150,8 +150,8 @@ export default function Institutes() {
                   )}
 
                   <div className="flex items-center gap-4 pt-2 border-t border-border/40">
-                    {institute.contact_email && (
-                      <span className="text-xs text-muted-foreground truncate">{institute.contact_email}</span>
+                    {institute.email && (
+                      <span className="text-xs text-muted-foreground truncate">{institute.email}</span>
                     )}
                   </div>
 
