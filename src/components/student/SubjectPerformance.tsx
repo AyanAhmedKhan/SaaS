@@ -1,31 +1,43 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { BarChart3, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
-interface SubjectScore {
-  subject: string;
-  latestScore: number;
-  maxScore: number;
-  trend: "up" | "down" | "neutral";
+interface ExamEntry {
+  subject_name?: string;
+  marks_obtained?: number;
+  max_marks?: number;
+  exam_name?: string;
 }
 
-const subjectScores: SubjectScore[] = [
-  { subject: "Mathematics", latestScore: 85, maxScore: 100, trend: "up" },
-  { subject: "Physics", latestScore: 72, maxScore: 100, trend: "down" },
-  { subject: "Chemistry", latestScore: 78, maxScore: 100, trend: "up" },
-  { subject: "English", latestScore: 90, maxScore: 100, trend: "neutral" },
-  { subject: "Biology", latestScore: 68, maxScore: 100, trend: "down" },
-];
+interface SubjectPerformanceProps {
+  exams: ExamEntry[];
+}
 
-const TrendIcon = ({ trend }: { trend: SubjectScore["trend"] }) => {
-  if (trend === "up") return <TrendingUp className="h-4 w-4 text-success" />;
+function TrendIcon({ trend }: { trend: "up" | "down" | "neutral" }) {
+  if (trend === "up") return <TrendingUp className="h-4 w-4 text-green-600" />;
   if (trend === "down") return <TrendingDown className="h-4 w-4 text-destructive" />;
   return <Minus className="h-4 w-4 text-muted-foreground" />;
-};
+}
 
-export function SubjectPerformance() {
+export function SubjectPerformance({ exams }: SubjectPerformanceProps) {
+  const subjects = useMemo(() => {
+    const map = new Map<string, { scores: number[]; max: number }>();
+    for (const e of exams) {
+      if (!e.subject_name) continue;
+      if (!map.has(e.subject_name)) map.set(e.subject_name, { scores: [], max: e.max_marks || 100 });
+      map.get(e.subject_name)!.scores.push(e.marks_obtained ?? 0);
+    }
+    return Array.from(map.entries()).map(([name, { scores, max }]) => {
+      const latest = scores[0];
+      const prev = scores.length > 1 ? scores[1] : latest;
+      const trend: "up" | "down" | "neutral" = latest > prev ? "up" : latest < prev ? "down" : "neutral";
+      return { name, latest, max, trend };
+    });
+  }, [exams]);
+
   return (
-    <Card className="shadow-card">
+    <Card className="shadow-card border-border/40">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg font-semibold flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-primary" />
@@ -33,23 +45,27 @@ export function SubjectPerformance() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {subjectScores.map((item) => {
-          const pct = Math.round((item.latestScore / item.maxScore) * 100);
-          return (
-            <div key={item.subject} className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground text-sm">{item.subject}</span>
-                  <TrendIcon trend={item.trend} />
+        {subjects.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No exam results yet.</p>
+        ) : (
+          subjects.map((item) => {
+            const pct = Math.round((item.latest / item.max) * 100);
+            return (
+              <div key={item.name} className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-foreground text-sm">{item.name}</span>
+                    <TrendIcon trend={item.trend} />
+                  </div>
+                  <span className="text-sm font-semibold text-foreground">
+                    {item.latest}/{item.max}
+                  </span>
                 </div>
-                <span className="text-sm font-semibold text-foreground">
-                  {item.latestScore}/{item.maxScore}
-                </span>
+                <Progress value={pct} className="h-2" />
               </div>
-              <Progress value={pct} className="h-2" />
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </CardContent>
     </Card>
   );
