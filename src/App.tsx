@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import ParentDashboard from "./pages/ParentDashboard";
@@ -27,7 +28,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function RoleBasedDashboard() {
   const { user } = useAuth();
-  
+
   switch (user?.role) {
     case 'student':
       return <StudentDashboard />;
@@ -44,6 +45,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/signup" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Signup />} />
       <Route path="/dashboard" element={<ProtectedRoute><RoleBasedDashboard /></ProtectedRoute>} />
       <Route path="/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
       <Route path="/teachers" element={<ProtectedRoute><Teachers /></ProtectedRoute>} />

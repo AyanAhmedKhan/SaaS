@@ -174,6 +174,24 @@ export async function loginApi(email: string, password: string, role?: string) {
     }
 }
 
+export async function registerApi(name: string, email: string, password: string, role: string) {
+    try {
+        const response = await api.post<{
+            user: { id: string; name: string; email: string; role: string; avatar?: string };
+            token: string;
+        }>('/auth/register', { name, email, password, role });
+
+        if (response.data?.token) {
+            api.setToken(response.data.token);
+        }
+
+        return response;
+    } catch (error) {
+        console.error('[API] Registration failed:', error);
+        throw error;
+    }
+}
+
 export async function getMeApi() {
     try {
         return await api.get<{

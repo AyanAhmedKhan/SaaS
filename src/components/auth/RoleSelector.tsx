@@ -1,4 +1,5 @@
 import { GraduationCap, Users, ShieldCheck } from "lucide-react";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 interface RoleSelectorProps {
@@ -120,9 +121,14 @@ export default function RoleSelector({ onSelectRole }: RoleSelectorProps) {
             ))}
           </div>
 
-          <p className="text-center text-xs text-muted-foreground/70 pt-2 animate-fade-in" style={{ animationDelay: '500ms', opacity: 0 }}>
-            EduYantra — Secure Management Portal
-          </p>
+          <div className="text-center pt-2 animate-fade-in" style={{ animationDelay: '500ms', opacity: 0 }}>
+            <p className="text-sm text-muted-foreground">
+              Don't have an account?{' '}
+              <Link to="/signup" className="font-semibold text-primary hover:text-primary/80 transition-colors">
+                Sign Up
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>
