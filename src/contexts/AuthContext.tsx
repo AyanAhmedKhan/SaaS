@@ -1,20 +1,23 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, UserRole } from '@/types';
+import { AuthUser, UserRole } from '@/types';
 import { loginApi, registerApi, getMeApi, logoutApi, api } from '@/lib/api';
 
 interface AuthContextType {
-  user: User | null;
-  login: (email: string, password: string, role: UserRole) => Promise<boolean>;
-  register: (name: string, email: string, password: string, role: UserRole) => Promise<boolean>;
+  user: AuthUser | null;
+  login: (email: string, password: string, instituteCode?: string) => Promise<boolean>;
+  register: (data: { name: string; email: string; password: string; role: string; institute_name?: string; institute_code?: string }) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
+  institute: AuthUser['institute'] | null;
+  hasModule: (module: string) => boolean;
+  isRole: (...roles: UserRole[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Restore session on mount
@@ -29,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const response = await getMeApi();
         if (response.success && response.data?.user) {
-          setUser(response.data.user as User);
+          setUser(response.data.user as AuthUser);
         } else {
           api.clearToken();
         }
@@ -44,12 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     restoreSession();
   }, []);
 
-  const login = async (email: string, password: string, role: UserRole): Promise<boolean> => {
+  const login = async (email: string, password: string, instituteCode?: string): Promise<boolean> => {
     try {
-      const response = await loginApi(email, password, role);
+      const response = await loginApi(email, password, instituteCode);
 
       if (response.success && response.data?.user) {
-        setUser(response.data.user as User);
+        setUser(response.data.user as AuthUser);
         return true;
       }
 
@@ -60,12 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (name: string, email: string, password: string, role: UserRole): Promise<boolean> => {
+  const register = async (data: { name: string; email: string; password: string; role: string; institute_name?: string; institute_code?: string }): Promise<boolean> => {
     try {
-      const response = await registerApi(name, email, password, role);
+      const response = await registerApi(data);
 
       if (response.success && response.data?.user) {
-        setUser(response.data.user as User);
+        setUser(response.data.user as AuthUser);
         return true;
       }
 
@@ -86,6 +89,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const institute = user?.institute || null;
+
+  const hasModule = (module: string): boolean => {
+    if (!institute?.modules_enabled) return true; // default allow if no config
+    return institute.modules_enabled[module] !== false;
+  };
+
+  const isRole = (...roles: UserRole[]): boolean => {
+    if (!user) return false;
+    return roles.includes(user.role);
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -95,7 +110,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isAuthenticated: !!user, isLoading }}>
+    <AuthContext.Provider value={{
+      user, login, register, logout,
+      isAuthenticated: !!user, isLoading,
+      institute, hasModule, isRole,
+    }}>
       {children}
     </AuthContext.Provider>
   );

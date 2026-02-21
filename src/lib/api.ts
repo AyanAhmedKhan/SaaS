@@ -1,398 +1,724 @@
 // Centralized API client with structured error handling
 // Every API call is wrapped in try-catch for debugging
 
+import type {
+  AuthUser, Student, Teacher, Class, Subject, AcademicYear, Institute,
+  AttendanceRecord, TimetableEntry, Notice, SyllabusEntry, Exam, ExamResult,
+  Assignment, AssignmentSubmission, FeeStructure, FeePayment, TeacherRemark,
+  GradingSystem, Notification, Pagination,
+} from '@/types';
+
 const API_BASE = '/api';
 
 interface ApiResponse<T = unknown> {
-    success: boolean;
-    data?: T;
-    error?: {
-        message: string;
-        code: string;
-        requestId?: string;
-        details?: unknown;
-        stack?: string;
-    };
-    message?: string;
+  success: boolean;
+  data?: T;
+  error?: {
+    message: string;
+    code: string;
+    requestId?: string;
+    details?: unknown;
+    stack?: string;
+  };
+  message?: string;
 }
 
 class ApiClient {
-    private baseUrl: string;
+  private baseUrl: string;
 
-    constructor(baseUrl: string) {
-        this.baseUrl = baseUrl;
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
+  }
+
+  private getToken(): string | null {
+    try {
+      return localStorage.getItem('eduyantra_token');
+    } catch (error) {
+      console.error('[API] Failed to get token from storage:', error);
+      return null;
+    }
+  }
+
+  setToken(token: string): void {
+    try {
+      localStorage.setItem('eduyantra_token', token);
+    } catch (error) {
+      console.error('[API] Failed to save token:', error);
+    }
+  }
+
+  setRefreshToken(token: string): void {
+    try {
+      localStorage.setItem('eduyantra_refresh_token', token);
+    } catch (error) {
+      console.error('[API] Failed to save refresh token:', error);
+    }
+  }
+
+  clearToken(): void {
+    try {
+      localStorage.removeItem('eduyantra_token');
+      localStorage.removeItem('eduyantra_refresh_token');
+    } catch (error) {
+      console.error('[API] Failed to clear token:', error);
+    }
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const token = this.getToken();
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string>),
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
-    private getToken(): string | null {
-        try {
-            return localStorage.getItem('eduyantra_token');
-        } catch (error) {
-            console.error('[API] Failed to get token from storage:', error);
-            return null;
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      });
+
+      const data: ApiResponse<T> = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Try refresh token before clearing
+          const refreshed = await this.tryRefreshToken();
+          if (refreshed) {
+            // Retry original request with new token
+            headers['Authorization'] = `Bearer ${this.getToken()}`;
+            const retryResponse = await fetch(url, { ...options, headers });
+            const retryData: ApiResponse<T> = await retryResponse.json();
+            if (retryResponse.ok) return retryData;
+          }
+          this.clearToken();
         }
+
+        const errorMessage =
+          data.error?.message || `Request failed with status ${response.status}`;
+        console.error(
+          `[API] ${options.method || 'GET'} ${endpoint} → ${response.status}: ${errorMessage}`
+        );
+        throw new ApiError(errorMessage, response.status, data.error);
+      }
+
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message : 'An unexpected error occurred';
+      console.error(`[API] Network error on ${endpoint}:`, message);
+      throw new ApiError(
+        'Unable to connect to server. Please check your connection.',
+        0,
+        { code: 'NETWORK_ERROR', message }
+      );
     }
+  }
 
-    setToken(token: string): void {
-        try {
-            localStorage.setItem('eduyantra_token', token);
-        } catch (error) {
-            console.error('[API] Failed to save token:', error);
-        }
+  private async tryRefreshToken(): Promise<boolean> {
+    try {
+      const refreshToken = localStorage.getItem('eduyantra_refresh_token');
+      if (!refreshToken) return false;
+      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!response.ok) return false;
+      const data = await response.json();
+      if (data.data?.token) {
+        this.setToken(data.data.token);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
     }
+  }
 
-    clearToken(): void {
-        try {
-            localStorage.removeItem('eduyantra_token');
-        } catch (error) {
-            console.error('[API] Failed to clear token:', error);
-        }
+  async get<T>(endpoint: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
+    let url = endpoint;
+    if (params) {
+      const searchParams = new URLSearchParams(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== '')
+      );
+      if (searchParams.toString()) {
+        url += `?${searchParams.toString()}`;
+      }
     }
+    return this.request<T>(url, { method: 'GET' });
+  }
 
-    private async request<T>(
-        endpoint: string,
-        options: RequestInit = {}
-    ): Promise<ApiResponse<T>> {
-        const url = `${this.baseUrl}${endpoint}`;
-        const token = this.getToken();
+  async post<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
 
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-            ...(options.headers as Record<string, string>),
-        };
+  async put<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
 
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        try {
-            const response = await fetch(url, {
-                ...options,
-                headers,
-            });
-
-            const data: ApiResponse<T> = await response.json();
-
-            if (!response.ok) {
-                // Handle 401 - auto logout
-                if (response.status === 401) {
-                    this.clearToken();
-                    // Don't redirect here to avoid circular deps, let AuthContext handle it
-                }
-
-                const errorMessage =
-                    data.error?.message || `Request failed with status ${response.status}`;
-                console.error(
-                    `[API] ${options.method || 'GET'} ${endpoint} → ${response.status}: ${errorMessage}`
-                );
-                throw new ApiError(errorMessage, response.status, data.error);
-            }
-
-            return data;
-        } catch (error) {
-            if (error instanceof ApiError) {
-                throw error;
-            }
-
-            // Network errors, timeouts, etc.
-            const message =
-                error instanceof Error ? error.message : 'An unexpected error occurred';
-            console.error(`[API] Network error on ${endpoint}:`, message);
-            throw new ApiError(
-                'Unable to connect to server. Please check your connection.',
-                0,
-                { code: 'NETWORK_ERROR', message }
-            );
-        }
-    }
-
-    async get<T>(endpoint: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
-        let url = endpoint;
-        if (params) {
-            const searchParams = new URLSearchParams(
-                Object.entries(params).filter(([, v]) => v !== undefined && v !== '')
-            );
-            if (searchParams.toString()) {
-                url += `?${searchParams.toString()}`;
-            }
-        }
-        return this.request<T>(url, { method: 'GET' });
-    }
-
-    async post<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
-        return this.request<T>(endpoint, {
-            method: 'POST',
-            body: body ? JSON.stringify(body) : undefined,
-        });
-    }
-
-    async put<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
-        return this.request<T>(endpoint, {
-            method: 'PUT',
-            body: body ? JSON.stringify(body) : undefined,
-        });
-    }
-
-    async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
-        return this.request<T>(endpoint, { method: 'DELETE' });
-    }
+  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'DELETE' });
+  }
 }
 
 // Custom error class for API errors
 export class ApiError extends Error {
-    status: number;
-    errorData: unknown;
+  status: number;
+  errorData: unknown;
 
-    constructor(message: string, status: number, errorData?: unknown) {
-        super(message);
-        this.name = 'ApiError';
-        this.status = status;
-        this.errorData = errorData;
-    }
+  constructor(message: string, status: number, errorData?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.errorData = errorData;
+  }
 }
 
 // Singleton API client
 export const api = new ApiClient(API_BASE);
 
-// ── Typed API functions ──
+// ═══════════════════════════════════════════
+// AUTH API
+// ═══════════════════════════════════════════
 
-// Auth
-export async function loginApi(email: string, password: string, role?: string) {
-    try {
-        const response = await api.post<{
-            user: { id: string; name: string; email: string; role: string; avatar?: string };
-            token: string;
-        }>('/auth/login', { email, password, role });
+export async function loginApi(email: string, password: string, instituteCode?: string) {
+  try {
+    const response = await api.post<{
+      user: AuthUser;
+      token: string;
+      refreshToken: string;
+    }>('/auth/login', { email, password, institute_code: instituteCode });
 
-        if (response.data?.token) {
-            api.setToken(response.data.token);
-        }
-
-        return response;
-    } catch (error) {
-        console.error('[API] Login failed:', error);
-        throw error;
+    if (response.data?.token) {
+      api.setToken(response.data.token);
+      if (response.data.refreshToken) {
+        api.setRefreshToken(response.data.refreshToken);
+      }
     }
+    return response;
+  } catch (error) {
+    console.error('[API] Login failed:', error);
+    throw error;
+  }
 }
 
-export async function registerApi(name: string, email: string, password: string, role: string) {
-    try {
-        const response = await api.post<{
-            user: { id: string; name: string; email: string; role: string; avatar?: string };
-            token: string;
-        }>('/auth/register', { name, email, password, role });
+export async function registerApi(data: {
+  name: string;
+  email: string;
+  password: string;
+  role: string;
+  institute_name?: string;
+  institute_code?: string;
+}) {
+  try {
+    const response = await api.post<{
+      user: AuthUser;
+      token: string;
+      refreshToken: string;
+    }>('/auth/register', data);
 
-        if (response.data?.token) {
-            api.setToken(response.data.token);
-        }
-
-        return response;
-    } catch (error) {
-        console.error('[API] Registration failed:', error);
-        throw error;
+    if (response.data?.token) {
+      api.setToken(response.data.token);
+      if (response.data.refreshToken) {
+        api.setRefreshToken(response.data.refreshToken);
+      }
     }
+    return response;
+  } catch (error) {
+    console.error('[API] Registration failed:', error);
+    throw error;
+  }
 }
 
 export async function getMeApi() {
-    try {
-        return await api.get<{
-            user: { id: string; name: string; email: string; role: string; avatar?: string };
-        }>('/auth/me');
-    } catch (error) {
-        console.error('[API] Get profile failed:', error);
-        throw error;
-    }
+  try {
+    return await api.get<{ user: AuthUser }>('/auth/me');
+  } catch (error) {
+    console.error('[API] Get profile failed:', error);
+    throw error;
+  }
 }
 
 export async function logoutApi() {
-    try {
-        await api.post('/auth/logout');
-        api.clearToken();
-    } catch (error) {
-        // Always clear token on logout, even if API fails
-        api.clearToken();
-        console.error('[API] Logout failed:', error);
-    }
+  try {
+    await api.post('/auth/logout');
+    api.clearToken();
+  } catch (error) {
+    api.clearToken();
+    console.error('[API] Logout failed:', error);
+  }
 }
 
-// Dashboard
+export async function changePasswordApi(currentPassword: string, newPassword: string) {
+  return api.post('/auth/change-password', { currentPassword, newPassword });
+}
+
+// ═══════════════════════════════════════════
+// DASHBOARD API
+// ═══════════════════════════════════════════
+
 export async function getDashboardStats() {
-    try {
-        return await api.get<{
-            stats: {
-                totalStudents: number;
-                totalTeachers: number;
-                totalParents: number;
-                averageAttendance: number;
-                pendingFees: number;
-                upcomingEvents: number;
-            };
-            attendanceData: { month: string; attendance: number }[];
-            performanceData: { subject: string; score: number }[];
-            recentStudents: unknown[];
-            recentNotices: unknown[];
-        }>('/dashboard/stats');
-    } catch (error) {
-        console.error('[API] Dashboard stats failed:', error);
-        throw error;
-    }
+  return api.get<{
+    stats: {
+      totalStudents: number;
+      totalTeachers: number;
+      totalClasses: number;
+      averageAttendance: number;
+      totalFeeCollected: number;
+      totalFeePending: number;
+    };
+    attendanceData: { month: string; attendance: number }[];
+    performanceData: { subject: string; average: number }[];
+    classOverview: { class_name: string; section: string; student_count: number; avg_attendance: number }[];
+    recentNotices: Notice[];
+  }>('/dashboard/stats');
 }
 
-// Students
-export async function getStudents(params?: {
-    search?: string;
-    class?: string;
-    section?: string;
-    page?: string;
-    limit?: string;
-}) {
-    try {
-        return await api.get<{
-            students: unknown[];
-            pagination: { page: number; limit: number; total: number; totalPages: number };
-        }>('/students', params as Record<string, string>);
-    } catch (error) {
-        console.error('[API] Get students failed:', error);
-        throw error;
-    }
+export async function getTeacherDashboard() {
+  return api.get('/dashboard/teacher');
 }
 
-export async function createStudent(data: unknown) {
-    try {
-        return await api.post<{ student: unknown }>('/students', data);
-    } catch (error) {
-        console.error('[API] Create student failed:', error);
-        throw error;
-    }
+export async function getStudentDashboard() {
+  return api.get('/dashboard/student');
 }
 
-export async function updateStudent(id: string, data: unknown) {
-    try {
-        return await api.put<{ student: unknown }>(`/students/${id}`, data);
-    } catch (error) {
-        console.error('[API] Update student failed:', error);
-        throw error;
-    }
+export async function getParentDashboard() {
+  return api.get('/dashboard/parent');
+}
+
+export async function getSuperAdminDashboard() {
+  return api.get('/dashboard/super-admin');
+}
+
+// ═══════════════════════════════════════════
+// STUDENTS API
+// ═══════════════════════════════════════════
+
+export async function getStudents(params?: Record<string, string>) {
+  return api.get<{
+    students: Student[];
+    pagination: Pagination;
+  }>('/students', params);
+}
+
+export async function getStudent(id: string) {
+  return api.get<{ student: Student }>(`/students/${id}`);
+}
+
+export async function createStudent(data: Partial<Student>) {
+  return api.post<{ student: Student }>('/students', data);
+}
+
+export async function updateStudent(id: string, data: Partial<Student>) {
+  return api.put<{ student: Student }>(`/students/${id}`, data);
 }
 
 export async function deleteStudent(id: string) {
-    try {
-        return await api.delete(`/students/${id}`);
-    } catch (error) {
-        console.error('[API] Delete student failed:', error);
-        throw error;
-    }
+  return api.delete(`/students/${id}`);
 }
 
-// Teachers
-export async function getTeachers(params?: { search?: string; subject?: string }) {
-    try {
-        return await api.get<{ teachers: unknown[] }>('/teachers', params as Record<string, string>);
-    } catch (error) {
-        console.error('[API] Get teachers failed:', error);
-        throw error;
-    }
+// ═══════════════════════════════════════════
+// TEACHERS API
+// ═══════════════════════════════════════════
+
+export async function getTeachers(params?: Record<string, string>) {
+  return api.get<{ teachers: Teacher[] }>('/teachers', params);
 }
 
-// Attendance
+export async function getTeacher(id: string) {
+  return api.get<{ teacher: Teacher }>(`/teachers/${id}`);
+}
+
+export async function createTeacher(data: Partial<Teacher>) {
+  return api.post<{ teacher: Teacher }>('/teachers', data);
+}
+
+export async function updateTeacher(id: string, data: Partial<Teacher>) {
+  return api.put<{ teacher: Teacher }>(`/teachers/${id}`, data);
+}
+
+export async function deleteTeacher(id: string) {
+  return api.delete(`/teachers/${id}`);
+}
+
+export async function assignTeacher(teacherId: string, assignments: { class_id: string; subject_id: string }[]) {
+  return api.post(`/teachers/${teacherId}/assign`, { assignments });
+}
+
+// ═══════════════════════════════════════════
+// CLASSES API
+// ═══════════════════════════════════════════
+
+export async function getClasses(params?: Record<string, string>) {
+  return api.get<{ classes: Class[] }>('/classes', params);
+}
+
+export async function createClass(data: Partial<Class>) {
+  return api.post<{ class: Class }>('/classes', data);
+}
+
+export async function updateClass(id: string, data: Partial<Class>) {
+  return api.put<{ class: Class }>(`/classes/${id}`, data);
+}
+
+export async function deleteClass(id: string) {
+  return api.delete(`/classes/${id}`);
+}
+
+// ═══════════════════════════════════════════
+// SUBJECTS API
+// ═══════════════════════════════════════════
+
+export async function getSubjects(params?: Record<string, string>) {
+  return api.get<{ subjects: Subject[] }>('/subjects', params);
+}
+
+export async function getSubjectsByClass(classId: string) {
+  return api.get<{ subjects: Subject[] }>(`/subjects/by-class/${classId}`);
+}
+
+export async function createSubject(data: Partial<Subject>) {
+  return api.post<{ subject: Subject }>('/subjects', data);
+}
+
+export async function updateSubject(id: string, data: Partial<Subject>) {
+  return api.put<{ subject: Subject }>(`/subjects/${id}`, data);
+}
+
+export async function deleteSubject(id: string) {
+  return api.delete(`/subjects/${id}`);
+}
+
+// ═══════════════════════════════════════════
+// ATTENDANCE API
+// ═══════════════════════════════════════════
+
 export async function getAttendance(params?: Record<string, string>) {
-    try {
-        return await api.get<{ attendance: unknown[] }>('/attendance', params);
-    } catch (error) {
-        console.error('[API] Get attendance failed:', error);
-        throw error;
-    }
+  return api.get<{ records: AttendanceRecord[]; pagination: Pagination }>('/attendance', params);
 }
 
 export async function getAttendanceSummary(params?: Record<string, string>) {
-    try {
-        return await api.get<{ summary: unknown[] }>('/attendance/summary', params);
-    } catch (error) {
-        console.error('[API] Get attendance summary failed:', error);
-        throw error;
-    }
+  return api.get<{ summary: unknown }>('/attendance/summary', params);
 }
 
-export async function markAttendance(records: unknown[]) {
-    try {
-        return await api.post('/attendance', { records });
-    } catch (error) {
-        console.error('[API] Mark attendance failed:', error);
-        throw error;
-    }
+export async function getAttendanceMonthly(params?: Record<string, string>) {
+  return api.get<{ calendar: unknown[] }>('/attendance/monthly', params);
 }
 
-// Notices
-export async function getNotices(params?: Record<string, string>) {
-    try {
-        return await api.get<{ notices: unknown[] }>('/notices', params);
-    } catch (error) {
-        console.error('[API] Get notices failed:', error);
-        throw error;
-    }
+export async function markAttendance(records: { student_id: string; class_id: string; date: string; status: string; subject_id?: string }[]) {
+  return api.post('/attendance', { records });
 }
 
-export async function createNotice(data: unknown) {
-    try {
-        return await api.post<{ notice: unknown }>('/notices', data);
-    } catch (error) {
-        console.error('[API] Create notice failed:', error);
-        throw error;
-    }
-}
+// ═══════════════════════════════════════════
+// TIMETABLE API
+// ═══════════════════════════════════════════
 
-// Timetable
 export async function getTimetable(params?: Record<string, string>) {
-    try {
-        return await api.get<{ timetable: unknown[] }>('/timetable', params);
-    } catch (error) {
-        console.error('[API] Get timetable failed:', error);
-        throw error;
-    }
+  return api.get<{ timetable: TimetableEntry[] }>('/timetable', params);
 }
 
-// Syllabus
+export async function createTimetableEntry(data: Partial<TimetableEntry>) {
+  return api.post<{ entry: TimetableEntry }>('/timetable', data);
+}
+
+export async function bulkUpsertTimetable(class_id: string, academic_year_id: string, entries: Partial<TimetableEntry>[]) {
+  return api.post('/timetable/bulk', { class_id, academic_year_id, entries });
+}
+
+export async function updateTimetableEntry(id: string, data: Partial<TimetableEntry>) {
+  return api.put<{ entry: TimetableEntry }>(`/timetable/${id}`, data);
+}
+
+export async function deleteTimetableEntry(id: string) {
+  return api.delete(`/timetable/${id}`);
+}
+
+// ═══════════════════════════════════════════
+// NOTICES API
+// ═══════════════════════════════════════════
+
+export async function getNotices(params?: Record<string, string>) {
+  return api.get<{ notices: Notice[]; pagination: Pagination }>('/notices', params);
+}
+
+export async function getNotice(id: string) {
+  return api.get<{ notice: Notice }>(`/notices/${id}`);
+}
+
+export async function createNotice(data: Partial<Notice>) {
+  return api.post<{ notice: Notice }>('/notices', data);
+}
+
+export async function updateNotice(id: string, data: Partial<Notice>) {
+  return api.put<{ notice: Notice }>(`/notices/${id}`, data);
+}
+
+export async function deleteNotice(id: string) {
+  return api.delete(`/notices/${id}`);
+}
+
+// ═══════════════════════════════════════════
+// SYLLABUS API
+// ═══════════════════════════════════════════
+
 export async function getSyllabus(params?: Record<string, string>) {
-    try {
-        return await api.get<{ syllabus: unknown[] }>('/syllabus', params);
-    } catch (error) {
-        console.error('[API] Get syllabus failed:', error);
-        throw error;
-    }
+  return api.get<{ syllabus: SyllabusEntry[] }>('/syllabus', params);
 }
 
 export async function getSyllabusSummary(params?: Record<string, string>) {
-    try {
-        return await api.get<{ summary: unknown[] }>('/syllabus/summary', params);
-    } catch (error) {
-        console.error('[API] Get syllabus summary failed:', error);
-        throw error;
-    }
+  return api.get<{ summary: unknown[] }>('/syllabus/summary', params);
 }
 
-// Reports
+export async function createSyllabusEntry(data: Partial<SyllabusEntry>) {
+  return api.post<{ entry: SyllabusEntry }>('/syllabus', data);
+}
+
+export async function updateSyllabusEntry(id: string, data: Partial<SyllabusEntry>) {
+  return api.put<{ entry: SyllabusEntry }>(`/syllabus/${id}`, data);
+}
+
+export async function deleteSyllabusEntry(id: string) {
+  return api.delete(`/syllabus/${id}`);
+}
+
+// ═══════════════════════════════════════════
+// EXAMS API
+// ═══════════════════════════════════════════
+
+export async function getExams(params?: Record<string, string>) {
+  return api.get<{ exams: Exam[]; pagination: Pagination }>('/exams', params);
+}
+
+export async function getExam(id: string) {
+  return api.get<{ exam: Exam; results: ExamResult[] }>(`/exams/${id}`);
+}
+
+export async function createExam(data: Partial<Exam>) {
+  return api.post<{ exam: Exam }>('/exams', data);
+}
+
+export async function updateExam(id: string, data: Partial<Exam>) {
+  return api.put<{ exam: Exam }>(`/exams/${id}`, data);
+}
+
+export async function deleteExam(id: string) {
+  return api.delete(`/exams/${id}`);
+}
+
+export async function enterExamResults(examId: string, results: { student_id: string; marks_obtained: number; is_absent?: boolean }[]) {
+  return api.post(`/exams/${examId}/results`, { results });
+}
+
+export async function getExamRankList(examId: string) {
+  return api.get<{ rankList: ExamResult[] }>(`/exams/${examId}/rank-list`);
+}
+
+// ═══════════════════════════════════════════
+// ASSIGNMENTS API
+// ═══════════════════════════════════════════
+
+export async function getAssignments(params?: Record<string, string>) {
+  return api.get<{ assignments: Assignment[]; pagination: Pagination }>('/assignments', params);
+}
+
+export async function getAssignment(id: string) {
+  return api.get<{ assignment: Assignment; submissions: AssignmentSubmission[] }>(`/assignments/${id}`);
+}
+
+export async function createAssignment(data: Partial<Assignment>) {
+  return api.post<{ assignment: Assignment }>('/assignments', data);
+}
+
+export async function updateAssignment(id: string, data: Partial<Assignment>) {
+  return api.put<{ assignment: Assignment }>(`/assignments/${id}`, data);
+}
+
+export async function deleteAssignment(id: string) {
+  return api.delete(`/assignments/${id}`);
+}
+
+export async function submitAssignment(assignmentId: string, data: { submission_text?: string; file_url?: string }) {
+  return api.post(`/assignments/${assignmentId}/submit`, data);
+}
+
+export async function gradeSubmission(assignmentId: string, submissionId: string, data: { marks_obtained: number; teacher_remarks?: string }) {
+  return api.put(`/assignments/${assignmentId}/submissions/${submissionId}/grade`, data);
+}
+
+// ═══════════════════════════════════════════
+// FEES API
+// ═══════════════════════════════════════════
+
+export async function getFeeStructures(params?: Record<string, string>) {
+  return api.get<{ structures: FeeStructure[] }>('/fees/structures', params);
+}
+
+export async function createFeeStructure(data: Partial<FeeStructure>) {
+  return api.post<{ structure: FeeStructure }>('/fees/structures', data);
+}
+
+export async function updateFeeStructure(id: string, data: Partial<FeeStructure>) {
+  return api.put<{ structure: FeeStructure }>(`/fees/structures/${id}`, data);
+}
+
+export async function deleteFeeStructure(id: string) {
+  return api.delete(`/fees/structures/${id}`);
+}
+
+export async function getFeePayments(params?: Record<string, string>) {
+  return api.get<{ payments: FeePayment[]; pagination: Pagination }>('/fees/payments', params);
+}
+
+export async function recordFeePayment(data: Partial<FeePayment>) {
+  return api.post<{ payment: FeePayment }>('/fees/payments', data);
+}
+
+export async function getStudentFees(studentId: string) {
+  return api.get<{ fees: unknown[]; payments: FeePayment[]; summary: unknown }>(`/fees/student/${studentId}`);
+}
+
+export async function getFeeDefaulters(params?: Record<string, string>) {
+  return api.get<{ defaulters: unknown[] }>('/fees/defaulters', params);
+}
+
+// ═══════════════════════════════════════════
+// REMARKS API
+// ═══════════════════════════════════════════
+
+export async function getRemarks(params?: Record<string, string>) {
+  return api.get<{ remarks: TeacherRemark[] }>('/remarks', params);
+}
+
+export async function createRemark(data: Partial<TeacherRemark>) {
+  return api.post<{ remark: TeacherRemark }>('/remarks', data);
+}
+
+export async function updateRemark(id: string, data: Partial<TeacherRemark>) {
+  return api.put<{ remark: TeacherRemark }>(`/remarks/${id}`, data);
+}
+
+export async function deleteRemark(id: string) {
+  return api.delete(`/remarks/${id}`);
+}
+
+// ═══════════════════════════════════════════
+// NOTIFICATIONS API
+// ═══════════════════════════════════════════
+
+export async function getNotifications(params?: Record<string, string>) {
+  return api.get<{ notifications: Notification[]; unread_count: number; pagination: Pagination }>('/notifications', params);
+}
+
+export async function markNotificationRead(id: string) {
+  return api.put(`/notifications/${id}/read`);
+}
+
+export async function markAllNotificationsRead() {
+  return api.put('/notifications/read-all');
+}
+
+export async function deleteNotification(id: string) {
+  return api.delete(`/notifications/${id}`);
+}
+
+// ═══════════════════════════════════════════
+// GRADING API
+// ═══════════════════════════════════════════
+
+export async function getGradingSystems() {
+  return api.get<{ gradingSystems: GradingSystem[] }>('/grading');
+}
+
+export async function createGradingSystem(data: Partial<GradingSystem>) {
+  return api.post<{ gradingSystem: GradingSystem }>('/grading', data);
+}
+
+export async function bulkUpsertGrading(grades: Partial<GradingSystem>[]) {
+  return api.post('/grading/bulk', { grades });
+}
+
+export async function updateGradingSystem(id: string, data: Partial<GradingSystem>) {
+  return api.put<{ gradingSystem: GradingSystem }>(`/grading/${id}`, data);
+}
+
+export async function deleteGradingSystem(id: string) {
+  return api.delete(`/grading/${id}`);
+}
+
+// ═══════════════════════════════════════════
+// REPORTS API
+// ═══════════════════════════════════════════
+
 export async function getExamResults(params?: Record<string, string>) {
-    try {
-        return await api.get<{ results: unknown[] }>('/reports/exam-results', params);
-    } catch (error) {
-        console.error('[API] Get exam results failed:', error);
-        throw error;
-    }
+  return api.get<{ results: unknown[] }>('/reports/exam-results', params);
 }
 
 export async function getPerformanceTrend(params?: Record<string, string>) {
-    try {
-        return await api.get<{ performanceTrend: unknown[] }>('/reports/performance-trend', params);
-    } catch (error) {
-        console.error('[API] Get performance trend failed:', error);
-        throw error;
-    }
+  return api.get<{ performanceTrend: unknown[] }>('/reports/performance-trend', params);
 }
 
 export async function getClassSummary() {
-    try {
-        return await api.get<{ summary: unknown[] }>('/reports/class-summary');
-    } catch (error) {
-        console.error('[API] Get class summary failed:', error);
-        throw error;
-    }
+  return api.get<{ summary: unknown[] }>('/reports/class-summary');
+}
+
+export async function getReportCard(studentId: string) {
+  return api.get<{ student: Student; exams: unknown[]; attendance: unknown; remarks: TeacherRemark[] }>(`/reports/report-card/${studentId}`);
+}
+
+export async function getFeeSummary() {
+  return api.get<{ summary: unknown }>('/reports/fee-summary');
+}
+
+// ═══════════════════════════════════════════
+// ACADEMIC YEARS API
+// ═══════════════════════════════════════════
+
+export async function getAcademicYears() {
+  return api.get<{ academicYears: AcademicYear[] }>('/academic-years');
+}
+
+export async function getCurrentAcademicYear() {
+  return api.get<{ academicYear: AcademicYear }>('/academic-years/current');
+}
+
+export async function createAcademicYear(data: Partial<AcademicYear>) {
+  return api.post<{ academicYear: AcademicYear }>('/academic-years', data);
+}
+
+// ═══════════════════════════════════════════
+// INSTITUTES API (super admin)
+// ═══════════════════════════════════════════
+
+export async function getInstitutes(params?: Record<string, string>) {
+  return api.get<{ institutes: Institute[]; pagination: Pagination }>('/institutes', params);
+}
+
+export async function getInstitute(id: string) {
+  return api.get<{ institute: Institute }>(`/institutes/${id}`);
+}
+
+export async function createInstitute(data: Partial<Institute>) {
+  return api.post<{ institute: Institute }>('/institutes', data);
+}
+
+export async function updateInstitute(id: string, data: Partial<Institute>) {
+  return api.put<{ institute: Institute }>(`/institutes/${id}`, data);
 }
