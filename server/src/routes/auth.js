@@ -8,19 +8,22 @@ const router = Router();
 
 // POST /api/auth/login
 router.post('/login', asyncHandler(async (req, res) => {
-    const { email, password, role } = req.body;
+    let { email, password, role } = req.body;
 
     if (!email || !password) {
         throw new AppError('Email and password are required', 400);
     }
 
+    email = email.trim().toLowerCase();
+    if (role) role = role.trim().toLowerCase();
+
     try {
         let result;
 
         if (role) {
-            result = await query('SELECT * FROM users WHERE email = $1 AND role = $2', [email, role]);
+            result = await query('SELECT * FROM users WHERE LOWER(email) = $1 AND role = $2', [email, role]);
         } else {
-            result = await query('SELECT * FROM users WHERE email = $1', [email]);
+            result = await query('SELECT * FROM users WHERE LOWER(email) = $1', [email]);
         }
 
         const user = result.rows[0];
