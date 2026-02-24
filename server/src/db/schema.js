@@ -146,6 +146,7 @@ export async function createSchema() {
         class_id TEXT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
         subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
         academic_year_id TEXT NOT NULL REFERENCES academic_years(id),
+        institute_id TEXT NOT NULL REFERENCES institutes(id) ON DELETE CASCADE,
         is_class_teacher BOOLEAN DEFAULT false,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(teacher_id, class_id, subject_id, academic_year_id)
@@ -330,6 +331,9 @@ export async function createSchema() {
         fee_type TEXT NOT NULL CHECK(fee_type IN ('tuition','exam','lab','library','transport','hostel','other')),
         frequency TEXT DEFAULT 'monthly' CHECK(frequency IN ('one_time','monthly','quarterly','half_yearly','yearly')),
         due_day INTEGER DEFAULT 10,
+        due_date DATE,
+        description TEXT,
+        installments_allowed BOOLEAN DEFAULT false,
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()

@@ -158,7 +158,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 router.post('/', authorize('institute_admin', 'class_teacher', 'super_admin'), asyncHandler(async (req, res) => {
     const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
     const { name, email, roll_number, class_id, admission_date, date_of_birth, gender, address, phone,
-            parent_name, parent_email, parent_phone, blood_group, create_login, password } = req.body;
+        parent_name, parent_email, parent_phone, blood_group, create_login, password } = req.body;
 
     if (!name || !email || !roll_number) {
         throw new AppError('Name, email, and roll number are required', 400);
@@ -179,8 +179,11 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'super_admin'), a
 
         // Optionally create a user login for the student
         if (create_login) {
+            if (!password || password.length < 8) {
+                throw new AppError('Password is required and must be at least 8 characters when creating login', 400);
+            }
             userId = `u_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
-            const passwordHash = bcrypt.hashSync(password || 'Student@123', 12);
+            const passwordHash = bcrypt.hashSync(password, 12);
             await client.query(
                 'INSERT INTO users (id, institute_id, name, email, password_hash, role) VALUES ($1, $2, $3, $4, $5, $6)',
                 [userId, instId, name, email, passwordHash, 'student']
@@ -198,7 +201,7 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'super_admin'), a
                 parentUserId = existingParent.rows[0].id;
             } else {
                 parentUserId = `u_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
-                const parentHash = bcrypt.hashSync(password || 'Parent@123', 12);
+                const parentHash = bcrypt.hashSync(password, 12);
                 await client.query(
                     'INSERT INTO users (id, institute_id, name, email, password_hash, role, phone) VALUES ($1, $2, $3, $4, $5, $6, $7)',
                     [parentUserId, instId, parent_name || `Parent of ${name}`, parent_email, parentHash, 'parent', parent_phone || null]
@@ -212,8 +215,8 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'super_admin'), a
              admission_date, date_of_birth, gender, address, phone, parent_id, parent_name, parent_email, parent_phone, blood_group)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
             [studentId, userId, instId, ayId, class_id || null, name, email, roll_number,
-             admission_date || null, date_of_birth || null, gender || null, address || null, phone || null,
-             parentUserId, parent_name || null, parent_email || null, parent_phone || null, blood_group || null]
+                admission_date || null, date_of_birth || null, gender || null, address || null, phone || null,
+                parentUserId, parent_name || null, parent_email || null, parent_phone || null, blood_group || null]
         );
 
         await client.query('COMMIT');
@@ -247,7 +250,7 @@ router.put('/:id', authorize('institute_admin', 'class_teacher', 'super_admin'),
 
     const e = existingResult.rows[0];
     const { name, email, roll_number, class_id, admission_date, date_of_birth, gender, address, phone,
-            parent_name, parent_email, parent_phone, blood_group, status } = req.body;
+        parent_name, parent_email, parent_phone, blood_group, status } = req.body;
 
     await query(
         `UPDATE students SET name = $1, email = $2, roll_number = $3, class_id = $4, 

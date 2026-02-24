@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import { randomUUID, randomBytes } from 'crypto';
 import { query, getClient } from '../db/connection.js';
 import { generateToken, generateRefreshToken, authenticate, logAudit } from '../middleware/auth.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
@@ -42,7 +43,7 @@ router.post('/login', asyncHandler(async (req, res) => {
             throw new AppError('Invalid email or password', 401);
         }
 
-        const isValidPassword = bcrypt.compareSync(password, user.password_hash);
+        const isValidPassword = await bcrypt.compare(password, user.password_hash);
         if (!isValidPassword) {
             throw new AppError('Invalid email or password', 401);
         }
@@ -94,6 +95,10 @@ router.post('/register', asyncHandler(async (req, res) => {
         throw new AppError('Invalid role specified', 400);
     }
 
+    if (password.length < 8) {
+        throw new AppError('Password must be at least 8 characters', 400);
+    }
+
     const client = await getClient();
     try {
         await client.query('BEGIN');
@@ -104,7 +109,7 @@ router.post('/register', asyncHandler(async (req, res) => {
         // If registering as institute_admin with a new institute
         if (role === 'institute_admin' && institute_name) {
             const instCode = institute_code?.trim().toUpperCase() || `INST${randomUUID().replace(/-/g, '').substring(0, 6).toUpperCase()}`;
-            
+
             // Check if code exists
             const existingInst = await client.query('SELECT id FROM institutes WHERE code = $1', [instCode]);
             if (existingInst.rows.length > 0) {
@@ -264,7 +269,7 @@ router.post('/refresh', asyncHandler(async (req, res) => {
 
     try {
         const jwt = (await import('jsonwebtoken')).default;
-        const JWT_SECRET = process.env.JWT_SECRET || 'eduyantra-secret-key-change-in-production';
+        const { JWT_SECRET } = await import('../middleware/auth.js');
         const decoded = jwt.verify(refreshToken, JWT_SECRET);
 
         if (decoded.type !== 'refresh') {
@@ -302,7 +307,7 @@ router.post('/change-password', authenticate, asyncHandler(async (req, res) => {
     const { rows } = await query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
     if (!rows[0]) throw new AppError('User not found', 404);
 
-    if (!bcrypt.compareSync(currentPassword, rows[0].password_hash)) {
+    if (!await bcrypt.compare(currentPassword, rows[0].password_hash)) {
         throw new AppError('Current password is incorrect', 401);
     }
 
@@ -363,7 +368,6 @@ router.post('/forgot-password', asyncHandler(async (req, res) => {
     await query('UPDATE password_resets SET used = true WHERE user_id = $1 AND used = false', [user.id]);
 
     // Generate token
-    const { randomUUID, randomBytes } = await import('crypto');
     const resetToken = randomBytes(32).toString('hex');
     const id = `pr_${randomUUID().replace(/-/g, '').substring(0, 12)}`;
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour

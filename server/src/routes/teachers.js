@@ -79,8 +79,11 @@ router.post('/', authorize('institute_admin', 'super_admin'), asyncHandler(async
 
         let userId = null;
         if (create_login !== false) {
+            if (!password || password.length < 8) {
+                throw new AppError('Password is required and must be at least 8 characters when creating login', 400);
+            }
             userId = `u_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
-            const passwordHash = bcrypt.hashSync(password || 'Teacher@123', 12);
+            const passwordHash = bcrypt.hashSync(password, 12);
             await client.query(
                 'INSERT INTO users (id, institute_id, name, email, password_hash, role, phone) VALUES ($1, $2, $3, $4, $5, $6, $7)',
                 [userId, instId, name, email, passwordHash, 'class_teacher', phone || null]
@@ -124,7 +127,7 @@ router.put('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(asy
         `UPDATE teachers SET name = $1, email = $2, phone = $3, subject_specialization = $4,
          qualification = $5, experience_years = $6, status = $7, updated_at = NOW() WHERE id = $8`,
         [name || e.name, email || e.email, phone ?? e.phone, subject_specialization ?? e.subject_specialization,
-         qualification ?? e.qualification, experience_years ?? e.experience_years, status || e.status, req.params.id]
+        qualification ?? e.qualification, experience_years ?? e.experience_years, status || e.status, req.params.id]
     );
 
     await logAudit({ instituteId: e.institute_id, userId: req.user.id, action: 'update', entityType: 'teacher', entityId: req.params.id, oldValues: e, newValues: req.body, req });
@@ -147,11 +150,11 @@ router.post('/:id/assign', authorize('institute_admin', 'super_admin'), asyncHan
 
     const { randomUUID } = await import('crypto');
     await query(
-        `INSERT INTO teacher_assignments (id, teacher_id, class_id, subject_id, academic_year_id, is_class_teacher)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO teacher_assignments (id, teacher_id, class_id, subject_id, academic_year_id, institute_id, is_class_teacher)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (teacher_id, class_id, subject_id, academic_year_id) 
-         DO UPDATE SET is_class_teacher = $6`,
-        [`ta_${randomUUID().replace(/-/g, '').substring(0, 10)}`, req.params.id, class_id, subject_id, ayId, is_class_teacher || false]
+         DO UPDATE SET is_class_teacher = $7`,
+        [`ta_${randomUUID().replace(/-/g, '').substring(0, 10)}`, req.params.id, class_id, subject_id, ayId, teacher.rows[0].institute_id, is_class_teacher || false]
     );
 
     // If is_class_teacher, also update the class record

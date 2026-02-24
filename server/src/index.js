@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { query, closePool } from './db/connection.js';
@@ -33,8 +34,9 @@ const PORT = process.env.PORT || 3001;
 
 // ── Security & parsing middleware ──
 app.use(helmet({ contentSecurityPolicy: false }));
+app.use(compression());
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
     credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));

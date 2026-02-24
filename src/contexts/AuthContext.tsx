@@ -6,7 +6,7 @@ interface AuthContextType {
   user: AuthUser | null;
   login: (email: string, password: string, instituteCode?: string) => Promise<boolean>;
   register: (data: { name: string; email: string; password: string; role: string; institute_name?: string; institute_code?: string }) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
   institute: AuthUser['institute'] | null;

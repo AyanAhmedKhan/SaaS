@@ -15,7 +15,7 @@ router.get('/structures', authorize('institute_admin', 'super_admin'), asyncHand
   const { class_id, academic_year_id, fee_type } = req.query;
   const params = [instId];
 
-  let sql = `SELECT fs.*, c.name AS class_name, c.section, ay.year_label AS academic_year
+  let sql = `SELECT fs.*, c.name AS class_name, c.section, ay.name AS academic_year
              FROM fee_structures fs
              JOIN classes c ON fs.class_id = c.id
              LEFT JOIN academic_years ay ON fs.academic_year_id = ay.id
@@ -40,7 +40,7 @@ router.post('/structures', authorize('institute_admin', 'super_admin'), asyncHan
   await query(
     `INSERT INTO fee_structures (id, institute_id, class_id, academic_year_id, fee_type, amount, due_date, description, installments_allowed)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [id, instId, class_id, academic_year_id||null, fee_type, amount, due_date||null, description||null, installments_allowed||false]
+    [id, instId, class_id, academic_year_id || null, fee_type, amount, due_date || null, description || null, installments_allowed || false]
   );
 
   const { rows } = await query('SELECT * FROM fee_structures WHERE id=$1', [id]);
@@ -152,7 +152,7 @@ router.post('/payments', authorize('institute_admin', 'super_admin'), asyncHandl
   await query(
     `INSERT INTO fee_payments (id, institute_id, student_id, fee_structure_id, academic_year_id, amount, paid_amount, due_date, paid_date, payment_method, receipt_number, remarks, recorded_by, status)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CURRENT_DATE,$9,$10,$11,$12,'paid')`,
-    [id, instId, student_id, fee_structure_id, ayId, paid_amount, paid_amount, due_date||new Date().toISOString().split('T')[0], payment_method||'cash', receipt_number||null, remarks||null, req.user.id]
+    [id, instId, student_id, fee_structure_id, ayId, paid_amount, paid_amount, due_date || new Date().toISOString().split('T')[0], payment_method || 'cash', receipt_number || null, remarks || null, req.user.id]
   );
 
   const { rows } = await query('SELECT * FROM fee_payments WHERE id=$1', [id]);

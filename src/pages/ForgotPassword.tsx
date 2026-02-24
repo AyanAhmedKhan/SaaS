@@ -54,7 +54,7 @@ export default function ForgotPassword() {
             <CardTitle className="text-lg">Reset your password</CardTitle>
             <CardDescription>
               We'll send a password reset link to your email{" "}
-              {process.env.NODE_ENV !== "production" && "and WhatsApp (if enabled)"}
+              {import.meta.env.DEV && "and WhatsApp (if enabled)"}
             </CardDescription>
           </CardHeader>
           <CardContent>

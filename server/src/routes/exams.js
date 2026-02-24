@@ -16,7 +16,7 @@ router.get('/', asyncHandler(async (req, res) => {
   const offset = (parseInt(page) - 1) * parseInt(limit);
   const params = [instId];
 
-  let sql = `SELECT e.*, ay.year_label AS academic_year,
+  let sql = `SELECT e.*, ay.name AS academic_year,
              (SELECT COUNT(*) FROM exam_results er WHERE er.exam_id = e.id) AS result_count
              FROM exams e
              LEFT JOIN academic_years ay ON e.academic_year_id = ay.id
@@ -53,7 +53,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
 
   const exam = await query(
-    `SELECT e.*, ay.year_label AS academic_year
+    `SELECT e.*, ay.name AS academic_year
      FROM exams e LEFT JOIN academic_years ay ON e.academic_year_id = ay.id
      WHERE e.id = $1 AND e.institute_id = $2`,
     [req.params.id, instId]
@@ -86,7 +86,7 @@ router.post('/', authorize('institute_admin', 'super_admin'), asyncHandler(async
   await query(
     `INSERT INTO exams (id, institute_id, name, exam_type, class_id, academic_year_id, subject_id, exam_date, total_marks, passing_marks, weightage, created_by, status)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'scheduled')`,
-    [id, instId, name, exam_type, class_id, academic_year_id||null, subject_id||null, exam_date||null, total_marks||100, passing_marks||33, weightage||1.0, req.user.id]
+    [id, instId, name, exam_type, class_id, academic_year_id || null, subject_id || null, exam_date || null, total_marks || 100, passing_marks || 33, weightage || 1.0, req.user.id]
   );
 
   const { rows } = await query('SELECT * FROM exams WHERE id=$1', [id]);

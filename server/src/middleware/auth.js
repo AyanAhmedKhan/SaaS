@@ -2,7 +2,11 @@ import jwt from 'jsonwebtoken';
 import { AppError } from './errorHandler.js';
 import { query } from '../db/connection.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'eduyantra-secret-key-change-in-production';
+export const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error('[AUTH] FATAL: JWT_SECRET environment variable is not set!');
+    process.exit(1);
+}
 const JWT_EXPIRES_IN = '24h';
 const JWT_REFRESH_EXPIRES_IN = '7d';
 

@@ -33,7 +33,6 @@ export function requestLogger(req, res, next) {
     // Log response on finish
     res.on('finish', () => {
         const duration = Date.now() - start;
-        const level = res.statusCode >= 400 ? 'WARN' : 'INFO';
         console.log(
             `[RES] [${logData.requestId}] ${logData.method} ${logData.url} → ${res.statusCode} (${duration}ms)`
         );

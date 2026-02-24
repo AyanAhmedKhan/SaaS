@@ -28,6 +28,8 @@ const Exams = lazy(() => import("./pages/Exams"));
 const Fees = lazy(() => import("./pages/Fees"));
 const Institutes = lazy(() => import("./pages/Institutes"));
 const ComingSoon = lazy(() => import("./pages/ComingSoon"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,6 +76,8 @@ function AppRoutes() {
       {/* Public */}
       <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/signup" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Signup />} />
+      <Route path="/forgot-password" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Suspense fallback={<PageLoader />}><ForgotPassword /></Suspense>} />
+      <Route path="/reset-password" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Suspense fallback={<PageLoader />}><ResetPassword /></Suspense>} />
 
       {/* Dashboard */}
       <Route path="/dashboard" element={<ProtectedRoute><RoleBasedDashboard /></ProtectedRoute>} />
