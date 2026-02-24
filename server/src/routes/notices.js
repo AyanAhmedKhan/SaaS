@@ -78,9 +78,9 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'super_admin'), a
     `INSERT INTO notices (id, institute_id, title, content, date, priority, created_by, target_roles, target_class_ids, attachment_url)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
     [id, instId, title, content, date, priority || 'medium', req.user.id,
-     target_roles ? JSON.stringify(target_roles) : null,
-     target_class_ids ? JSON.stringify(target_class_ids) : null,
-     attachment_url || null]
+      target_roles || null,
+      target_class_ids || null,
+      attachment_url || null]
   );
 
   const { rows } = await query('SELECT * FROM notices WHERE id=$1', [id]);
@@ -101,9 +101,9 @@ router.put('/:id', authorize('institute_admin', 'class_teacher', 'super_admin'),
      target_class_ids=COALESCE($5,target_class_ids), attachment_url=COALESCE($6,attachment_url),
      updated_at=NOW() WHERE id=$7 AND institute_id=$8`,
     [title, content, priority,
-     target_roles ? JSON.stringify(target_roles) : null,
-     target_class_ids ? JSON.stringify(target_class_ids) : null,
-     attachment_url, req.params.id, instId]
+      target_roles || null,
+      target_class_ids || null,
+      attachment_url, req.params.id, instId]
   );
 
   const { rows } = await query('SELECT * FROM notices WHERE id=$1', [req.params.id]);

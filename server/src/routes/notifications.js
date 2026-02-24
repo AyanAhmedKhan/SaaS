@@ -40,16 +40,16 @@ router.get('/', asyncHandler(async (req, res) => {
   });
 }));
 
+// PUT /api/notifications/read-all — mark all as read (must be before /:id to avoid matching)
+router.put('/read-all', asyncHandler(async (req, res) => {
+  await query('UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false', [req.user.id]);
+  res.json({ success: true, message: 'All notifications marked as read' });
+}));
+
 // PUT /api/notifications/:id/read — mark as read
 router.put('/:id/read', asyncHandler(async (req, res) => {
   await query('UPDATE notifications SET is_read = true WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
   res.json({ success: true, message: 'Notification marked as read' });
-}));
-
-// PUT /api/notifications/read-all — mark all as read
-router.put('/read-all', asyncHandler(async (req, res) => {
-  await query('UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false', [req.user.id]);
-  res.json({ success: true, message: 'All notifications marked as read' });
 }));
 
 // DELETE /api/notifications/:id

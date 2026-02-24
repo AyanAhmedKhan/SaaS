@@ -23,7 +23,7 @@ router.get('/', asyncHandler(async (req, res) => {
   if (subject_id) { params.push(subject_id); sql += ` AND sy.subject_id = $${params.length}`; }
   if (status && status !== 'all') { params.push(status); sql += ` AND sy.status = $${params.length}`; }
 
-  sql += ' ORDER BY c.name, sub.name, sy.unit';
+  sql += ' ORDER BY c.name, sub.name, sy.unit_name';
   const { rows } = await query(sql, params);
   res.json({ success: true, data: { syllabus: rows } });
 }));
@@ -59,7 +59,7 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher'
 
   const id = `syl_${randomUUID().replace(/-/g, '').substring(0, 12)}`;
   await query(
-    `INSERT INTO syllabus (id, institute_id, class_id, subject_id, unit, topic, description, status, completion_percentage)
+    `INSERT INTO syllabus (id, institute_id, class_id, subject_id, unit_name, topic_name, description, status, completion_percentage)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
     [id, instId, class_id, subject_id, unit || null, topic, description || null, status || 'not_started', completion_percentage || 0]
   );
@@ -77,7 +77,7 @@ router.put('/:id', authorize('institute_admin', 'class_teacher', 'subject_teache
 
   const { unit, topic, description, status, completion_percentage } = req.body;
   await query(
-    `UPDATE syllabus SET unit=COALESCE($1,unit), topic=COALESCE($2,topic), description=COALESCE($3,description),
+    `UPDATE syllabus SET unit_name=COALESCE($1,unit_name), topic_name=COALESCE($2,topic_name), description=COALESCE($3,description),
      status=COALESCE($4,status), completion_percentage=COALESCE($5,completion_percentage), updated_at=NOW()
      WHERE id=$6 AND institute_id=$7`,
     [unit, topic, description, status, completion_percentage, req.params.id, instId]
