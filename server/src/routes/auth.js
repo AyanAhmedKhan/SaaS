@@ -167,6 +167,24 @@ router.post('/register', asyncHandler(async (req, res) => {
                 'INSERT INTO teachers (id, user_id, institute_id, name, email) VALUES ($1, $2, $3, $4, $5)',
                 [teacherId, userId, instituteId, name, email]
             );
+        } else if (role === 'parent' && instituteId) {
+            // Link parent to children if student identifiers provided
+            const { student_ids, student_roll_numbers } = req.body;
+            if (student_ids && Array.isArray(student_ids)) {
+                for (const sid of student_ids) {
+                    await client.query(
+                        'UPDATE students SET parent_id = $1, parent_name = $2, parent_email = $3, parent_phone = $4 WHERE id = $5 AND institute_id = $6',
+                        [userId, name, email, req.body.phone || null, sid, instituteId]
+                    );
+                }
+            } else if (student_roll_numbers && Array.isArray(student_roll_numbers)) {
+                for (const roll of student_roll_numbers) {
+                    await client.query(
+                        'UPDATE students SET parent_id = $1, parent_name = $2, parent_email = $3, parent_phone = $4 WHERE roll_number = $5 AND institute_id = $6',
+                        [userId, name, email, req.body.phone || null, roll, instituteId]
+                    );
+                }
+            }
         }
 
         await client.query('COMMIT');

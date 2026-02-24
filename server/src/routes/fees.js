@@ -109,11 +109,11 @@ router.get('/payments', asyncHandler(async (req, res) => {
   }
   if (req.user.role === 'parent') {
     params.push(req.user.id);
-    sql += ` AND fp.student_id IN (SELECT id FROM students WHERE parent_user_id = $${params.length})`;
+    sql += ` AND fp.student_id IN (SELECT id FROM students WHERE parent_id = $${params.length})`;
   }
 
   const countSql = sql.replace(/SELECT fp\.\*.*?FROM/, 'SELECT COUNT(*) FROM');
-  sql += ` ORDER BY fp.payment_date DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  sql += ` ORDER BY fp.paid_date DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
   params.push(parseInt(limit), offset);
 
   const [dataRes, countRes] = await Promise.all([
@@ -137,18 +137,26 @@ router.get('/payments', asyncHandler(async (req, res) => {
 // POST /api/fees/payments — record a payment (manual cash/cheque/UPI)
 router.post('/payments', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
-  const { student_id, fee_structure_id, amount_paid, payment_mode, receipt_number, remarks, installment_number } = req.body;
-  if (!student_id || !fee_structure_id || !amount_paid) throw new AppError('student_id, fee_structure_id, amount_paid required', 400);
+  const { student_id, fee_structure_id, paid_amount, payment_method, receipt_number, remarks, due_date, academic_year_id } = req.body;
+  if (!student_id || !fee_structure_id || !paid_amount) throw new AppError('student_id, fee_structure_id, paid_amount required', 400);
+
+  // Resolve academic_year_id if not provided
+  let ayId = academic_year_id;
+  if (!ayId) {
+    const ayRes = await query("SELECT id FROM academic_years WHERE institute_id=$1 AND is_current=true LIMIT 1", [instId]);
+    ayId = ayRes.rows[0]?.id;
+  }
+  if (!ayId) throw new AppError('academic_year_id required', 400);
 
   const id = `pay_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
   await query(
-    `INSERT INTO fee_payments (id, institute_id, student_id, fee_structure_id, amount_paid, payment_mode, payment_date, receipt_number, installment_number, remarks, recorded_by, status)
-     VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,$7,$8,$9,$10,'completed')`,
-    [id, instId, student_id, fee_structure_id, amount_paid, payment_mode||'cash', receipt_number||null, installment_number||null, remarks||null, req.user.id]
+    `INSERT INTO fee_payments (id, institute_id, student_id, fee_structure_id, academic_year_id, amount, paid_amount, due_date, paid_date, payment_method, receipt_number, remarks, recorded_by, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CURRENT_DATE,$9,$10,$11,$12,'paid')`,
+    [id, instId, student_id, fee_structure_id, ayId, paid_amount, paid_amount, due_date||new Date().toISOString().split('T')[0], payment_method||'cash', receipt_number||null, remarks||null, req.user.id]
   );
 
   const { rows } = await query('SELECT * FROM fee_payments WHERE id=$1', [id]);
-  await logAudit({ instituteId: instId, userId: req.user.id, action: 'record_payment', entityType: 'fee_payment', entityId: id, newValues: { student_id, amount_paid }, req });
+  await logAudit({ instituteId: instId, userId: req.user.id, action: 'record_payment', entityType: 'fee_payment', entityId: id, newValues: { student_id, paid_amount }, req });
   res.status(201).json({ success: true, data: { payment: rows[0] } });
 }));
 
@@ -162,8 +170,8 @@ router.get('/student/:studentId', asyncHandler(async (req, res) => {
 
   const dues = await query(
     `SELECT fs.*,
-       COALESCE((SELECT SUM(amount_paid) FROM fee_payments WHERE fee_structure_id=fs.id AND student_id=$1 AND status='completed'), 0) AS paid_amount,
-       fs.amount - COALESCE((SELECT SUM(amount_paid) FROM fee_payments WHERE fee_structure_id=fs.id AND student_id=$1 AND status='completed'), 0) AS pending_amount
+       COALESCE((SELECT SUM(paid_amount) FROM fee_payments WHERE fee_structure_id=fs.id AND student_id=$1 AND status='paid'), 0) AS total_paid,
+       fs.amount - COALESCE((SELECT SUM(paid_amount) FROM fee_payments WHERE fee_structure_id=fs.id AND student_id=$1 AND status='paid'), 0) AS pending_amount
      FROM fee_structures fs
      WHERE fs.class_id = $2 AND fs.institute_id = $3
      ORDER BY fs.fee_type`,
@@ -174,12 +182,12 @@ router.get('/student/:studentId', asyncHandler(async (req, res) => {
     `SELECT fp.*, fs.fee_type FROM fee_payments fp
      JOIN fee_structures fs ON fp.fee_structure_id = fs.id
      WHERE fp.student_id = $1 AND fp.institute_id = $2
-     ORDER BY fp.payment_date DESC`,
+     ORDER BY fp.paid_date DESC`,
     [studentId, instId]
   );
 
   const totalDue = dues.rows.reduce((s, d) => s + parseFloat(d.pending_amount), 0);
-  const totalPaid = dues.rows.reduce((s, d) => s + parseFloat(d.paid_amount), 0);
+  const totalPaid = dues.rows.reduce((s, d) => s + parseFloat(d.total_paid), 0);
 
   res.json({
     success: true,
@@ -206,8 +214,8 @@ router.get('/defaulters', authorize('institute_admin', 'super_admin'), asyncHand
              JOIN classes c ON s.class_id = c.id
              JOIN fee_structures fs ON fs.class_id = c.id AND fs.institute_id = $1
              LEFT JOIN (
-               SELECT student_id, fee_structure_id, SUM(amount_paid) AS total_paid
-               FROM fee_payments WHERE institute_id = $1 AND status = 'completed'
+               SELECT student_id, fee_structure_id, SUM(paid_amount) AS total_paid
+               FROM fee_payments WHERE institute_id = $1 AND status = 'paid'
                GROUP BY student_id, fee_structure_id
              ) paid ON paid.student_id = s.id AND paid.fee_structure_id = fs.id
              WHERE s.institute_id = $1 AND s.status = 'active'`;

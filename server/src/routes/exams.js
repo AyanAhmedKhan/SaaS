@@ -27,7 +27,7 @@ router.get('/', asyncHandler(async (req, res) => {
   if (class_id) { params.push(class_id); sql += ` AND e.class_id = $${params.length}`; }
 
   const countSql = sql.replace(/SELECT e\.\*.*?FROM/, 'SELECT COUNT(*) FROM');
-  sql += ` ORDER BY e.start_date DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  sql += ` ORDER BY e.exam_date DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
   params.push(parseInt(limit), offset);
 
   const [dataRes, countRes] = await Promise.all([
@@ -65,7 +65,8 @@ router.get('/:id', asyncHandler(async (req, res) => {
        c.name AS class_name, c.section
      FROM exam_results er
      JOIN students s ON er.student_id = s.id
-     JOIN subjects sub ON er.subject_id = sub.id
+     JOIN exams e2 ON er.exam_id = e2.id
+     LEFT JOIN subjects sub ON e2.subject_id = sub.id
      JOIN classes c ON s.class_id = c.id
      WHERE er.exam_id = $1 AND er.institute_id = $2
      ORDER BY sub.name, s.roll_number`,
@@ -78,14 +79,14 @@ router.get('/:id', asyncHandler(async (req, res) => {
 // POST /api/exams — create exam
 router.post('/', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
-  const { name, exam_type, class_id, academic_year_id, start_date, end_date, max_marks, description } = req.body;
+  const { name, exam_type, class_id, academic_year_id, subject_id, exam_date, total_marks, passing_marks, weightage } = req.body;
   if (!name || !exam_type || !class_id) throw new AppError('name, exam_type, class_id required', 400);
 
   const id = `exam_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
   await query(
-    `INSERT INTO exams (id, institute_id, name, exam_type, class_id, academic_year_id, start_date, end_date, max_marks, description, status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'upcoming')`,
-    [id, instId, name, exam_type, class_id, academic_year_id||null, start_date||null, end_date||null, max_marks||100, description||null]
+    `INSERT INTO exams (id, institute_id, name, exam_type, class_id, academic_year_id, subject_id, exam_date, total_marks, passing_marks, weightage, created_by, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'scheduled')`,
+    [id, instId, name, exam_type, class_id, academic_year_id||null, subject_id||null, exam_date||null, total_marks||100, passing_marks||33, weightage||1.0, req.user.id]
   );
 
   const { rows } = await query('SELECT * FROM exams WHERE id=$1', [id]);
@@ -99,14 +100,14 @@ router.put('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(asy
   const existing = await query('SELECT id FROM exams WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Exam not found', 404);
 
-  const { name, exam_type, start_date, end_date, max_marks, status, description } = req.body;
+  const { name, exam_type, exam_date, subject_id, total_marks, passing_marks, weightage, status } = req.body;
   await query(
     `UPDATE exams SET name=COALESCE($1,name), exam_type=COALESCE($2,exam_type),
-     start_date=COALESCE($3,start_date), end_date=COALESCE($4,end_date),
-     max_marks=COALESCE($5,max_marks), status=COALESCE($6,status),
-     description=COALESCE($7,description), updated_at=NOW()
-     WHERE id=$8 AND institute_id=$9`,
-    [name, exam_type, start_date, end_date, max_marks, status, description, req.params.id, instId]
+     exam_date=COALESCE($3,exam_date), subject_id=COALESCE($4,subject_id),
+     total_marks=COALESCE($5,total_marks), passing_marks=COALESCE($6,passing_marks),
+     weightage=COALESCE($7,weightage), status=COALESCE($8,status), updated_at=NOW()
+     WHERE id=$9 AND institute_id=$10`,
+    [name, exam_type, exam_date, subject_id, total_marks, passing_marks, weightage, status, req.params.id, instId]
   );
 
   const { rows } = await query('SELECT * FROM exams WHERE id=$1', [req.params.id]);
@@ -130,7 +131,7 @@ router.delete('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(
 router.post('/:id/results', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const { results } = req.body;
-  // results: [{ student_id, subject_id, marks_obtained, max_marks?, remarks? }]
+  // results: [{ student_id, marks_obtained, remarks?, is_absent? }]
 
   if (!Array.isArray(results) || !results.length) throw new AppError('results[] required', 400);
 
@@ -143,8 +144,8 @@ router.post('/:id/results', authorize('institute_admin', 'class_teacher', 'subje
 
     for (const r of results) {
       const id = `er_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
-      const maxMarks = r.max_marks || exam.rows[0].max_marks || 100;
-      const percentage = (r.marks_obtained / maxMarks) * 100;
+      const totalMarks = exam.rows[0].total_marks || 100;
+      const percentage = (r.marks_obtained / totalMarks) * 100;
 
       // Auto-determine grade from grading_systems
       let grade = null;
@@ -157,19 +158,19 @@ router.post('/:id/results', authorize('institute_admin', 'class_teacher', 'subje
       if (gradeRes.rows[0]) grade = gradeRes.rows[0].grade;
 
       await client.query(
-        `INSERT INTO exam_results (id, institute_id, exam_id, student_id, subject_id, marks_obtained, max_marks, percentage, grade, remarks)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-         ON CONFLICT (exam_id, student_id, subject_id)
-         DO UPDATE SET marks_obtained=$6, max_marks=$7, percentage=$8, grade=$9, remarks=$10, updated_at=NOW()`,
-        [id, instId, req.params.id, r.student_id, r.subject_id, r.marks_obtained, maxMarks, Math.round(percentage * 10) / 10, grade, r.remarks || null]
+        `INSERT INTO exam_results (id, institute_id, exam_id, student_id, marks_obtained, grade, remarks, is_absent)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (exam_id, student_id)
+         DO UPDATE SET marks_obtained=$5, grade=$6, remarks=$7, is_absent=$8, updated_at=NOW()`,
+        [id, instId, req.params.id, r.student_id, r.marks_obtained, grade, r.remarks || null, r.is_absent || false]
       );
     }
 
-    // Auto-calculate ranks per subject
+    // Auto-calculate ranks
     await client.query(
       `WITH ranked AS (
-         SELECT id, RANK() OVER (PARTITION BY subject_id ORDER BY marks_obtained DESC) AS rnk
-         FROM exam_results WHERE exam_id=$1 AND institute_id=$2
+         SELECT id, RANK() OVER (ORDER BY marks_obtained DESC) AS rnk
+         FROM exam_results WHERE exam_id=$1 AND institute_id=$2 AND is_absent=false
        )
        UPDATE exam_results er SET rank = r.rnk
        FROM ranked r WHERE er.id = r.id`,
@@ -194,10 +195,11 @@ router.get('/:id/rank-list', asyncHandler(async (req, res) => {
   let sql = `SELECT er.*, s.name AS student_name, s.roll_number, sub.name AS subject_name
              FROM exam_results er
              JOIN students s ON er.student_id = s.id
-             JOIN subjects sub ON er.subject_id = sub.id
+             JOIN exams e ON er.exam_id = e.id
+             LEFT JOIN subjects sub ON e.subject_id = sub.id
              WHERE er.exam_id = $1 AND er.institute_id = $2`;
 
-  if (subject_id) { params.push(subject_id); sql += ` AND er.subject_id = $${params.length}`; }
+  if (subject_id) { params.push(subject_id); sql += ` AND e.subject_id = $${params.length}`; }
   sql += ' ORDER BY er.rank';
 
   const { rows } = await query(sql, params);

@@ -288,4 +288,41 @@ router.delete('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(
     res.json({ success: true, message: 'Student deactivated' });
 }));
 
+// PUT /api/students/:id/link-parent — link a parent user to a student
+router.put('/:id/link-parent', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
+    const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
+    const { parent_user_id } = req.body;
+    if (!parent_user_id) throw new AppError('parent_user_id required', 400);
+
+    const student = await query('SELECT * FROM students WHERE id = $1 AND institute_id = $2', [req.params.id, instId]);
+    if (!student.rows[0]) throw new AppError('Student not found', 404);
+
+    const parent = await query("SELECT * FROM users WHERE id = $1 AND role = 'parent' AND institute_id = $2", [parent_user_id, instId]);
+    if (!parent.rows[0]) throw new AppError('Parent user not found in this institute', 404);
+
+    await query(
+        'UPDATE students SET parent_id = $1, parent_name = $2, parent_email = $3, parent_phone = $4, updated_at = NOW() WHERE id = $5',
+        [parent_user_id, parent.rows[0].name, parent.rows[0].email, parent.rows[0].phone, req.params.id]
+    );
+
+    const { rows } = await query('SELECT * FROM students WHERE id = $1', [req.params.id]);
+    await logAudit({ instituteId: instId, userId: req.user.id, action: 'link_parent', entityType: 'student', entityId: req.params.id, newValues: { parent_user_id }, req });
+    res.json({ success: true, data: { student: rows[0] } });
+}));
+
+// DELETE /api/students/:id/link-parent — unlink a parent from a student
+router.delete('/:id/link-parent', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
+    const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+    const student = await query('SELECT * FROM students WHERE id = $1 AND institute_id = $2', [req.params.id, instId]);
+    if (!student.rows[0]) throw new AppError('Student not found', 404);
+
+    await query(
+        'UPDATE students SET parent_id = NULL, updated_at = NOW() WHERE id = $1',
+        [req.params.id]
+    );
+
+    await logAudit({ instituteId: instId, userId: req.user.id, action: 'unlink_parent', entityType: 'student', entityId: req.params.id, req });
+    res.json({ success: true, message: 'Parent unlinked from student' });
+}));
+
 export default router;

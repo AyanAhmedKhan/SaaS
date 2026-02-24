@@ -10,7 +10,7 @@ router.use(authenticate, requireInstitute);
 // GET /api/remarks — list remarks for a student
 router.get('/', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-  const { student_id, teacher_id, category, page = '1', limit = '20' } = req.query;
+  const { student_id, teacher_id, remark_type, page = '1', limit = '20' } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
   const params = [instId];
 
@@ -24,7 +24,7 @@ router.get('/', asyncHandler(async (req, res) => {
 
   if (student_id) { params.push(student_id); sql += ` AND tr.student_id = $${params.length}`; }
   if (teacher_id) { params.push(teacher_id); sql += ` AND tr.teacher_id = $${params.length}`; }
-  if (category) { params.push(category); sql += ` AND tr.category = $${params.length}`; }
+  if (remark_type) { params.push(remark_type); sql += ` AND tr.remark_type = $${params.length}`; }
 
   // scope for teachers
   if (req.user.role === 'class_teacher' || req.user.role === 'subject_teacher') {
@@ -41,10 +41,10 @@ router.get('/', asyncHandler(async (req, res) => {
   // scope for parents
   if (req.user.role === 'parent') {
     params.push(req.user.id);
-    sql += ` AND tr.student_id IN (SELECT id FROM students WHERE parent_user_id = $${params.length})`;
+    sql += ` AND tr.student_id IN (SELECT id FROM students WHERE parent_id = $${params.length})`;
   }
 
-  sql += ` ORDER BY tr.date DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  sql += ` ORDER BY tr.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
   params.push(parseInt(limit), offset);
 
   const { rows } = await query(sql, params);
@@ -54,8 +54,8 @@ router.get('/', asyncHandler(async (req, res) => {
 // POST /api/remarks — create remark
 router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
-  const { student_id, category, remark, is_positive } = req.body;
-  if (!student_id || !remark) throw new AppError('student_id and remark required', 400);
+  const { student_id, remark_type, content, subject_id, is_visible_to_parent, academic_year_id } = req.body;
+  if (!student_id || !content) throw new AppError('student_id and content required', 400);
 
   // resolve teacher_id
   let teacher_id = null;
@@ -71,11 +71,19 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher'
   }
   if (!teacher_id) throw new AppError('Could not determine teacher_id', 400);
 
+  // Resolve academic_year_id if not provided
+  let ayId = academic_year_id;
+  if (!ayId) {
+    const ayRes = await query("SELECT id FROM academic_years WHERE institute_id=$1 AND is_current=true LIMIT 1", [instId]);
+    ayId = ayRes.rows[0]?.id;
+  }
+  if (!ayId) throw new AppError('academic_year_id required (no current academic year found)', 400);
+
   const id = `rmk_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
   await query(
-    `INSERT INTO teacher_remarks (id, institute_id, student_id, teacher_id, date, category, remark, is_positive)
-     VALUES ($1,$2,$3,$4,CURRENT_DATE,$5,$6,$7)`,
-    [id, instId, student_id, teacher_id, category||'general', remark, is_positive !== undefined ? is_positive : true]
+    `INSERT INTO teacher_remarks (id, institute_id, student_id, teacher_id, subject_id, remark_type, content, is_visible_to_parent, academic_year_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [id, instId, student_id, teacher_id, subject_id||null, remark_type||'general', content, is_visible_to_parent !== undefined ? is_visible_to_parent : true, ayId]
   );
 
   const { rows } = await query('SELECT * FROM teacher_remarks WHERE id=$1', [id]);
@@ -89,12 +97,12 @@ router.put('/:id', authorize('institute_admin', 'class_teacher', 'subject_teache
   const existing = await query('SELECT * FROM teacher_remarks WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Remark not found', 404);
 
-  const { category, remark, is_positive } = req.body;
+  const { remark_type, content, is_visible_to_parent } = req.body;
   await query(
-    `UPDATE teacher_remarks SET category=COALESCE($1,category), remark=COALESCE($2,remark),
-     is_positive=COALESCE($3,is_positive), updated_at=NOW()
+    `UPDATE teacher_remarks SET remark_type=COALESCE($1,remark_type), content=COALESCE($2,content),
+     is_visible_to_parent=COALESCE($3,is_visible_to_parent)
      WHERE id=$4 AND institute_id=$5`,
-    [category, remark, is_positive, req.params.id, instId]
+    [remark_type, content, is_visible_to_parent, req.params.id, instId]
   );
 
   const { rows } = await query('SELECT * FROM teacher_remarks WHERE id=$1', [req.params.id]);

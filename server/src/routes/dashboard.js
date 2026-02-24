@@ -21,9 +21,9 @@ router.get('/stats', asyncHandler(async (req, res) => {
            FROM attendance_records WHERE institute_id=$1`, [instId]),
     query(`SELECT COALESCE(SUM(fs.amount)-SUM(COALESCE(fp.total_paid,0)),0) AS pending
            FROM fee_structures fs
-           LEFT JOIN (SELECT fee_structure_id, SUM(amount_paid) AS total_paid FROM fee_payments WHERE institute_id=$1 AND status='completed' GROUP BY fee_structure_id) fp ON fp.fee_structure_id=fs.id
+           LEFT JOIN (SELECT fee_structure_id, SUM(paid_amount) AS total_paid FROM fee_payments WHERE institute_id=$1 AND status='paid' GROUP BY fee_structure_id) fp ON fp.fee_structure_id=fs.id
            WHERE fs.institute_id=$1`, [instId]),
-    query("SELECT COUNT(*) AS c FROM notices WHERE institute_id=$1 AND date >= CURRENT_DATE::text", [instId]),
+    query("SELECT COUNT(*) AS c FROM notices WHERE institute_id=$1 AND created_at >= CURRENT_DATE", [instId]),
   ]);
 
   // Monthly attendance trend
@@ -38,8 +38,10 @@ router.get('/stats', asyncHandler(async (req, res) => {
 
   // Performance by subject
   const perf = await query(
-    `SELECT sub.name AS subject, ROUND(AVG(er.marks_obtained::NUMERIC/NULLIF(er.max_marks,0)*100),0) AS score
-     FROM exam_results er JOIN subjects sub ON er.subject_id=sub.id
+    `SELECT sub.name AS subject, ROUND(AVG(er.marks_obtained::NUMERIC/NULLIF(e.total_marks,0)*100),0) AS score
+     FROM exam_results er
+     JOIN exams e ON er.exam_id=e.id
+     JOIN subjects sub ON e.subject_id=sub.id
      WHERE er.institute_id=$1
      GROUP BY sub.name ORDER BY sub.name`,
     [instId]
@@ -55,7 +57,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
 
   // Recent notices
   const recentNotices = await query(
-    'SELECT * FROM notices WHERE institute_id=$1 ORDER BY date DESC LIMIT 4', [instId]
+    'SELECT * FROM notices WHERE institute_id=$1 ORDER BY created_at DESC LIMIT 4', [instId]
   );
 
   // Class overview
@@ -127,7 +129,7 @@ router.get('/teacher', asyncHandler(async (req, res) => {
        ORDER BY a.due_date LIMIT 5`,
       [tid, instId]
     ),
-    query('SELECT * FROM notices WHERE institute_id=$1 ORDER BY date DESC LIMIT 4', [instId]),
+    query('SELECT * FROM notices WHERE institute_id=$1 ORDER BY created_at DESC LIMIT 4', [instId]),
   ]);
 
   res.json({
@@ -160,9 +162,9 @@ router.get('/student', asyncHandler(async (req, res) => {
       `SELECT er.*, e.name AS exam_name, sub.name AS subject_name
        FROM exam_results er
        JOIN exams e ON er.exam_id=e.id
-       JOIN subjects sub ON er.subject_id=sub.id
+       LEFT JOIN subjects sub ON e.subject_id=sub.id
        WHERE er.student_id=$1 AND er.institute_id=$2
-       ORDER BY e.start_date DESC LIMIT 10`,
+       ORDER BY e.exam_date DESC LIMIT 10`,
       [student.id, instId]
     ),
     query(
@@ -181,7 +183,7 @@ router.get('/student', asyncHandler(async (req, res) => {
        WHERE tr.student_id=$1 AND tr.institute_id=$2 ORDER BY tr.created_at DESC LIMIT 5`,
       [student.id, instId]
     ),
-    query("SELECT * FROM notices WHERE institute_id=$1 AND (target_roles IS NULL OR target_roles::jsonb ? 'student') ORDER BY date DESC LIMIT 5", [instId]),
+    query("SELECT * FROM notices WHERE institute_id=$1 AND (target_roles IS NULL OR 'student' = ANY(target_roles)) ORDER BY created_at DESC LIMIT 5", [instId]),
   ]);
 
   res.json({
@@ -203,7 +205,7 @@ router.get('/parent', asyncHandler(async (req, res) => {
   const children = await query(
     `SELECT s.*, c.name AS class_name, c.section FROM students s
      LEFT JOIN classes c ON s.class_id=c.id
-     WHERE s.parent_user_id=$1 AND s.institute_id=$2 AND s.status='active'`,
+     WHERE s.parent_id=$1 AND s.institute_id=$2 AND s.status='active'`,
     [req.user.id, instId]
   );
 
@@ -215,11 +217,11 @@ router.get('/parent', asyncHandler(async (req, res) => {
            ROUND(COUNT(*) FILTER (WHERE status='present')::NUMERIC/NULLIF(COUNT(*),0)*100,1) AS pct
          FROM attendance_records WHERE student_id=$1`, [child.id]),
       query(
-        `SELECT er.marks_obtained, er.max_marks, e.name AS exam_name, sub.name AS subject_name
-         FROM exam_results er JOIN exams e ON er.exam_id=e.id JOIN subjects sub ON er.subject_id=sub.id
-         WHERE er.student_id=$1 ORDER BY e.start_date DESC LIMIT 5`, [child.id]),
+        `SELECT er.marks_obtained, e.total_marks, e.name AS exam_name, sub.name AS subject_name
+         FROM exam_results er JOIN exams e ON er.exam_id=e.id LEFT JOIN subjects sub ON e.subject_id=sub.id
+         WHERE er.student_id=$1 ORDER BY e.exam_date DESC LIMIT 5`, [child.id]),
       query(
-        'SELECT * FROM teacher_remarks WHERE student_id=$1 ORDER BY date DESC LIMIT 3', [child.id]),
+        'SELECT * FROM teacher_remarks WHERE student_id=$1 ORDER BY created_at DESC LIMIT 3', [child.id]),
     ]);
     childData.push({
       student: child,
@@ -230,7 +232,7 @@ router.get('/parent', asyncHandler(async (req, res) => {
   }
 
   const notices = await query(
-    "SELECT * FROM notices WHERE institute_id=$1 AND (target_roles IS NULL OR target_roles::jsonb ? 'parent') ORDER BY date DESC LIMIT 5",
+    "SELECT * FROM notices WHERE institute_id=$1 AND (target_roles IS NULL OR 'parent' = ANY(target_roles)) ORDER BY created_at DESC LIMIT 5",
     [instId]
   );
 

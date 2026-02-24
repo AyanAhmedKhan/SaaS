@@ -40,7 +40,7 @@ router.get('/', asyncHandler(async (req, res) => {
   // scope for parents
   if (req.user.role === 'parent') {
     params.push(req.user.id);
-    sql += ` AND tt.class_id IN (SELECT class_id FROM students WHERE parent_user_id = $${params.length})`;
+    sql += ` AND tt.class_id IN (SELECT class_id FROM students WHERE parent_id = $${params.length})`;  
   }
 
   sql += ' ORDER BY tt.day_of_week, tt.period_number';

@@ -18,16 +18,16 @@ router.get('/exam-results', asyncHandler(async (req, res) => {
              FROM exam_results er
              JOIN students s ON er.student_id = s.id
              JOIN classes c ON s.class_id = c.id
-             JOIN subjects sub ON er.subject_id = sub.id
              JOIN exams e ON er.exam_id = e.id
+             LEFT JOIN subjects sub ON e.subject_id = sub.id
              WHERE er.institute_id = $1`;
 
   if (student_id) { params.push(student_id); sql += ` AND er.student_id = $${params.length}`; }
   if (exam_id) { params.push(exam_id); sql += ` AND er.exam_id = $${params.length}`; }
-  if (subject_id) { params.push(subject_id); sql += ` AND er.subject_id = $${params.length}`; }
+  if (subject_id) { params.push(subject_id); sql += ` AND e.subject_id = $${params.length}`; }
   if (class_id) { params.push(class_id); sql += ` AND s.class_id = $${params.length}`; }
 
-  sql += ' ORDER BY e.start_date DESC, sub.name';
+  sql += ' ORDER BY e.exam_date DESC, sub.name';
   const { rows } = await query(sql, params);
   res.json({ success: true, data: { results: rows } });
 }));
@@ -44,14 +44,14 @@ router.get('/performance-trend', asyncHandler(async (req, res) => {
 
   const { rows } = await query(
     `SELECT e.name AS exam, sub.name AS subject,
-       ROUND(AVG(er.marks_obtained::NUMERIC / NULLIF(er.max_marks,0) * 100), 1) AS avg_score,
-       MIN(e.start_date) AS exam_date
+       ROUND(AVG(er.marks_obtained::NUMERIC / NULLIF(e.total_marks,0) * 100), 1) AS avg_score,
+       MIN(e.exam_date) AS exam_date
      FROM exam_results er
      JOIN exams e ON er.exam_id = e.id
-     JOIN subjects sub ON er.subject_id = sub.id
+     LEFT JOIN subjects sub ON e.subject_id = sub.id
      JOIN students s ON er.student_id = s.id
      WHERE ${where}
-     GROUP BY e.name, sub.name, e.start_date ORDER BY e.start_date`,
+     GROUP BY e.name, sub.name, e.exam_date ORDER BY e.exam_date`,
     params
   );
 
@@ -79,8 +79,8 @@ router.get('/class-summary', asyncHandler(async (req, res) => {
        COUNT(DISTINCT s.id) AS student_count,
        (SELECT ROUND(COUNT(*) FILTER (WHERE ar.status='present')::NUMERIC/NULLIF(COUNT(*),0)*100,1)
         FROM attendance_records ar WHERE ar.class_id=c.id) AS avg_attendance,
-       (SELECT ROUND(AVG(er.marks_obtained::NUMERIC/NULLIF(er.max_marks,0)*100),1)
-        FROM exam_results er JOIN students st ON er.student_id=st.id WHERE st.class_id=c.id) AS avg_performance
+       (SELECT ROUND(AVG(er.marks_obtained::NUMERIC/NULLIF(e2.total_marks,0)*100),1)
+        FROM exam_results er JOIN exams e2 ON er.exam_id=e2.id JOIN students st ON er.student_id=st.id WHERE st.class_id=c.id) AS avg_performance
      FROM classes c
      LEFT JOIN students s ON s.class_id=c.id AND s.status='active'
      WHERE c.institute_id=$1
@@ -112,10 +112,10 @@ router.get('/report-card/:studentId', asyncHandler(async (req, res) => {
   const results = await query(
     `SELECT er.*, sub.name AS subject_name, e.name AS exam_name, e.exam_type
      FROM exam_results er
-     JOIN subjects sub ON er.subject_id = sub.id
      JOIN exams e ON er.exam_id = e.id
+     LEFT JOIN subjects sub ON e.subject_id = sub.id
      WHERE ${examWhere}
-     ORDER BY e.start_date DESC, sub.name`,
+     ORDER BY e.exam_date DESC, sub.name`,
     params
   );
 
@@ -127,7 +127,7 @@ router.get('/report-card/:studentId', asyncHandler(async (req, res) => {
   );
 
   const remarks = await query(
-    'SELECT * FROM teacher_remarks WHERE student_id=$1 AND institute_id=$2 ORDER BY date DESC LIMIT 5',
+    'SELECT * FROM teacher_remarks WHERE student_id=$1 AND institute_id=$2 ORDER BY created_at DESC LIMIT 5',
     [studentId, instId]
   );
 
@@ -150,12 +150,12 @@ router.get('/fee-summary', asyncHandler(async (req, res) => {
     `SELECT fs.fee_type, fs.class_id, c.name AS class_name,
        COUNT(DISTINCT s.id) AS total_students,
        fs.amount AS fee_amount,
-       COALESCE(SUM(fp.amount_paid),0) AS total_collected,
-       fs.amount * COUNT(DISTINCT s.id) - COALESCE(SUM(fp.amount_paid),0) AS total_pending
+       COALESCE(SUM(fp.paid_amount),0) AS total_collected,
+       fs.amount * COUNT(DISTINCT s.id) - COALESCE(SUM(fp.paid_amount),0) AS total_pending
      FROM fee_structures fs
      JOIN classes c ON fs.class_id = c.id
      LEFT JOIN students s ON s.class_id = c.id AND s.status='active'
-     LEFT JOIN fee_payments fp ON fp.fee_structure_id = fs.id AND fp.student_id = s.id AND fp.status='completed'
+     LEFT JOIN fee_payments fp ON fp.fee_structure_id = fs.id AND fp.student_id = s.id AND fp.status='paid'
      WHERE fs.institute_id = $1
      GROUP BY fs.id, fs.fee_type, fs.class_id, c.name, fs.amount
      ORDER BY c.name, fs.fee_type`,

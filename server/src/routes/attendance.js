@@ -56,7 +56,7 @@ router.get('/', asyncHandler(async (req, res) => {
   // scope for parent role — children only
   if (req.user.role === 'parent') {
     params.push(req.user.id);
-    sql += ` AND ar.student_id IN (SELECT id FROM students WHERE parent_user_id = $${params.length})`;
+    sql += ` AND ar.student_id IN (SELECT id FROM students WHERE parent_id = $${params.length})`;
   }
 
   const countSql = sql.replace(/SELECT ar\.\*.*?FROM/, 'SELECT COUNT(*) FROM');
