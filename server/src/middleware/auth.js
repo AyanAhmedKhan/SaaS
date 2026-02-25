@@ -7,10 +7,8 @@ if (!JWT_SECRET) {
     console.error('[AUTH] FATAL: JWT_SECRET environment variable is not set!');
     process.exit(1);
 }
-const JWT_EXPIRES_IN = '24h';
+export const JWT_EXPIRES_IN = '24h';
 const JWT_REFRESH_EXPIRES_IN = '7d';
-
-export { JWT_SECRET, JWT_EXPIRES_IN };
 
 // Generate JWT token with institute context
 export function generateToken(user) {

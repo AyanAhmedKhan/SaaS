@@ -169,7 +169,7 @@ router.get('/student', asyncHandler(async (req, res) => {
     ),
     query(
       `SELECT a.*, sub.name AS subject_name,
-         asub.status AS submission_status, asub.submitted_at
+         CASE WHEN asub.id IS NOT NULL THEN 'submitted' ELSE 'pending' END AS submission_status, asub.submitted_at
        FROM assignments a
        LEFT JOIN subjects sub ON a.subject_id=sub.id
        LEFT JOIN assignment_submissions asub ON asub.assignment_id=a.id AND asub.student_id=$1

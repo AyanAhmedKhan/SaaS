@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { AuthUser, UserRole } from '@/types';
 import { loginApi, registerApi, getMeApi, logoutApi, api } from '@/lib/api';
+import { useInactivityLogout } from '@/hooks/use-inactivity-logout';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -79,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await logoutApi();
     } catch (error) {
@@ -87,7 +88,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setUser(null);
     }
-  };
+  }, []);
+
+  // Auto-logout after 30 minutes of inactivity
+  useInactivityLogout(logout, !!user);
 
   const institute = user?.institute || null;
 

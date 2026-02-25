@@ -173,9 +173,9 @@ async function seed() {
             (tId === 'tch_01' && ['cls_10a', 'cls_10b'].includes(cls.id)) ||
             (tId === 'tch_02' && ['cls_11a', 'cls_11b'].includes(cls.id));
           await client.query(
-            `INSERT INTO teacher_assignments (id, teacher_id, class_id, subject_id, academic_year_id, is_class_teacher)
-             VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (teacher_id, class_id, subject_id, academic_year_id) DO NOTHING`,
-            [`ta_${taIdx}`, tId, cls.id, sub, 'ay_2024', isClassTeacher]
+            `INSERT INTO teacher_assignments (id, teacher_id, class_id, subject_id, academic_year_id, institute_id, is_class_teacher)
+             VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (teacher_id, class_id, subject_id, academic_year_id) DO NOTHING`,
+            [`ta_${taIdx}`, tId, cls.id, sub, 'ay_2024', 'inst_01', isClassTeacher]
           );
         }
       }
