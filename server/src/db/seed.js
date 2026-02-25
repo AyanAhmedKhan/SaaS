@@ -226,16 +226,16 @@ async function seed() {
       console.log('[SEED] Grading systems seeded:', grades.length);
 
       // ════════════════════════════════════════
-      // 11. ATTENDANCE RECORDS (60 weekdays from Jul 1)
+      // 11. ATTENDANCE RECORDS (past 90 calendar days, weekdays only)
       // ════════════════════════════════════════
       const attStatuses = ['present', 'present', 'present', 'present', 'absent', 'late'];
-      const attStart = new Date('2024-07-01');
+      const today = new Date();
       let attIdx = 0;
 
       for (const s of studentData) {
-        for (let d = 0; d < 60; d++) {
-          const date = new Date(attStart);
-          date.setDate(date.getDate() + d);
+        for (let d = 90; d >= 1; d--) {
+          const date = new Date(today);
+          date.setDate(date.getDate() - d);
           if (date.getDay() === 0 || date.getDay() === 6) continue;
           attIdx++;
           const status = attStatuses[Math.floor(Math.random() * attStatuses.length)];
