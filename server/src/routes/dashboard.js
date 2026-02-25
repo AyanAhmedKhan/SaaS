@@ -146,7 +146,14 @@ router.get('/teacher', asyncHandler(async (req, res) => {
 // ── Student dashboard ──
 router.get('/student', asyncHandler(async (req, res) => {
   const instId = req.instituteId;
-  const stuRes = await query('SELECT * FROM students WHERE user_id=$1 AND institute_id=$2', [req.user.id, instId]);
+  const stuRes = await query(
+    `SELECT s.*, c.name AS class_name, c.section AS class_section, ay.name AS academic_year_name
+     FROM students s
+     LEFT JOIN classes c ON s.class_id = c.id
+     LEFT JOIN academic_years ay ON s.academic_year_id = ay.id
+     WHERE s.user_id=$1 AND s.institute_id=$2`,
+    [req.user.id, instId]
+  );
   if (!stuRes.rows[0]) throw new AppError('Student profile not found', 404);
   const student = stuRes.rows[0];
 

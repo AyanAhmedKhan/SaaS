@@ -59,7 +59,7 @@ router.get('/', asyncHandler(async (req, res) => {
     sql += ` AND ar.student_id IN (SELECT id FROM students WHERE parent_id = $${params.length})`;
   }
 
-  const countSql = sql.replace(/SELECT ar\.\*.*?FROM/, 'SELECT COUNT(*) FROM');
+  const countSql = sql.replace(/SELECT ar\.\*[\s\S]*?FROM/, 'SELECT COUNT(*) AS count FROM');
   sql += ` ORDER BY ar.date DESC, s.roll_number`;
   sql += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
   params.push(parseInt(limit), offset);
@@ -69,14 +69,16 @@ router.get('/', asyncHandler(async (req, res) => {
     query(countSql, params.slice(0, -2)),
   ]);
 
+  const total = countRes.rows[0]?.count ?? 0;
+
   res.json({
     success: true,
     data: {
       attendance: dataRes.rows,
       pagination: {
         page: parseInt(page), limit: parseInt(limit),
-        total: parseInt(countRes.rows[0].count),
-        totalPages: Math.ceil(parseInt(countRes.rows[0].count) / parseInt(limit)),
+        total: parseInt(total),
+        totalPages: Math.ceil(parseInt(total) / parseInt(limit)),
       },
     },
   });

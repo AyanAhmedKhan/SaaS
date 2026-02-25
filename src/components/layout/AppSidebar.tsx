@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Users,
+  User,
   GraduationCap,
   UserCheck,
   CalendarDays,
@@ -59,6 +60,7 @@ const menuItems: MenuItem[] = [
   { title: "Reports", url: "/reports", icon: BarChart3, roles: STAFF },
   { title: "Notices", url: "/notices", icon: Bell },
   { title: "Fees", url: "/fees", icon: DollarSign, roles: [...ADMIN, 'student', 'parent'] },
+  { title: "My Profile", url: "/profile", icon: User, roles: ['student'] },
   { title: "Institutes", url: "/institutes", icon: Building2, roles: ['super_admin'] },
 ];
 

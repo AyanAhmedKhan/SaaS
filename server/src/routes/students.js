@@ -84,6 +84,81 @@ router.get('/', asyncHandler(async (req, res) => {
     });
 }));
 
+// GET /api/students/me/profile — logged-in student's own full profile
+router.get('/me/profile', asyncHandler(async (req, res) => {
+    if (req.user.role !== 'student') throw new AppError('Only students can access this endpoint', 403);
+
+    const instId = req.instituteId;
+    const { rows } = await query(
+        `SELECT s.*, c.name AS class_name, c.section AS class_section, ay.name AS academic_year_name
+         FROM students s
+         LEFT JOIN classes c ON s.class_id = c.id
+         LEFT JOIN academic_years ay ON s.academic_year_id = ay.id
+         WHERE s.user_id = $1 AND s.institute_id = $2`,
+        [req.user.id, instId]
+    );
+
+    if (!rows[0]) throw new AppError('Student profile not found', 404);
+    const student = rows[0];
+
+    // Attendance summary
+    const attResult = await query(
+        `SELECT
+            COUNT(*) AS total_days,
+            COUNT(*) FILTER (WHERE status = 'present') AS present_count,
+            COUNT(*) FILTER (WHERE status = 'absent') AS absent_count,
+            COUNT(*) FILTER (WHERE status = 'late') AS late_count,
+            ROUND(COUNT(*) FILTER (WHERE status='present')::NUMERIC / NULLIF(COUNT(*),0) * 100, 1) AS percentage
+         FROM attendance_records WHERE student_id = $1 AND institute_id = $2`,
+        [student.id, instId]
+    );
+
+    // Recent exam results
+    const examResults = await query(
+        `SELECT er.*, e.name AS exam_name, e.total_marks, e.exam_type, sub.name AS subject_name
+         FROM exam_results er
+         JOIN exams e ON er.exam_id = e.id
+         LEFT JOIN subjects sub ON e.subject_id = sub.id
+         WHERE er.student_id = $1 AND er.institute_id = $2
+         ORDER BY e.exam_date DESC LIMIT 10`,
+        [student.id, instId]
+    );
+
+    // Fee payment summary
+    const feeResult = await query(
+        `SELECT
+            COUNT(*) AS total_fees,
+            COUNT(*) FILTER (WHERE status = 'paid') AS paid_count,
+            COUNT(*) FILTER (WHERE status = 'pending' OR status = 'overdue') AS pending_count,
+            COALESCE(SUM(amount), 0) AS total_amount,
+            COALESCE(SUM(paid_amount), 0) AS total_paid
+         FROM fee_payments WHERE student_id = $1 AND institute_id = $2`,
+        [student.id, instId]
+    );
+
+    // Teacher remarks
+    const remarks = await query(
+        `SELECT tr.*, t.name AS teacher_name, sub.name AS subject_name
+         FROM teacher_remarks tr
+         JOIN teachers t ON tr.teacher_id = t.id
+         LEFT JOIN subjects sub ON tr.subject_id = sub.id
+         WHERE tr.student_id = $1 AND tr.institute_id = $2
+         ORDER BY tr.created_at DESC LIMIT 10`,
+        [student.id, instId]
+    );
+
+    res.json({
+        success: true,
+        data: {
+            student,
+            attendance: attResult.rows[0] || {},
+            examResults: examResults.rows,
+            feeSummary: feeResult.rows[0] || {},
+            remarks: remarks.rows,
+        },
+    });
+}));
+
 // GET /api/students/:id — full profile with stats
 router.get('/:id', asyncHandler(async (req, res) => {
     const { rows } = await query(

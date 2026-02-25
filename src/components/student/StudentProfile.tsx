@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { User, Phone, Hash, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { User, Phone, Hash, Users, Mail } from "lucide-react";
+import { Link } from "react-router-dom";
 
 interface StudentProfileProps {
   student: {
@@ -10,6 +12,10 @@ interface StudentProfileProps {
     parent_name?: string;
     parent_phone?: string;
     email?: string;
+    class_name?: string;
+    class_section?: string;
+    gender?: string;
+    date_of_birth?: string;
   };
   className?: string;
 }
@@ -22,13 +28,18 @@ export function StudentProfile({ student, className }: StudentProfileProps) {
     .slice(0, 2)
     .toUpperCase();
 
+  const classDisplay = [student.class_name, student.class_section].filter(Boolean).join(" - ") || className || "—";
+
   return (
     <Card className="shadow-card border-border/40">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 flex flex-row items-center justify-between">
         <CardTitle className="text-lg font-semibold flex items-center gap-2">
           <User className="h-5 w-5 text-primary" />
           Student Profile
         </CardTitle>
+        <Link to="/profile">
+          <Button variant="outline" size="sm">View Full Profile</Button>
+        </Link>
       </CardHeader>
       <CardContent>
         <div className="flex flex-col sm:flex-row items-start gap-4">
@@ -44,13 +55,20 @@ export function StudentProfile({ student, className }: StudentProfileProps) {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Class</p>
-              <p className="font-medium text-foreground">{className || "—"}</p>
+              <p className="font-medium text-foreground">{classDisplay}</p>
             </div>
             <div className="flex items-center gap-1.5">
               <Hash className="h-3.5 w-3.5 text-muted-foreground" />
               <div>
                 <p className="text-xs text-muted-foreground">Roll Number</p>
                 <Badge variant="outline" className="mt-0.5">{student.roll_number || "—"}</Badge>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Email</p>
+                <p className="font-medium text-foreground truncate">{student.email || "—"}</p>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
@@ -66,10 +84,6 @@ export function StudentProfile({ student, className }: StudentProfileProps) {
                 <p className="text-xs text-muted-foreground">Parent Contact</p>
                 <p className="font-medium text-foreground">{student.parent_phone || "—"}</p>
               </div>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Email</p>
-              <p className="font-medium text-foreground truncate">{student.email || "—"}</p>
             </div>
           </div>
         </div>

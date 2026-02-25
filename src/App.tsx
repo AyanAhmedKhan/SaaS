@@ -30,6 +30,7 @@ const Institutes = lazy(() => import("./pages/Institutes"));
 const ComingSoon = lazy(() => import("./pages/ComingSoon"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const StudentProfilePage = lazy(() => import("./pages/StudentProfilePage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -95,6 +96,9 @@ function AppRoutes() {
       <Route path="/notices" element={<ProtectedRoute roles={ALL_ROLES}><Notices /></ProtectedRoute>} />
       <Route path="/assignments" element={<ProtectedRoute roles={ALL_ROLES}><Assignments /></ProtectedRoute>} />
       <Route path="/exams" element={<ProtectedRoute roles={ALL_ROLES}><Exams /></ProtectedRoute>} />
+
+      {/* Student profile */}
+      <Route path="/profile" element={<ProtectedRoute roles={['student']}><StudentProfilePage /></ProtectedRoute>} />
 
       {/* Super admin only */}
       <Route path="/institutes" element={<ProtectedRoute roles={['super_admin']}><Institutes /></ProtectedRoute>} />

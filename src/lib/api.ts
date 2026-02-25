@@ -346,6 +346,10 @@ export async function getStudent(id: string) {
   return api.get<{ student: Student }>(`/students/${id}`);
 }
 
+export async function getMyStudentProfile() {
+  return api.get('/students/me/profile');
+}
+
 export async function createStudent(data: Partial<Student>) {
   return api.post<{ student: Student }>('/students', data);
 }
