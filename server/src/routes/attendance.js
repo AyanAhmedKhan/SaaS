@@ -142,13 +142,26 @@ router.get('/subject-wise', asyncHandler(async (req, res) => {
 // GET /api/attendance/monthly — calendar view data
 router.get('/monthly', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-  const { class_id, student_id, year, month } = req.query;
+  let { class_id, student_id, year, month } = req.query;
   const params = [instId];
   let sql = `SELECT ar.date, ar.status, ar.student_id, s.name AS student_name
              FROM attendance_records ar JOIN students s ON ar.student_id = s.id
              WHERE ar.institute_id = $1`;
 
   if (class_id) { params.push(class_id); sql += ` AND ar.class_id = $${params.length}`; }
+
+  // Auto-scope for student role
+  if (req.user.role === 'student') {
+    const sr = await query('SELECT id FROM students WHERE user_id = $1', [req.user.id]);
+    if (sr.rows[0]) { student_id = sr.rows[0].id; }
+  }
+
+  // Auto-scope for parent role — children only
+  if (req.user.role === 'parent') {
+    params.push(req.user.id);
+    sql += ` AND ar.student_id IN (SELECT id FROM students WHERE parent_id = $${params.length})`;
+  }
+
   if (student_id) { params.push(student_id); sql += ` AND ar.student_id = $${params.length}`; }
   if (year && month) {
     const pad = String(month).padStart(2, '0');

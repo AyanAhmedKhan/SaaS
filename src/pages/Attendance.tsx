@@ -15,6 +15,7 @@ import { getStudents, getClasses, markAttendance as markAttendanceApi, getAttend
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { AttendanceCalendar } from "@/components/student/AttendanceCalendar";
 import type { Student, Class as ClassType, AttendanceRecord } from "@/types";
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | null;
@@ -325,6 +326,11 @@ export default function Attendance() {
             <p className="text-muted-foreground text-sm">No active students in this class.</p>
           </div>
         )}
+
+        {/* Attendance Calendar */}
+        <AttendanceCalendar
+          classId={selectedClassId || undefined}
+        />
       </div>
     </DashboardLayout>
   );
