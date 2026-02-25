@@ -81,7 +81,7 @@ app.get('/api/health', async (req, res) => {
             success: true,
             data: {
                 status: 'healthy',
-                database: 'PostgreSQL (Neon)',
+                database: 'PostgreSQL (Local)',
                 timestamp: new Date().toISOString(),
                 uptime: process.uptime(),
             },
@@ -135,7 +135,7 @@ async function startServer() {
     app.listen(PORT, () => {
         console.log(`[SERVER] EduYantra API running on http://localhost:${PORT}`);
         console.log(`[SERVER] Health check: http://localhost:${PORT}/api/health`);
-        console.log(`[SERVER] Database: PostgreSQL (Neon)`);
+        console.log(`[SERVER] Database: PostgreSQL (Local)`);
         console.log(`[SERVER] Environment: ${process.env.NODE_ENV || 'development'}`);
         startMetricsSnapshot();
         console.log('[SERVER] Metrics snapshot started (every 5 min)');

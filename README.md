@@ -6,6 +6,13 @@ A modern, full-stack school management platform built with React + Express.js.
 
 **Frontend**: React 18, TypeScript, Vite, shadcn/ui, Tailwind CSS, React Query  
 **Backend**: Express.js, SQLite (better-sqlite3), JWT Auth, Zod validation  
+Role	Email	Institute Code
+Super Admin	super@eduyantra.com	—
+Institute Admin	admin@springfield.edu	SPRING01
+Class Teacher	priya.sharma@springfield.edu	SPRING01
+Subject Teacher	sunita.verma@springfield.edu	SPRING01
+Student	arjun@springfield.edu	SPRING01
+Parent	ramesh.sharma@gmail.com	SPRING01
 
 ## Quick Start
 

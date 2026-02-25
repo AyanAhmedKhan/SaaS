@@ -4,6 +4,9 @@ import { authenticate, authorize, requireInstitute, logAudit } from '../middlewa
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 import bcrypt from 'bcryptjs';
 
+
+// Example: Get all students from PostgreSQL
+// Add this route if not present
 const router = Router();
 router.use(authenticate, requireInstitute);
 

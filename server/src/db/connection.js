@@ -13,15 +13,18 @@ let pool = null;
 export function getPool() {
     if (!pool) {
         pool = new Pool({
-            connectionString: process.env.DATABASE_URL,
-            ssl: { rejectUnauthorized: false },
+            host: process.env.PGHOST || 'localhost',
+            user: process.env.PGUSER || 'postgres',
+            password: process.env.PGPASSWORD || 'ayan',
+            database: process.env.PGDATABASE || 'eduyantra',
+            port: parseInt(process.env.PGPORT || '5432'),
             max: 20,
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 10000,
         });
 
         pool.on('connect', () => {
-            console.log('[DB] New client connected to PostgreSQL (Neon)');
+            console.log('[DB] New client connected to PostgreSQL (Local)');
         });
 
         pool.on('error', (err) => {
