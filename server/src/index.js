@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { query, closePool } from './db/connection.js';
 import { createSchema } from './db/schema.js';
-import { requestIdMiddleware, requestLogger } from './middleware/requestLogger.js';
+import { requestIdMiddleware, requestLogger, startMetricsSnapshot } from './middleware/requestLogger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Route imports
@@ -28,6 +28,8 @@ import feeRoutes from './routes/fees.js';
 import remarkRoutes from './routes/remarks.js';
 import notificationRoutes from './routes/notifications.js';
 import gradingRoutes from './routes/grading.js';
+import analyticsRoutes from './routes/analytics.js';
+import monitoringRoutes from './routes/monitoring.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -111,6 +113,8 @@ app.use('/api/fees', feeRoutes);
 app.use('/api/remarks', remarkRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/grading', gradingRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/monitoring', monitoringRoutes);
 
 // ── 404 & Error handlers ──
 app.use(notFoundHandler);
@@ -131,6 +135,8 @@ async function startServer() {
         console.log(`[SERVER] Health check: http://localhost:${PORT}/api/health`);
         console.log(`[SERVER] Database: PostgreSQL (Neon)`);
         console.log(`[SERVER] Environment: ${process.env.NODE_ENV || 'development'}`);
+        startMetricsSnapshot();
+        console.log('[SERVER] Metrics snapshot started (every 5 min)');
     });
 }
 

@@ -17,7 +17,7 @@ router.get('/structures', authorize('institute_admin', 'super_admin'), asyncHand
 
   let sql = `SELECT fs.*, c.name AS class_name, c.section, ay.name AS academic_year
              FROM fee_structures fs
-             JOIN classes c ON fs.class_id = c.id
+             LEFT JOIN classes c ON fs.class_id = c.id
              LEFT JOIN academic_years ay ON fs.academic_year_id = ay.id
              WHERE fs.institute_id = $1`;
 
@@ -33,14 +33,14 @@ router.get('/structures', authorize('institute_admin', 'super_admin'), asyncHand
 // POST /api/fees/structures — create
 router.post('/structures', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
-  const { class_id, academic_year_id, fee_type, amount, due_date, description, installments_allowed } = req.body;
-  if (!class_id || !fee_type || !amount) throw new AppError('class_id, fee_type, amount required', 400);
+  const { name, class_id, academic_year_id, fee_type, amount, due_date, description, installments_allowed } = req.body;
+  if (!fee_type || !amount || !name) throw new AppError('name, fee_type, amount required', 400);
 
   const id = `fs_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
   await query(
-    `INSERT INTO fee_structures (id, institute_id, class_id, academic_year_id, fee_type, amount, due_date, description, installments_allowed)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [id, instId, class_id, academic_year_id || null, fee_type, amount, due_date || null, description || null, installments_allowed || false]
+    `INSERT INTO fee_structures (id, institute_id, class_id, academic_year_id, name, fee_type, amount, due_date, description, installments_allowed)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [id, instId, class_id || null, academic_year_id || null, name, fee_type, amount, due_date || null, description || null, installments_allowed || false]
   );
 
   const { rows } = await query('SELECT * FROM fee_structures WHERE id=$1', [id]);

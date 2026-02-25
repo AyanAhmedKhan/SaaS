@@ -147,18 +147,18 @@ router.get('/fee-summary', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
 
   const { rows } = await query(
-    `SELECT fs.fee_type, fs.class_id, c.name AS class_name,
+    `SELECT fs.fee_type, fs.class_id, COALESCE(c.name, 'All Classes') AS class_name,
        COUNT(DISTINCT s.id) AS total_students,
        fs.amount AS fee_amount,
        COALESCE(SUM(fp.paid_amount),0) AS total_collected,
        fs.amount * COUNT(DISTINCT s.id) - COALESCE(SUM(fp.paid_amount),0) AS total_pending
      FROM fee_structures fs
-     JOIN classes c ON fs.class_id = c.id
-     LEFT JOIN students s ON s.class_id = c.id AND s.status='active'
+     LEFT JOIN classes c ON fs.class_id = c.id
+     LEFT JOIN students s ON (s.class_id = c.id OR fs.class_id IS NULL) AND s.institute_id = fs.institute_id AND s.status='active'
      LEFT JOIN fee_payments fp ON fp.fee_structure_id = fs.id AND fp.student_id = s.id AND fp.status='paid'
      WHERE fs.institute_id = $1
      GROUP BY fs.id, fs.fee_type, fs.class_id, c.name, fs.amount
-     ORDER BY c.name, fs.fee_type`,
+     ORDER BY c.name NULLS LAST, fs.fee_type`,
     [instId]
   );
   res.json({ success: true, data: { feeSummary: rows } });

@@ -17,7 +17,7 @@ export async function createSchema() {
         website TEXT,
         logo_url TEXT,
         academic_year_format TEXT DEFAULT 'april-march',
-        grading_system JSONB DEFAULT '{}',
+
         modules_enabled JSONB DEFAULT '{"attendance":true,"assignments":true,"fees":true,"exams":true,"syllabus":true,"timetable":true,"notices":true,"reports":true,"ai_insight":true}',
         ai_insight_enabled BOOLEAN DEFAULT true,
         status TEXT DEFAULT 'active' CHECK(status IN ('active','suspended','archived')),
@@ -110,7 +110,7 @@ export async function createSchema() {
         gender TEXT,
         address TEXT,
         phone TEXT,
-        parent_id TEXT,
+        parent_id TEXT REFERENCES users(id) ON DELETE SET NULL,
         parent_name TEXT,
         parent_email TEXT,
         parent_phone TEXT,
@@ -153,6 +153,27 @@ export async function createSchema() {
       );
     `);
 
+    // ── DEFERRED FK CONSTRAINTS (tables referenced after creation) ──
+    await query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name = 'fk_classes_class_teacher' AND table_name = 'classes'
+        ) THEN
+          ALTER TABLE classes ADD CONSTRAINT fk_classes_class_teacher
+            FOREIGN KEY (class_teacher_id) REFERENCES teachers(id) ON DELETE SET NULL;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name = 'fk_class_subjects_teacher' AND table_name = 'class_subjects'
+        ) THEN
+          ALTER TABLE class_subjects ADD CONSTRAINT fk_class_subjects_teacher
+            FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE SET NULL;
+        END IF;
+      END $$;
+    `);
+
     // ── ATTENDANCE MODULE ──
     await query(`
       CREATE TABLE IF NOT EXISTS attendance_records (
@@ -168,7 +189,22 @@ export async function createSchema() {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_unique 
+    `);
+
+    // Add subject_id if table exists from an older schema version
+    await query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'attendance_records' AND column_name = 'subject_id'
+        ) THEN
+          ALTER TABLE attendance_records ADD COLUMN subject_id TEXT REFERENCES subjects(id);
+        END IF;
+      END $$;
+    `);
+
+    await query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_unique
         ON attendance_records(student_id, date, COALESCE(subject_id, 'general'));
     `);
 
@@ -469,6 +505,36 @@ export async function createSchema() {
       );
     `);
 
+    // ── REQUEST LOGS (analytics & monitoring) ──
+    await query(`
+      CREATE TABLE IF NOT EXISTS request_logs (
+        id TEXT PRIMARY KEY,
+        request_id TEXT NOT NULL,
+        method TEXT NOT NULL,
+        url TEXT NOT NULL,
+        status_code INTEGER,
+        duration_ms INTEGER,
+        ip TEXT,
+        user_id TEXT,
+        institute_id TEXT,
+        user_agent TEXT,
+        error_message TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+    // ── SYSTEM METRICS (periodic snapshots) ──
+    await query(`
+      CREATE TABLE IF NOT EXISTS system_metrics (
+        id TEXT PRIMARY KEY,
+        metric_name TEXT NOT NULL,
+        metric_value DOUBLE PRECISION NOT NULL,
+        tags JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+
     // ── INDEXES ──
     const indexes = [
       'CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)',
@@ -512,10 +578,42 @@ export async function createSchema() {
       'CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_notification_log_user ON notification_log(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_notification_log_channel ON notification_log(channel, status)',
+      'CREATE INDEX IF NOT EXISTS idx_request_logs_created ON request_logs(created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_request_logs_status ON request_logs(status_code)',
+      'CREATE INDEX IF NOT EXISTS idx_request_logs_url ON request_logs(url)',
+      'CREATE INDEX IF NOT EXISTS idx_request_logs_user ON request_logs(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_system_metrics_name ON system_metrics(metric_name, created_at DESC)',
     ];
 
     for (const idx of indexes) {
       await query(idx);
+    }
+
+    // ── AUTO-UPDATE updated_at TRIGGER ──
+    await query(`
+      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = NOW();
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    const tablesWithUpdatedAt = [
+      'institutes', 'users', 'academic_years', 'classes',
+      'students', 'teachers', 'attendance_records', 'timetable',
+      'notices', 'syllabus', 'exams', 'exam_results', 'assignments',
+      'assignment_submissions', 'fee_structures', 'fee_payments',
+    ];
+
+    for (const table of tablesWithUpdatedAt) {
+      await query(`
+        DROP TRIGGER IF EXISTS trigger_${table}_updated_at ON ${table};
+        CREATE TRIGGER trigger_${table}_updated_at
+          BEFORE UPDATE ON ${table}
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      `);
     }
 
     console.log('[DB] Multi-tenant schema created successfully');
