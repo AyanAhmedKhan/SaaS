@@ -19,9 +19,12 @@ router.get('/', asyncHandler(async (req, res) => {
              WHERE h.institute_id = $1`;
 
   if (year && month) {
-    const pad = String(month).padStart(2, '0');
-    params.push(`${year}-${pad}-01`, `${year}-${pad}-31`);
-    sql += ` AND h.date >= $${params.length - 1} AND h.date <= $${params.length}`;
+    const y = Number(year), m = Number(month);
+    const firstDay = `${y}-${String(m).padStart(2, '0')}-01`;
+    // First day of NEXT month — avoids leap-year / short-month bugs
+    const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    params.push(firstDay, nextMonth);
+    sql += ` AND h.date >= $${params.length - 1} AND h.date < $${params.length}`;
   } else if (from_date) {
     params.push(from_date);
     sql += ` AND h.date >= $${params.length}`;

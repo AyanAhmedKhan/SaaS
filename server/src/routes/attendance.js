@@ -164,9 +164,12 @@ router.get('/monthly', asyncHandler(async (req, res) => {
 
   if (student_id) { params.push(student_id); sql += ` AND ar.student_id = $${params.length}`; }
   if (year && month) {
-    const pad = String(month).padStart(2, '0');
-    params.push(`${year}-${pad}-01`, `${year}-${pad}-31`);
-    sql += ` AND ar.date >= $${params.length - 1} AND ar.date <= $${params.length}`;
+    const y = Number(year), m = Number(month);
+    const firstDay = `${y}-${String(m).padStart(2, '0')}-01`;
+    // First day of NEXT month — avoids Feb-28/29 and 30-day month issues entirely
+    const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    params.push(firstDay, nextMonth);
+    sql += ` AND ar.date >= $${params.length - 1} AND ar.date < $${params.length}`;
   }
   sql += ' ORDER BY ar.date';
   const { rows } = await query(sql, params);
