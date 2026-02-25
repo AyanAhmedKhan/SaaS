@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { Calendar, Check, X, Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, Save } from "lucide-react";
+import { Calendar, Check, X, Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, Save, GraduationCap, CheckCircle2, XCircle } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -11,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getStudents, getClasses, markAttendance as markAttendanceApi, getAttendance } from "@/lib/api";
+import { getStudents, getClasses, markAttendance as markAttendanceApi, getAttendance, getAttendanceSummary, getMyStudentProfile } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -20,7 +21,187 @@ import type { Student, Class as ClassType, AttendanceRecord } from "@/types";
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | null;
 
-export default function Attendance() {
+/* ══════════════════════════════════════════════
+   Student / Parent view — shows their own attendance
+   ══════════════════════════════════════════════ */
+function StudentAttendanceView() {
+  const [summary, setSummary] = useState<{ total: number; present: number; absent: number; late: number; percentage: number } | null>(null);
+  const [studentId, setStudentId] = useState<string | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        // Get the student's own profile to find their student_id
+        const profileRes = await getMyStudentProfile();
+        if (profileRes.success && profileRes.data) {
+          const profile = profileRes.data as { student: { id: string; class_id?: string } };
+          setStudentId(profile.student?.id);
+
+          // Fetch attendance summary for the student
+          if (profile.student?.id) {
+            const summaryRes = await getAttendanceSummary({ student_id: profile.student.id });
+            if (summaryRes.success && summaryRes.data) {
+              const rows = (summaryRes.data as {
+                summary: Array<{
+                  total_days: number | string;
+                  present_days: number | string;
+                  absent_days: number | string;
+                  late_days: number | string;
+                  attendance_percentage: number | string;
+                }>
+              }).summary;
+              if (rows && rows.length > 0) {
+                const row = rows[0];
+                setSummary({
+                  total: Number(row.total_days) || 0,
+                  present: Number(row.present_days) || 0,
+                  absent: Number(row.absent_days) || 0,
+                  late: Number(row.late_days) || 0,
+                  percentage: Number(row.attendance_percentage) || 0,
+                });
+              }
+            }
+          }
+        }
+      } catch {
+        // Silently fail — the calendar below will still work via auto-scoping
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const total = summary?.total || 0;
+  const present = summary?.present || 0;
+  const absent = summary?.absent || 0;
+  const late = summary?.late || 0;
+  const percentage = summary?.percentage || 0;
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6 page-enter">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">My Attendance</h1>
+          <p className="text-muted-foreground text-sm">View your attendance records and calendar.</p>
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center h-40 gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-muted-foreground text-sm">Loading attendance...</p>
+          </div>
+        )}
+
+        {/* Summary Stats */}
+        {!loading && summary && (
+          <>
+            {/* Attendance Percentage Hero */}
+            <Card className="shadow-card border-border/40 overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                  <div className="relative flex items-center justify-center">
+                    <svg width={100} height={100} className="transform -rotate-90">
+                      <circle cx={50} cy={50} r={42} fill="none" stroke="currentColor" strokeWidth={8} className="text-muted/40" />
+                      <circle
+                        cx={50} cy={50} r={42} fill="none"
+                        stroke="currentColor" strokeWidth={8}
+                        strokeDasharray={2 * Math.PI * 42}
+                        strokeDashoffset={2 * Math.PI * 42 - (Math.min(percentage, 100) / 100) * 2 * Math.PI * 42}
+                        strokeLinecap="round"
+                        className={`${percentage >= 90 ? 'text-green-500' : percentage >= 75 ? 'text-amber-500' : 'text-destructive'} transition-all duration-1000 ease-out`}
+                      />
+                    </svg>
+                    <span className={`absolute text-2xl font-bold ${percentage >= 90 ? 'text-green-600' : percentage >= 75 ? 'text-amber-600' : 'text-destructive'}`}>
+                      {percentage}%
+                    </span>
+                  </div>
+                  <div className="flex-1 space-y-3 w-full">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Overall Attendance</p>
+                      <p className="text-xs text-muted-foreground">{total} school days recorded</p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Present</span>
+                        <span className="text-xs font-medium text-green-600">{present} days</span>
+                      </div>
+                      <Progress value={total > 0 ? (present / total) * 100 : 0} className="h-2 [&>div]:bg-green-500" />
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Absent</span>
+                        <span className="text-xs font-medium text-destructive">{absent} days</span>
+                      </div>
+                      <Progress value={total > 0 ? (absent / total) * 100 : 0} className="h-2 [&>div]:bg-destructive" />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Stat Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <Card className="shadow-card border-border/40">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-emerald-600">{present}</p>
+                    <p className="text-xs text-muted-foreground">Present</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-card border-border/40">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center">
+                    <XCircle className="h-5 w-5 text-destructive" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-destructive">{absent}</p>
+                    <p className="text-xs text-muted-foreground">Absent</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-card border-border/40">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                    <Clock className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-amber-600">{late}</p>
+                    <p className="text-xs text-muted-foreground">Late</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-card border-border/40">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <GraduationCap className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-primary">{total}</p>
+                    <p className="text-xs text-muted-foreground">Total Days</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
+
+        {/* Attendance Calendar — backend auto-scopes for student role */}
+        <AttendanceCalendar studentId={studentId} />
+      </div>
+    </DashboardLayout>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   Admin / Teacher view — mark & manage attendance
+   ══════════════════════════════════════════════ */
+function AdminAttendanceView() {
   const { isRole } = useAuth();
   const [classes, setClasses] = useState<ClassType[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -336,4 +517,18 @@ export default function Attendance() {
       </div>
     </DashboardLayout>
   );
+}
+
+/* ══════════════════════════════════════════════
+   Main component — route to correct view by role
+   ══════════════════════════════════════════════ */
+export default function Attendance() {
+  const { isRole } = useAuth();
+  const isStudentOrParent = isRole('student', 'parent');
+
+  if (isStudentOrParent) {
+    return <StudentAttendanceView />;
+  }
+
+  return <AdminAttendanceView />;
 }
