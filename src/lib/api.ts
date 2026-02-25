@@ -447,11 +447,16 @@ export async function getAttendanceSummary(params?: Record<string, string>) {
 }
 
 export async function getAttendanceMonthly(params?: Record<string, string>) {
-  return api.get<{ calendar: unknown[] }>('/attendance/monthly', params);
+  return api.get<{ records: { date: string; status: string; student_id: string; student_name?: string }[] }>('/attendance/monthly', params);
 }
 
-export async function markAttendance(records: { student_id: string; class_id: string; date: string; status: string; subject_id?: string }[]) {
-  return api.post('/attendance', { records });
+export async function markAttendance(data: {
+  records: { student_id: string; status: string; remarks?: string }[];
+  class_id: string;
+  date: string;
+  subject_id?: string;
+}) {
+  return api.post('/attendance', data);
 }
 
 // ═══════════════════════════════════════════

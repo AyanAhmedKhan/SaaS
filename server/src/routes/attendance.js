@@ -74,7 +74,7 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      attendance: dataRes.rows,
+      records: dataRes.rows,
       pagination: {
         page: parseInt(page), limit: parseInt(limit),
         total: parseInt(total),

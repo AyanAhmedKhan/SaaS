@@ -111,8 +111,6 @@ export default function Attendance() {
       .filter(([, status]) => status !== null)
       .map(([student_id, status]) => ({
         student_id,
-        class_id: selectedClassId,
-        date: dateStr,
         status: status as string,
       }));
 
@@ -123,7 +121,11 @@ export default function Attendance() {
 
     try {
       setSaving(true);
-      const res = await markAttendanceApi(records);
+      const res = await markAttendanceApi({
+        records,
+        class_id: selectedClassId,
+        date: dateStr,
+      });
       if (res.success) {
         toast.success(`Attendance saved for ${records.length} students.`);
       } else {

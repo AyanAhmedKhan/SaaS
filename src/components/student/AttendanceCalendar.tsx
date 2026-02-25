@@ -44,7 +44,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
-type ViewMode = "day-wise";
 
 interface RawRecord {
   date: string;
@@ -82,7 +81,6 @@ export function AttendanceCalendar({ studentId, classId }: AttendanceCalendarPro
 
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
-  const [viewMode, setViewMode] = useState<ViewMode>("day-wise");
   const [records, setRecords] = useState<RawRecord[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(false);
@@ -297,18 +295,6 @@ export function AttendanceCalendar({ studentId, classId }: AttendanceCalendarPro
                   Add Holiday
                 </Button>
               )}
-
-              {/* View mode selector */}
-              <div className="flex items-center gap-1">
-                <Select value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-                  <SelectTrigger className="w-[140px] h-8 text-xs font-medium">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="day-wise">Day-wise View</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
 
               {/* Month navigator */}
               <div className="flex items-center gap-1">
