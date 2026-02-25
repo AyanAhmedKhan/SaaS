@@ -450,6 +450,10 @@ export async function getAttendanceMonthly(params?: Record<string, string>) {
   return api.get<{ records: { date: string; status: string; student_id: string; student_name?: string }[] }>('/attendance/monthly', params);
 }
 
+export async function getAttendanceSubjectWise(params?: { student_id: string; institute_id?: string }) {
+  return api.get<{ subjectWise: { subject_name: string; subject_id: string; total_classes: string; present: string; absent: string; percentage: string }[] }>('/attendance/subject-wise', params);
+}
+
 export async function markAttendance(data: {
   records: { student_id: string; status: string; remarks?: string }[];
   class_id: string;

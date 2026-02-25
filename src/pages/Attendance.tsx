@@ -12,11 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getStudents, getClasses, markAttendance as markAttendanceApi, getAttendance, getAttendanceSummary, getMyStudentProfile } from "@/lib/api";
+import { getStudents, getClasses, markAttendance as markAttendanceApi, getAttendance, getAttendanceSummary, getAttendanceSubjectWise, getMyStudentProfile } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AttendanceCalendar } from "@/components/student/AttendanceCalendar";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { Student, Class as ClassType, AttendanceRecord } from "@/types";
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | null;
@@ -26,6 +27,7 @@ type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | null;
    ══════════════════════════════════════════════ */
 function StudentAttendanceView() {
   const [summary, setSummary] = useState<{ total: number; present: number; absent: number; late: number; percentage: number } | null>(null);
+  const [subjectStats, setSubjectStats] = useState<any[]>([]);
   const [studentId, setStudentId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
@@ -61,6 +63,18 @@ function StudentAttendanceView() {
                   percentage: Number(row.attendance_percentage) || 0,
                 });
               }
+            }
+
+            // Fetch subject-wise stats
+            const subRes = await getAttendanceSubjectWise({ student_id: profile.student.id });
+            if (subRes.success && subRes.data) {
+              const dataList = (subRes.data as { subjectWise: any[] }).subjectWise || [];
+              setSubjectStats(dataList.map(d => ({
+                name: d.subject_name,
+                percentage: parseFloat(d.percentage) || 0,
+                total: parseInt(d.total_classes) || 0,
+                present: parseInt(d.present) || 0
+              })));
             }
           }
         }
@@ -100,86 +114,140 @@ function StudentAttendanceView() {
         {!loading && summary && (
           <>
             {/* Attendance Percentage Hero */}
-            <Card className="shadow-card border-border/40 overflow-hidden">
-              <CardContent className="p-6">
-                <div className="flex flex-col sm:flex-row items-center gap-6">
-                  <div className="relative flex items-center justify-center">
-                    <svg width={100} height={100} className="transform -rotate-90">
-                      <circle cx={50} cy={50} r={42} fill="none" stroke="currentColor" strokeWidth={8} className="text-muted/40" />
+            <Card className="shadow-xl border border-white/20 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl overflow-hidden animate-scale-in">
+              <CardContent className="p-8">
+                <div className="flex flex-col md:flex-row items-center gap-10">
+                  <div className="relative flex items-center justify-center scale-110">
+                    <svg width={120} height={120} className="transform -rotate-90 drop-shadow-lg">
+                      <circle cx={60} cy={60} r={50} fill="none" stroke="currentColor" strokeWidth={10} className="text-muted/30" />
                       <circle
-                        cx={50} cy={50} r={42} fill="none"
-                        stroke="currentColor" strokeWidth={8}
-                        strokeDasharray={2 * Math.PI * 42}
-                        strokeDashoffset={2 * Math.PI * 42 - (Math.min(percentage, 100) / 100) * 2 * Math.PI * 42}
+                        cx={60} cy={60} r={50} fill="none"
+                        stroke="currentColor" strokeWidth={10}
+                        strokeDasharray={2 * Math.PI * 50}
+                        strokeDashoffset={2 * Math.PI * 50 - (Math.min(percentage, 100) / 100) * 2 * Math.PI * 50}
                         strokeLinecap="round"
-                        className={`${percentage >= 90 ? 'text-green-500' : percentage >= 75 ? 'text-amber-500' : 'text-destructive'} transition-all duration-1000 ease-out`}
+                        className={`${percentage >= 90 ? 'text-emerald-500' : percentage >= 75 ? 'text-amber-500' : 'text-red-500'} transition-all duration-1000 ease-out`}
                       />
                     </svg>
-                    <span className={`absolute text-2xl font-bold ${percentage >= 90 ? 'text-green-600' : percentage >= 75 ? 'text-amber-600' : 'text-destructive'}`}>
-                      {percentage}%
-                    </span>
-                  </div>
-                  <div className="flex-1 space-y-3 w-full">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">Overall Attendance</p>
-                      <p className="text-xs text-muted-foreground">{total} school days recorded</p>
+                    <div className="absolute flex flex-col items-center justify-center">
+                      <span className={`text-3xl font-black tracking-tighter ${percentage >= 90 ? 'text-emerald-600 dark:text-emerald-400' : percentage >= 75 ? 'text-amber-600 dark:text-amber-400' : 'text-red-500 dark:text-red-400'}`}>
+                        {percentage}%
+                      </span>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Present</span>
-                        <span className="text-xs font-medium text-green-600">{present} days</span>
+                  </div>
+                  <div className="flex-1 space-y-5 w-full">
+                    <div>
+                      <h3 className="text-2xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">Overall Attendance</h3>
+                      <p className="text-sm text-muted-foreground mt-1">{total} school days recorded</p>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground font-medium">Present</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">{present} days</span>
+                        </div>
+                        <Progress value={total > 0 ? (present / total) * 100 : 0} className="h-2.5 bg-emerald-500/10 [&>div]:bg-gradient-to-r [&>div]:from-emerald-400 [&>div]:to-emerald-600" />
                       </div>
-                      <Progress value={total > 0 ? (present / total) * 100 : 0} className="h-2 [&>div]:bg-green-500" />
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Absent</span>
-                        <span className="text-xs font-medium text-destructive">{absent} days</span>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground font-medium">Absent</span>
+                          <span className="font-bold text-red-500 dark:text-red-400">{absent} days</span>
+                        </div>
+                        <Progress value={total > 0 ? (absent / total) * 100 : 0} className="h-2.5 bg-red-500/10 [&>div]:bg-gradient-to-r [&>div]:from-red-400 [&>div]:to-red-600" />
                       </div>
-                      <Progress value={total > 0 ? (absent / total) * 100 : 0} className="h-2 [&>div]:bg-destructive" />
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
+            {/* Subject-Wise Performance Chart */}
+            {subjectStats.length > 0 && (
+              <Card className="shadow-lg border-white/20 bg-white/40 dark:bg-zinc-900/40 backdrop-blur-md animate-fade-in-up hover:shadow-xl transition-shadow duration-300">
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold">Subject-Wise Performance</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px] w-full mt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={subjectStats} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
+                        <XAxis dataKey="name" fontSize={13} tickLine={false} axisLine={false} dy={10} fontWeight={500} />
+                        <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} domain={[0, 100]} />
+                        <Tooltip
+                          cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-background/95 border border-border/50 p-4 rounded-xl shadow-2xl backdrop-blur-md">
+                                  <p className="font-bold text-base">{data.name}</p>
+                                  <div className="mt-2 space-y-1">
+                                    <p className="text-sm font-medium">Attendance: <span className={cn(
+                                      "font-bold",
+                                      data.percentage >= 75 ? "text-emerald-500" : data.percentage >= 60 ? "text-amber-500" : "text-red-500"
+                                    )}>{data.percentage}%</span></p>
+                                    <p className="text-xs text-muted-foreground">{data.present} of {data.total} classes attended</p>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Bar dataKey="percentage" radius={[6, 6, 0, 0]} maxBarSize={60}>
+                          {subjectStats.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.percentage >= 75 ? "hsl(var(--primary))" : entry.percentage >= 60 ? "#f59e0b" : "#ef4444"}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Stat Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Card className="shadow-card border-border/40">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+              <Card className="shadow-lg border-white/20 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl hover:-translate-y-1 transition-transform duration-300">
+                <CardContent className="p-5 flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+                    <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div>
-                    <p className="text-xl font-bold text-emerald-600">{present}</p>
-                    <p className="text-xs text-muted-foreground">Present</p>
+                    <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{present}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Present</p>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="shadow-card border-border/40">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center">
-                    <XCircle className="h-5 w-5 text-destructive" />
+              <Card className="shadow-lg border-white/20 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl hover:-translate-y-1 transition-transform duration-300">
+                <CardContent className="p-5 flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-red-500/10 flex items-center justify-center">
+                    <XCircle className="h-6 w-6 text-red-500 dark:text-red-400" />
                   </div>
                   <div>
-                    <p className="text-xl font-bold text-destructive">{absent}</p>
-                    <p className="text-xs text-muted-foreground">Absent</p>
+                    <p className="text-2xl font-black text-red-500 dark:text-red-400">{absent}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Absent</p>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="shadow-card border-border/40">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                    <Clock className="h-5 w-5 text-amber-600" />
+              <Card className="shadow-lg border-white/20 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl hover:-translate-y-1 transition-transform duration-300">
+                <CardContent className="p-5 flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center">
+                    <Clock className="h-6 w-6 text-amber-500 dark:text-amber-400" />
                   </div>
                   <div>
-                    <p className="text-xl font-bold text-amber-600">{late}</p>
-                    <p className="text-xs text-muted-foreground">Late</p>
+                    <p className="text-2xl font-black text-amber-500 dark:text-amber-400">{late}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Late</p>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="shadow-card border-border/40">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <GraduationCap className="h-5 w-5 text-primary" />
+              <Card className="shadow-lg border-white/20 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl hover:-translate-y-1 transition-transform duration-300">
+                <CardContent className="p-5 flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+                    <GraduationCap className="h-6 w-6 text-primary" />
                   </div>
                   <div>
                     <p className="text-xl font-bold text-primary">{total}</p>
@@ -347,7 +415,7 @@ function AdminAttendanceView() {
           </div>
           <div className="flex items-center gap-3">
             <Select value={selectedClassId} onValueChange={setSelectedClassId}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Select Class" /></SelectTrigger>
+              <SelectTrigger className="w-[180px] bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md border-white/20"><SelectValue placeholder="Select Class" /></SelectTrigger>
               <SelectContent>
                 {classes.map(c => (
                   <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>
@@ -368,7 +436,7 @@ function AdminAttendanceView() {
         </div>
 
         {/* Date Navigation */}
-        <Card className="shadow-card border-border/40">
+        <Card className="shadow-lg border-white/20 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl animate-fade-in-up" style={{ animationDelay: '100ms' }}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <Button variant="ghost" size="icon" onClick={prevDay}><ChevronLeft className="h-5 w-5" /></Button>
@@ -385,37 +453,37 @@ function AdminAttendanceView() {
 
         {/* Stats */}
         {students.length > 0 && (
-          <div className="grid grid-cols-3 gap-4">
-            <Card className="shadow-card border-border/40">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                  <Check className="h-6 w-6 text-emerald-600" />
+          <div className="grid grid-cols-3 gap-4 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+            <Card className="shadow-xl border-white/20 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl hover:-translate-y-1 transition-transform duration-300">
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+                  <Check className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-emerald-600">{stats.present}</p>
-                  <p className="text-sm text-muted-foreground">Present</p>
+                  <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{stats.present}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Present</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="shadow-card border-border/40">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-xl bg-destructive/10 flex items-center justify-center">
-                  <X className="h-6 w-6 text-destructive" />
+            <Card className="shadow-xl border-white/20 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl hover:-translate-y-1 transition-transform duration-300">
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-red-500/10 flex items-center justify-center">
+                  <X className="h-6 w-6 text-red-500 dark:text-red-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-destructive">{stats.absent}</p>
-                  <p className="text-sm text-muted-foreground">Absent</p>
+                  <p className="text-2xl font-black text-red-500 dark:text-red-400">{stats.absent}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Absent</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="shadow-card border-border/40">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                  <Clock className="h-6 w-6 text-amber-600" />
+            <Card className="shadow-xl border-white/20 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl hover:-translate-y-1 transition-transform duration-300">
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center">
+                  <Clock className="h-6 w-6 text-amber-500 dark:text-amber-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-amber-600">{stats.late}</p>
-                  <p className="text-sm text-muted-foreground">Late</p>
+                  <p className="text-2xl font-black text-amber-500 dark:text-amber-400">{stats.late}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Late</p>
                 </div>
               </CardContent>
             </Card>
@@ -440,19 +508,19 @@ function AdminAttendanceView() {
 
         {/* Student List */}
         {!loading && !error && students.length > 0 && (
-          <Card className="shadow-card border-border/40">
+          <Card className="shadow-xl border-white/20 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl animate-fade-in-up" style={{ animationDelay: '300ms' }}>
             <CardHeader className="pb-3">
               <CardTitle className="text-lg">
                 Mark Attendance — {selectedClass ? `${selectedClass.name} ${selectedClass.section}` : ''}
-                <span className="text-sm font-normal text-muted-foreground ml-2">({students.length} students)</span>
+                <span className="text-sm font-medium text-muted-foreground ml-2">({students.length} students)</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {students.map((student, index) => (
                   <div
                     key={student.id}
-                    className="flex items-center justify-between p-3 rounded-xl border border-border/40 hover:bg-muted/30 transition-colors animate-scale-in"
+                    className="flex justify-between items-center p-3 sm:p-4 rounded-2xl border border-white/20 bg-white/40 dark:bg-zinc-800/40 hover:bg-white/60 dark:hover:bg-zinc-800/60 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-scale-in"
                     style={{ animationDelay: `${index * 20}ms` }}
                   >
                     <div className="flex items-center gap-3">
@@ -467,25 +535,25 @@ function AdminAttendanceView() {
                       </div>
                     </div>
                     {canMark ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
                         <Button
                           variant="outline" size="sm"
                           onClick={() => toggleAttendance(student.id, 'present')}
-                          className={cn("h-9 w-9 p-0 rounded-lg", attendance[student.id] === 'present' && getStatusColor('present'))}
+                          className={cn("h-10 w-10 p-0 rounded-full transition-transform hover:scale-110", attendance[student.id] === 'present' && getStatusColor('present'))}
                         >
                           <Check className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="outline" size="sm"
                           onClick={() => toggleAttendance(student.id, 'absent')}
-                          className={cn("h-9 w-9 p-0 rounded-lg", attendance[student.id] === 'absent' && getStatusColor('absent'))}
+                          className={cn("h-10 w-10 p-0 rounded-full transition-transform hover:scale-110", attendance[student.id] === 'absent' && getStatusColor('absent'))}
                         >
                           <X className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="outline" size="sm"
                           onClick={() => toggleAttendance(student.id, 'late')}
-                          className={cn("h-9 w-9 p-0 rounded-lg", attendance[student.id] === 'late' && getStatusColor('late'))}
+                          className={cn("h-10 w-10 p-0 rounded-full transition-transform hover:scale-110", attendance[student.id] === 'late' && getStatusColor('late'))}
                         >
                           <Clock className="h-4 w-4" />
                         </Button>
