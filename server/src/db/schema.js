@@ -248,6 +248,22 @@ export async function createSchema() {
       );
     `);
 
+    // ── HOLIDAYS MODULE ──
+    await query(`
+      CREATE TABLE IF NOT EXISTS holidays (
+        id TEXT PRIMARY KEY,
+        institute_id TEXT NOT NULL REFERENCES institutes(id) ON DELETE CASCADE,
+        date DATE NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        holiday_type TEXT NOT NULL DEFAULT 'general' CHECK(holiday_type IN ('general','national','religious','exam','custom')),
+        created_by TEXT REFERENCES users(id),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(institute_id, date)
+      );
+    `);
+
     // ── SYLLABUS MODULE ──
     await query(`
       CREATE TABLE IF NOT EXISTS syllabus (

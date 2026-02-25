@@ -30,6 +30,7 @@ import notificationRoutes from './routes/notifications.js';
 import gradingRoutes from './routes/grading.js';
 import analyticsRoutes from './routes/analytics.js';
 import monitoringRoutes from './routes/monitoring.js';
+import holidayRoutes from './routes/holidays.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -115,6 +116,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/grading', gradingRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/monitoring', monitoringRoutes);
+app.use('/api/holidays', holidayRoutes);
 
 // ── 404 & Error handlers ──
 app.use(notFoundHandler);

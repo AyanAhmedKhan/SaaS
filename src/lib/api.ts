@@ -749,3 +749,35 @@ export async function createInstitute(data: Partial<Institute>) {
 export async function updateInstitute(id: string, data: Partial<Institute>) {
   return api.put<{ institute: Institute }>(`/institutes/${id}`, data);
 }
+
+// ═══════════════════════════════════════════
+// HOLIDAYS API
+// ═══════════════════════════════════════════
+
+export interface Holiday {
+  id: string;
+  institute_id: string;
+  date: string;
+  name: string;
+  description?: string;
+  holiday_type: 'general' | 'national' | 'religious' | 'exam' | 'custom';
+  created_by?: string;
+  created_by_name?: string;
+  created_at?: string;
+}
+
+export async function getHolidays(params?: Record<string, string>) {
+  return api.get<{ holidays: Holiday[] }>('/holidays', params);
+}
+
+export async function createHoliday(data: { date: string; name: string; description?: string; holiday_type?: string }) {
+  return api.post<{ holiday: Holiday }>('/holidays', data);
+}
+
+export async function updateHoliday(id: string, data: Partial<{ date: string; name: string; description: string; holiday_type: string }>) {
+  return api.put<{ holiday: Holiday }>(`/holidays/${id}`, data);
+}
+
+export async function deleteHoliday(id: string) {
+  return api.delete(`/holidays/${id}`);
+}
