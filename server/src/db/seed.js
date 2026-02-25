@@ -228,9 +228,11 @@ async function seed() {
       // ════════════════════════════════════════
       // 11. ATTENDANCE RECORDS (past 90 calendar days, weekdays only)
       // ════════════════════════════════════════
-      const attStatuses = ['present', 'present', 'present', 'present', 'absent', 'late'];
+      const attStatuses = ['present', 'present', 'present', 'present', 'absent', 'late', 'excused'];
       const today = new Date();
       let attIdx = 0;
+
+      await client.query("DELETE FROM attendance_records WHERE id LIKE 'att_%'");
 
       for (const s of studentData) {
         for (let d = 90; d >= 1; d--) {
