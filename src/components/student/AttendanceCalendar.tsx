@@ -50,6 +50,7 @@ interface RawRecord {
   status: string;
   student_id: string;
   student_name?: string;
+  subject_name?: string;
 }
 
 type DayStatus = "present" | "absent" | null;
@@ -95,6 +96,10 @@ export function AttendanceCalendar({ studentId, classId }: AttendanceCalendarPro
 
   const [viewHoliday, setViewHoliday] = useState<Holiday | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  /* ─── Day Details State ─── */
+  const [dayDetailsOpen, setDayDetailsOpen] = useState(false);
+  const [selectedDayDetails, setSelectedDayDetails] = useState<{ day: number; records: RawRecord[] } | null>(null);
 
   /* ─── Fetch attendance + holidays (independent so one failure doesn't block the other) ─── */
   const fetchData = useCallback(async () => {
@@ -264,7 +269,17 @@ export function AttendanceCalendar({ studentId, classId }: AttendanceCalendarPro
     const hol = holidayByDay.get(day);
     if (hol) {
       setViewHoliday(hol);
-    } else if (isAdmin) {
+      return;
+    }
+
+    const dayRecs = records.filter(r => new Date(r.date).getUTCDate() === day);
+    if (dayRecs.length > 0) {
+      setSelectedDayDetails({ day, records: dayRecs });
+      setDayDetailsOpen(true);
+      return;
+    }
+
+    if (isAdmin) {
       openAddForDate(day);
     }
   };
@@ -594,6 +609,52 @@ export function AttendanceCalendar({ studentId, classId }: AttendanceCalendarPro
                 Remove Holiday
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── View Day Details Dialog ─── */}
+      <Dialog open={dayDetailsOpen} onOpenChange={setDayDetailsOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              Attendance for {selectedDayDetails && new Date(year, month - 1, selectedDayDetails.day).toLocaleDateString("en-IN", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </DialogTitle>
+            <DialogDescription>
+              Classes and subjects recorded on this date.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+            {selectedDayDetails?.records.map((r, i) => (
+              <div key={i} className="flex justify-between items-center p-3 rounded-lg border border-border/50 bg-muted/20">
+                <div>
+                  <p className="text-sm font-medium">{r.subject_name || "General Class"}</p>
+                  {isAdmin && r.student_name && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{r.student_name}</p>
+                  )}
+                </div>
+                <div className={cn(
+                  "px-2.5 py-1 rounded-full text-xs font-semibold capitalize",
+                  r.status === "present" ? "bg-emerald-500/10 text-emerald-600" :
+                    r.status === "absent" ? "bg-red-500/10 text-red-600" :
+                      r.status === "late" ? "bg-amber-500/10 text-amber-600" :
+                        "bg-muted text-muted-foreground"
+                )}>
+                  {r.status}
+                </div>
+              </div>
+            ))}
+            {selectedDayDetails?.records.length === 0 && (
+              <p className="text-sm text-center text-muted-foreground py-4">No specific class attendance found.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDayDetailsOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
