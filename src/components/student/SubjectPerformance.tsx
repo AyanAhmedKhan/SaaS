@@ -15,9 +15,9 @@ interface SubjectPerformanceProps {
 }
 
 function TrendIcon({ trend }: { trend: "up" | "down" | "neutral" }) {
-  if (trend === "up") return <TrendingUp className="h-4 w-4 text-green-600" />;
-  if (trend === "down") return <TrendingDown className="h-4 w-4 text-destructive" />;
-  return <Minus className="h-4 w-4 text-muted-foreground" />;
+  if (trend === "up") return <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-600" />;
+  if (trend === "down") return <TrendingDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive" />;
+  return <Minus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />;
 }
 
 export function SubjectPerformance({ exams }: SubjectPerformanceProps) {
@@ -38,30 +38,30 @@ export function SubjectPerformance({ exams }: SubjectPerformanceProps) {
 
   return (
     <Card className="shadow-card border-border/40">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-primary" />
-          Subject-wise Performance
+      <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
+        <CardTitle className="text-sm sm:text-lg font-semibold flex items-center gap-2">
+          <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+          Subject Performance
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3 sm:space-y-4 px-3 sm:px-6 pb-3 sm:pb-6">
         {subjects.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">No exam results yet.</p>
+          <p className="text-xs sm:text-sm text-muted-foreground text-center py-4">No exam results yet.</p>
         ) : (
           subjects.map((item) => {
             const pct = Math.round((item.latest / item.max) * 100);
             return (
-              <div key={item.name} className="space-y-1.5">
+              <div key={item.name} className="space-y-1 sm:space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground text-sm">{item.name}</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                    <span className="font-medium text-foreground text-xs sm:text-sm truncate">{item.name}</span>
                     <TrendIcon trend={item.trend} />
                   </div>
-                  <span className="text-sm font-semibold text-foreground">
+                  <span className="text-xs sm:text-sm font-semibold text-foreground shrink-0 ml-2">
                     {item.latest}/{item.max}
                   </span>
                 </div>
-                <Progress value={pct} className="h-2" />
+                <Progress value={pct} className="h-1.5 sm:h-2" />
               </div>
             );
           })

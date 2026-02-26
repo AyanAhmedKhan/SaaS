@@ -31,6 +31,7 @@ const ComingSoon = lazy(() => import("./pages/ComingSoon"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const StudentProfilePage = lazy(() => import("./pages/StudentProfilePage"));
+const Settings = lazy(() => import("./pages/Settings"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -105,7 +106,7 @@ function AppRoutes() {
 
       {/* Placeholder routes */}
       <Route path="/grading" element={<ProtectedRoute roles={ADMIN_ROLES}><ComingSoon title="Grading Configuration" /></ProtectedRoute>} />
-      <Route path="/settings" element={<ProtectedRoute><ComingSoon title="Settings" /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>
