@@ -19,7 +19,9 @@ import { AssignmentsPanel } from "@/components/student/AssignmentsPanel";
 import { NotificationsWidget } from "@/components/student/NotificationsWidget";
 import { TeacherFeedback } from "@/components/student/TeacherFeedback";
 import { AIInsightCard } from "@/components/dashboard/AIInsightCard";
-import { getStudentDashboard, getTimetable } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Cell } from "recharts";
+import { getStudentDashboard, getTimetable, getAttendanceSubjectWise } from "@/lib/api";
 
 interface StudentData {
   name: string;
@@ -88,6 +90,7 @@ export default function StudentDashboard() {
   const [remarks, setRemarks] = useState<RemarkRow[]>([]);
   const [notices, setNotices] = useState<NoticeRow[]>([]);
   const [todayClasses, setTodayClasses] = useState<TimetableRow[]>([]);
+  const [subjectStats, setSubjectStats] = useState<{ name: string; percentage: number; present: number; total: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -101,9 +104,10 @@ export default function StudentDashboard() {
       const jsDay = new Date().getDay();
       const schemaDay = jsDay === 0 ? 6 : jsDay - 1;
 
-      const [dashRes, ttRes] = await Promise.all([
+      const [dashRes, ttRes, attRes] = await Promise.all([
         getStudentDashboard(),
         getTimetable({ day: String(schemaDay) }),
+        getAttendanceSubjectWise(),
       ]);
 
       if (dashRes.success && dashRes.data) {
@@ -121,6 +125,16 @@ export default function StudentDashboard() {
         setAssignments(d.upcomingAssignments || []);
         setRemarks(d.recentRemarks || []);
         setNotices(d.notices || []);
+      }
+
+      if (attRes.success && attRes.data) {
+        const stats = (attRes.data as { subjectWise: { subject_name: string; percentage: string; present: string; total_classes: string }[] }).subjectWise || [];
+        setSubjectStats(stats.map(s => ({
+          name: s.subject_name.length > 12 ? s.subject_name.substring(0, 10) + '...' : s.subject_name,
+          percentage: parseFloat(s.percentage),
+          present: parseInt(s.present),
+          total: parseInt(s.total_classes)
+        })));
       }
 
       if (ttRes.success && ttRes.data) {
@@ -540,23 +554,21 @@ export default function StudentDashboard() {
                     return (
                       <div
                         key={cls.id}
-                        className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-200 ${
-                          status === "ongoing"
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-200 ${status === "ongoing"
                             ? "bg-green-500/5 border-green-500/30 shadow-sm"
                             : status === "completed"
-                            ? "bg-muted/40 border-border/50 opacity-60"
-                            : "bg-card border-border/50 hover:bg-muted/30 hover:shadow-sm"
-                        }`}
+                              ? "bg-muted/40 border-border/50 opacity-60"
+                              : "bg-card border-border/50 hover:bg-muted/30 hover:shadow-sm"
+                          }`}
                         style={{ animationDelay: `${idx * 50}ms` }}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${
-                            status === "ongoing"
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${status === "ongoing"
                               ? "bg-green-500/15 text-green-700"
                               : status === "completed"
-                              ? "bg-muted text-muted-foreground"
-                              : "bg-primary/10 text-primary"
-                          }`}>
+                                ? "bg-muted text-muted-foreground"
+                                : "bg-primary/10 text-primary"
+                            }`}>
                             P{cls.period_number}
                           </div>
                           <div>
@@ -590,7 +602,63 @@ export default function StudentDashboard() {
               </CardContent>
             </Card>
 
-            <SubjectPerformance exams={recentExams} />
+            <div className="space-y-6">
+              <SubjectPerformance exams={recentExams} />
+
+              {/* Subject-Wise Attendance Chart */}
+              {subjectStats.length > 0 && (
+                <Card className="shadow-card border-border/40 hover:shadow-md transition-all duration-300">
+                  <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                      <CalendarDays className="h-5 w-5 text-green-600" />
+                      Attendance Trends
+                    </CardTitle>
+                    <Button variant="ghost" size="sm" className="text-xs h-8" onClick={() => navigate("/attendance")}>
+                      Details <ChevronRight className="h-3 w-3 ml-1" />
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[280px] w-full mt-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={subjectStats} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                          <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} dy={10} fontWeight={500} />
+                          <YAxis fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} domain={[0, 100]} />
+                          <RechartsTooltip
+                            cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                return (
+                                  <div className="bg-background border border-border/50 p-3 rounded-xl shadow-xl backdrop-blur-md">
+                                    <p className="font-bold text-sm">{data.name}</p>
+                                    <div className="mt-1 space-y-0.5">
+                                      <p className="text-xs font-medium">Attendance: <span className={cn(
+                                        "font-bold",
+                                        data.percentage >= 75 ? "text-emerald-500" : data.percentage >= 60 ? "text-amber-500" : "text-red-500"
+                                      )}>{data.percentage}%</span></p>
+                                      <p className="text-[11px] text-muted-foreground">{data.present} of {data.total} classes attended</p>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Bar dataKey="percentage" radius={[4, 4, 0, 0]} maxBarSize={45}>
+                            {subjectStats.map((entry, index) => (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={entry.percentage >= 75 ? "hsl(var(--primary))" : entry.percentage >= 60 ? "#f59e0b" : "#ef4444"}
+                              />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
 
           {/* ═══════════ ASSIGNMENTS + NOTICES ═══════════ */}

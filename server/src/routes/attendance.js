@@ -121,7 +121,14 @@ router.get('/summary', asyncHandler(async (req, res) => {
 // GET /api/attendance/subject-wise — per-subject breakdown
 router.get('/subject-wise', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-  const { student_id } = req.query;
+  let { student_id } = req.query;
+
+  // Auto-scope for student role
+  if (!student_id && req.user.role === 'student') {
+    const sr = await query('SELECT id FROM students WHERE user_id = $1 AND institute_id = $2', [req.user.id, instId]);
+    if (sr.rows[0]) { student_id = sr.rows[0].id; }
+  }
+
   if (!student_id) throw new AppError('student_id query param required', 400);
 
   const { rows } = await query(

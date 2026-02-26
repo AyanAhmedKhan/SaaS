@@ -39,7 +39,7 @@ router.get('/summary', asyncHandler(async (req, res) => {
              COUNT(*) FILTER (WHERE sy.status = 'completed') AS completed,
              COUNT(*) FILTER (WHERE sy.status = 'in_progress') AS in_progress,
              COUNT(*) FILTER (WHERE sy.status = 'not_started') AS not_started,
-             ROUND(AVG(sy.completion_percentage), 1) AS avg_completion
+             ROUND(AVG(sy.completion_percentage)::numeric, 1) AS avg_completion
              FROM syllabus sy
              JOIN subjects sub ON sy.subject_id = sub.id
              JOIN classes c ON sy.class_id = c.id

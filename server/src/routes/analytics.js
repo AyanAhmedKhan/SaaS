@@ -51,7 +51,7 @@ router.get('/overview', asyncHandler(async (req, res) => {
         query(`SELECT
             COUNT(*) AS total_exams,
             COUNT(*) FILTER (WHERE status='completed') AS completed,
-            ROUND(AVG(CASE WHEN e.total_marks > 0 THEN er.marks_obtained::NUMERIC/e.total_marks*100 END),1) AS avg_score
+            ROUND(AVG(CASE WHEN e.total_marks > 0 THEN er.marks_obtained::NUMERIC/e.total_marks*100 END)::numeric,1) AS avg_score
             FROM exams e LEFT JOIN exam_results er ON e.id=er.exam_id
             WHERE e.institute_id=$1`, [instId]),
 
@@ -120,7 +120,7 @@ router.get('/students/performance', asyncHandler(async (req, res) => {
     // Top/bottom performers
     const topParams = [instId];
     const topSql = `SELECT s.name, s.roll_number, c.name AS class_name, c.section,
-        ROUND(AVG(er.marks_obtained::NUMERIC / NULLIF(e.total_marks,0) * 100), 1) AS avg_percentage
+        ROUND(AVG(er.marks_obtained::NUMERIC / NULLIF(e.total_marks,0) * 100)::numeric, 1) AS avg_percentage
         FROM exam_results er
         JOIN exams e ON er.exam_id=e.id
         JOIN students s ON er.student_id=s.id
@@ -172,7 +172,7 @@ router.get('/students/at-risk', asyncHandler(async (req, res) => {
         ) att ON att.student_id=s.id
         LEFT JOIN (
             SELECT er.student_id,
-                ROUND(AVG(er.marks_obtained::NUMERIC / NULLIF(e.total_marks,0) * 100), 1) AS avg_score
+                ROUND(AVG(er.marks_obtained::NUMERIC / NULLIF(e.total_marks,0) * 100)::numeric, 1) AS avg_score
             FROM exam_results er JOIN exams e ON er.exam_id=e.id
             WHERE er.institute_id=$1
             GROUP BY er.student_id
@@ -326,11 +326,11 @@ router.get('/exams/distribution', asyncHandler(async (req, res) => {
         // Stats
         query(`SELECT
             COUNT(*) AS total_students,
-            ROUND(AVG(er.marks_obtained),1) AS mean,
+            ROUND(AVG(er.marks_obtained)::numeric,1) AS mean,
             PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY er.marks_obtained) AS median,
             MIN(er.marks_obtained) AS min_score,
             MAX(er.marks_obtained) AS max_score,
-            ROUND(STDDEV(er.marks_obtained),2) AS std_dev,
+            ROUND(STDDEV(er.marks_obtained)::numeric,2) AS std_dev,
             COUNT(*) FILTER (WHERE er.marks_obtained >= e.passing_marks) AS passed,
             COUNT(*) FILTER (WHERE er.marks_obtained < e.passing_marks) AS failed
             FROM exam_results er JOIN exams e ON er.exam_id=e.id
@@ -360,7 +360,7 @@ router.get('/exams/comparison', asyncHandler(async (req, res) => {
     let sql = `SELECT e.id, e.name, e.exam_type, e.exam_date,
         sub.name AS subject_name,
         COUNT(er.id) AS students_appeared,
-        ROUND(AVG(er.marks_obtained::NUMERIC / NULLIF(e.total_marks,0) * 100), 1) AS avg_percentage,
+        ROUND(AVG(er.marks_obtained::NUMERIC / NULLIF(e.total_marks,0) * 100)::numeric, 1) AS avg_percentage,
         ROUND(MIN(er.marks_obtained::NUMERIC / NULLIF(e.total_marks,0) * 100), 1) AS min_pct,
         ROUND(MAX(er.marks_obtained::NUMERIC / NULLIF(e.total_marks,0) * 100), 1) AS max_pct,
         COUNT(*) FILTER (WHERE er.marks_obtained >= e.passing_marks)::NUMERIC / NULLIF(COUNT(*),0) * 100 AS pass_rate
@@ -422,7 +422,7 @@ router.get('/syllabus/progress', asyncHandler(async (req, res) => {
             COUNT(*) FILTER (WHERE sy.status='completed') AS completed,
             COUNT(*) FILTER (WHERE sy.status='in_progress') AS in_progress,
             COUNT(*) FILTER (WHERE sy.status='not_started') AS not_started,
-            ROUND(AVG(sy.completion_percentage), 1) AS avg_completion
+            ROUND(AVG(sy.completion_percentage)::numeric, 1) AS avg_completion
         FROM syllabus sy
         JOIN classes c ON sy.class_id=c.id
         JOIN subjects sub ON sy.subject_id=sub.id

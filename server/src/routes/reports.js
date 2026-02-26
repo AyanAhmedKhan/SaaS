@@ -44,7 +44,7 @@ router.get('/performance-trend', asyncHandler(async (req, res) => {
 
   const { rows } = await query(
     `SELECT e.name AS exam, sub.name AS subject,
-       ROUND(AVG(er.marks_obtained::NUMERIC / NULLIF(e.total_marks,0) * 100), 1) AS avg_score,
+       ROUND(AVG(er.marks_obtained::NUMERIC / NULLIF(e.total_marks,0) * 100)::numeric, 1) AS avg_score,
        MIN(e.exam_date) AS exam_date
      FROM exam_results er
      JOIN exams e ON er.exam_id = e.id
@@ -79,7 +79,7 @@ router.get('/class-summary', asyncHandler(async (req, res) => {
        COUNT(DISTINCT s.id) AS student_count,
        (SELECT ROUND(COUNT(*) FILTER (WHERE ar.status='present')::NUMERIC/NULLIF(COUNT(*),0)*100,1)
         FROM attendance_records ar WHERE ar.class_id=c.id) AS avg_attendance,
-       (SELECT ROUND(AVG(er.marks_obtained::NUMERIC/NULLIF(e2.total_marks,0)*100),1)
+       (SELECT ROUND(AVG(er.marks_obtained::NUMERIC/NULLIF(e2.total_marks,0)*100)::numeric,1)
         FROM exam_results er JOIN exams e2 ON er.exam_id=e2.id JOIN students st ON er.student_id=st.id WHERE st.class_id=c.id) AS avg_performance
      FROM classes c
      LEFT JOIN students s ON s.class_id=c.id AND s.status='active'

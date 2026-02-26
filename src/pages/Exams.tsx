@@ -6,6 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -33,6 +39,7 @@ export default function Exams() {
   const [searchQuery, setSearchQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
 
   const canCreate = isRole('super_admin', 'institute_admin');
 
@@ -194,7 +201,7 @@ export default function Exams() {
                       </TableCell>
                       <TableCell>{getStatusBadge(exam.status)}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">View</Button>
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedExam(exam)}>View</Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -212,6 +219,62 @@ export default function Exams() {
             <p className="text-muted-foreground text-sm font-medium">No exams found.</p>
           </div>
         )}
+
+        {/* Exam Detail Dialog */}
+        <Dialog open={!!selectedExam} onOpenChange={(open) => !open && setSelectedExam(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <GraduationCap className="h-5 w-5 text-primary" />
+                {selectedExam?.name}
+              </DialogTitle>
+            </DialogHeader>
+            {selectedExam && (
+              <div className="space-y-4 mt-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Type</p>
+                    <Badge variant="outline" className="capitalize">{selectedExam.exam_type}</Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Status</p>
+                    {getStatusBadge(selectedExam.status)}
+                  </div>
+                  {selectedExam.subject_name && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Subject</p>
+                      <p className="text-sm font-medium">{selectedExam.subject_name}</p>
+                    </div>
+                  )}
+                  {selectedExam.class_name && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Class</p>
+                      <p className="text-sm font-medium">{selectedExam.class_name}</p>
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Date</p>
+                    <p className="text-sm font-medium">
+                      {selectedExam.exam_date
+                        ? new Date(selectedExam.exam_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        : '—'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Total Marks</p>
+                    <p className="text-sm font-medium">{selectedExam.total_marks}</p>
+                  </div>
+                  {selectedExam.passing_marks != null && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Passing Marks</p>
+                      <p className="text-sm font-medium">{selectedExam.passing_marks}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

@@ -6,7 +6,7 @@ import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 const router = Router();
 router.use(authenticate, requireInstitute);
 
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // ── Admin / Institute-Admin dashboard ──
 router.get('/stats', asyncHandler(async (req, res) => {
@@ -34,11 +34,11 @@ router.get('/stats', asyncHandler(async (req, res) => {
      GROUP BY EXTRACT(MONTH FROM date::date) ORDER BY m`,
     [instId]
   );
-  const attendanceData = monthlyAtt.rows.map(r => ({ month: MONTH_NAMES[r.m-1], attendance: parseFloat(r.att) }));
+  const attendanceData = monthlyAtt.rows.map(r => ({ month: MONTH_NAMES[r.m - 1], attendance: parseFloat(r.att) }));
 
   // Performance by subject
   const perf = await query(
-    `SELECT sub.name AS subject, ROUND(AVG(er.marks_obtained::NUMERIC/NULLIF(e.total_marks,0)*100),0) AS score
+    `SELECT sub.name AS subject, ROUND(AVG(er.marks_obtained::NUMERIC/NULLIF(e.total_marks,0)*100)::numeric,0) AS score
      FROM exam_results er
      JOIN exams e ON er.exam_id=e.id
      JOIN subjects sub ON e.subject_id=sub.id
