@@ -23,6 +23,7 @@ const Attendance = lazy(() => import("./pages/Attendance"));
 const Notices = lazy(() => import("./pages/Notices"));
 const Timetable = lazy(() => import("./pages/Timetable"));
 const Syllabus = lazy(() => import("./pages/Syllabus"));
+const Subjects = lazy(() => import("./pages/Subjects"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Assignments = lazy(() => import("./pages/Assignments"));
 const Exams = lazy(() => import("./pages/Exams"));
@@ -100,6 +101,7 @@ function AppRoutes() {
       <Route path="/attendance" element={<ProtectedRoute roles={ALL_ROLES}><Attendance /></ProtectedRoute>} />
       <Route path="/timetable" element={<ProtectedRoute roles={ALL_ROLES}><Timetable /></ProtectedRoute>} />
       <Route path="/syllabus" element={<ProtectedRoute roles={ALL_ROLES}><Syllabus /></ProtectedRoute>} />
+      <Route path="/subjects" element={<ProtectedRoute roles={ADMIN_ROLES}><Subjects /></ProtectedRoute>} />
       <Route path="/notices" element={<ProtectedRoute roles={ALL_ROLES}><Notices /></ProtectedRoute>} />
       <Route path="/assignments" element={<ProtectedRoute roles={ALL_ROLES}><Assignments /></ProtectedRoute>} />
       <Route path="/exams" element={<ProtectedRoute roles={ALL_ROLES}><Exams /></ProtectedRoute>} />

@@ -16,6 +16,7 @@ import {
   Building2,
   MessageCircle,
   BarChart3,
+  Library,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,7 @@ const menuItems: MenuItem[] = [
   { title: "Academic Years", url: "/academic-years", icon: CalendarDays, roles: ADMIN },
   { title: "Students", url: "/students", icon: GraduationCap, roles: STAFF },
   { title: "Teachers", url: "/teachers", icon: Users, roles: ADMIN },
+  { title: "Subjects", url: "/subjects", icon: Library, roles: ADMIN },
   { title: "Attendance", url: "/attendance", icon: UserCheck },
   { title: "Timetable", url: "/timetable", icon: CalendarDays },
   { title: "Syllabus", url: "/syllabus", icon: BookOpen },
