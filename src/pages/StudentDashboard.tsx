@@ -636,7 +636,13 @@ export default function StudentDashboard() {
 
           {/* ═══════════ ASSIGNMENTS + NOTICES ═══════════ */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            <AssignmentsPanel assignments={assignments} />
+            <AssignmentsPanel
+              assignments={assignments}
+              onClick={(id) => {
+                setSelectedAssignmentId(id);
+                setDetailsOpen(true);
+              }}
+            />
             <NotificationsWidget notices={notices} />
           </div>
 
@@ -647,6 +653,13 @@ export default function StudentDashboard() {
           <div className="h-4 sm:h-0" />
         </div>
       </TooltipProvider>
+
+      <StudentAssignmentDetailsDialog
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        assignmentId={selectedAssignmentId}
+        onSuccess={fetchData}
+      />
     </DashboardLayout>
   );
 }

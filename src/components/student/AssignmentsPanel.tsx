@@ -12,6 +12,7 @@ interface AssignmentEntry {
 
 interface AssignmentsPanelProps {
   assignments: AssignmentEntry[];
+  onClick?: (id: string) => void;
 }
 
 type Status = "pending" | "submitted" | "late";
@@ -28,7 +29,7 @@ function mapStatus(submissionStatus?: string | null, dueDate?: string): Status {
   return "pending";
 }
 
-export function AssignmentsPanel({ assignments }: AssignmentsPanelProps) {
+export function AssignmentsPanel({ assignments, onClick }: AssignmentsPanelProps) {
   return (
     <Card className="shadow-card border-border/40">
       <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
@@ -48,7 +49,8 @@ export function AssignmentsPanel({ assignments }: AssignmentsPanelProps) {
             return (
               <div
                 key={a.id}
-                className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg border bg-card hover:bg-muted/30 active:scale-[0.99] transition-all"
+                onClick={onClick ? () => onClick(a.id) : undefined}
+                className={`flex items-center justify-between p-2.5 sm:p-3 rounded-lg border bg-card transition-all ${onClick ? 'hover:bg-muted/30 cursor-pointer active:scale-[0.99]' : ''}`}
               >
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <StatusIcon className={`h-4 w-4 sm:h-5 sm:w-5 shrink-0 ${status === "submitted" ? "text-green-600" : status === "late" ? "text-destructive" : "text-amber-500"
