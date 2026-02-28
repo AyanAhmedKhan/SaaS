@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, MoreVertical, Mail, Loader2, AlertCircle, GraduationCap } from "lucide-react";
+import { Search, MoreVertical, Mail, Loader2, AlertCircle, GraduationCap } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
