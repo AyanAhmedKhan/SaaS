@@ -25,15 +25,14 @@ import {
 import { cn } from "@/lib/utils";
 import { getTeachers } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
 import type { Teacher } from "@/types";
 import { AddTeacherDialog } from "@/components/teacher/AddTeacherDialog";
 import { EditTeacherDialog } from "@/components/teacher/EditTeacherDialog";
 import { AssignTeacherDialog } from "@/components/teacher/AssignTeacherDialog";
+import { TeacherScheduleDialog } from "@/components/teacher/TeacherScheduleDialog";
 
 export default function Teachers() {
   const { isRole } = useAuth();
-  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -41,6 +40,7 @@ export default function Teachers() {
   const [error, setError] = useState<string | null>(null);
   const [editTeacher, setEditTeacher] = useState<Teacher | null>(null);
   const [assignTeacher, setAssignTeacher] = useState<Teacher | null>(null);
+  const [scheduleTeacher, setScheduleTeacher] = useState<Teacher | null>(null);
 
   const canCreate = isRole('super_admin', 'institute_admin');
 
@@ -241,7 +241,7 @@ export default function Teachers() {
                           <DropdownMenuItem onClick={() => setAssignTeacher(teacher)}>
                             Manage Assignments
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toast({ title: "Coming Soon", description: "Schedule viewing will be available soon." })}>
+                          <DropdownMenuItem onClick={() => setScheduleTeacher(teacher)}>
                             View Schedule
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -360,6 +360,13 @@ export default function Teachers() {
           open={!!assignTeacher}
           onOpenChange={(open) => { if (!open) setAssignTeacher(null); }}
           onSuccess={fetchTeachers}
+        />
+      )}
+      {scheduleTeacher && (
+        <TeacherScheduleDialog
+          teacher={scheduleTeacher}
+          open={!!scheduleTeacher}
+          onOpenChange={(open) => { if (!open) setScheduleTeacher(null); }}
         />
       )}
     </DashboardLayout>
