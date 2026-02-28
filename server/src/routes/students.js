@@ -232,6 +232,86 @@ router.get('/:id', asyncHandler(async (req, res) => {
     });
 }));
 
+// POST /api/students/bulk — create multiple students at once
+router.post('/bulk', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
+    const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
+    const { students } = req.body;
+
+    if (!Array.isArray(students) || students.length === 0) {
+        throw new AppError('An array of students is required', 400);
+    }
+
+    const { randomUUID } = await import('crypto');
+    const client = await getClient();
+
+    try {
+        await client.query('BEGIN');
+
+        // Get current academic year
+        const ayResult = await client.query('SELECT id FROM academic_years WHERE institute_id = $1 AND is_current = true', [instId]);
+        if (!ayResult.rows[0]) throw new AppError('No current academic year found', 404);
+        const ayId = ayResult.rows[0].id;
+
+        let successCount = 0;
+        let errors = [];
+
+        for (const [index, student] of students.entries()) {
+            const { name, email, roll_number, class_id, admission_date, date_of_birth, gender, address, phone, blood_group } = student;
+
+            if (!name || !email || !roll_number) {
+                errors.push({ row: index + 1, error: 'Name, email, and roll number are required' });
+                continue;
+            }
+
+            // Check if roll number already exists in class
+            if (class_id) {
+                const rollCheck = await client.query('SELECT id FROM students WHERE class_id = $1 AND roll_number = $2 AND institute_id = $3', [class_id, roll_number, instId]);
+                if (rollCheck.rows[0]) {
+                    errors.push({ row: index + 1, error: `Roll number ${roll_number} already exists in this class` });
+                    continue;
+                }
+            }
+
+            // Check if email already exists in institute
+            const emailCheck = await client.query('SELECT id FROM students WHERE email = $1 AND institute_id = $2', [email, instId]);
+            if (emailCheck.rows[0]) {
+                errors.push({ row: index + 1, error: `Email ${email} already exists` });
+                continue;
+            }
+
+            const studentId = `s_${randomUUID().replace(/-/g, '').substring(0, 8)}`;
+            try {
+                await client.query(
+                    `INSERT INTO students (id, institute_id, academic_year_id, class_id, name, email, roll_number,
+                      admission_date, date_of_birth, gender, address, phone, blood_group)
+                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                    [studentId, instId, ayId, class_id || null, name, email, roll_number,
+                        admission_date || null, date_of_birth || null, gender || null, address || null, phone || null, blood_group || null]
+                );
+                successCount++;
+            } catch (err) {
+                errors.push({ row: index + 1, error: err.message });
+            }
+        }
+
+        if (successCount === 0 && errors.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ success: false, message: 'All imports failed', errors });
+        }
+
+        await client.query('COMMIT');
+
+        await logAudit({ instituteId: instId, userId: req.user.id, action: 'bulk_create', entityType: 'student', newValues: { successCount, errorCount: errors.length }, req });
+
+        res.status(201).json({ success: true, message: `Successfully imported ${successCount} students.`, errors });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
+}));
+
 // POST /api/students — create student (admin/teacher)
 router.post('/', authorize('institute_admin', 'class_teacher', 'super_admin'), asyncHandler(async (req, res) => {
     const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;

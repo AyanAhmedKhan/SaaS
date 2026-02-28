@@ -50,6 +50,7 @@ const STAFF: UserRole[] = ['super_admin', 'institute_admin', 'class_teacher', 's
 
 const menuItems: MenuItem[] = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Academic Years", url: "/academic-years", icon: CalendarDays, roles: ADMIN },
   { title: "Students", url: "/students", icon: GraduationCap, roles: STAFF },
   { title: "Teachers", url: "/teachers", icon: Users, roles: ADMIN },
   { title: "Attendance", url: "/attendance", icon: UserCheck },

@@ -33,6 +33,7 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const StudentProfilePage = lazy(() => import("./pages/StudentProfilePage"));
 const Settings = lazy(() => import("./pages/Settings"));
+const AcademicYears = lazy(() => import("./pages/AcademicYears"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -89,6 +90,7 @@ function AppRoutes() {
       <Route path="/dashboard" element={<ProtectedRoute><RoleBasedDashboard /></ProtectedRoute>} />
 
       {/* Admin & Staff modules */}
+      <Route path="/academic-years" element={<ProtectedRoute roles={ADMIN_ROLES}><AcademicYears /></ProtectedRoute>} />
       <Route path="/students" element={<ProtectedRoute roles={STAFF_ROLES}><Students /></ProtectedRoute>} />
       <Route path="/teachers" element={<ProtectedRoute roles={ADMIN_ROLES}><Teachers /></ProtectedRoute>} />
       <Route path="/fees" element={<ProtectedRoute roles={[...ADMIN_ROLES, 'student', 'parent']}><Fees /></ProtectedRoute>} />

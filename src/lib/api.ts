@@ -731,8 +731,8 @@ export async function getFeeSummary() {
 // ACADEMIC YEARS API
 // ═══════════════════════════════════════════
 
-export async function getAcademicYears() {
-  return api.get<{ academicYears: AcademicYear[] }>('/academic-years');
+export async function getAcademicYears(params?: Record<string, string>) {
+  return api.get<{ academicYears: AcademicYear[] }>('/academic-years', params);
 }
 
 export async function getCurrentAcademicYear() {
@@ -741,6 +741,18 @@ export async function getCurrentAcademicYear() {
 
 export async function createAcademicYear(data: Partial<AcademicYear>) {
   return api.post<{ academicYear: AcademicYear }>('/academic-years', data);
+}
+
+export async function updateAcademicYear(id: string, data: Partial<AcademicYear>) {
+  return api.put<{ academicYear: AcademicYear }>(`/academic-years/${id}`, data);
+}
+
+export async function archiveAcademicYear(id: string) {
+  return api.post(`/academic-years/${id}/archive`);
+}
+
+export async function bulkPromoteStudents(id: string, data: { to_academic_year_id: string; promotions: { student_id: string; to_class_id?: string; promotion_type: string }[] }) {
+  return api.post(`/academic-years/${id}/promote`, data);
 }
 
 // ═══════════════════════════════════════════
@@ -793,4 +805,36 @@ export async function updateHoliday(id: string, data: Partial<{ date: string; na
 
 export async function deleteHoliday(id: string) {
   return api.delete(`/holidays/${id}`);
+}
+
+// ═══════════════════════════════════════════
+// ACADEMIC YEARS API
+// ═══════════════════════════════════════════
+
+export async function getAcademicYears(params?: Record<string, string>) {
+  return api.get<{ academicYears: AcademicYear[] }>('/academic-years', params);
+}
+
+export async function getCurrentAcademicYear() {
+  return api.get<{ academicYear: AcademicYear }>('/academic-years/current');
+}
+
+export async function createAcademicYear(data: Partial<AcademicYear>) {
+  return api.post<{ academicYear: AcademicYear }>('/academic-years', data);
+}
+
+export async function updateAcademicYear(id: string, data: Partial<AcademicYear>) {
+  return api.put<{ academicYear: AcademicYear }>(`/academic-years/${id}`, data);
+}
+
+export async function archiveAcademicYear(id: string) {
+  return api.post(`/academic-years/${id}/archive`);
+}
+
+export async function bulkPromoteStudents(id: string, data: { to_academic_year_id: string; promotions: { student_id: string; to_class_id?: string; promotion_type: string }[] }) {
+  return api.post(`/academic-years/${id}/promote`, data);
+}
+
+export async function bulkCreateStudents(data: { students: Partial<Student>[] }) {
+  return api.post<{ message: string; errors: any[] }>('/students/bulk', data);
 }
