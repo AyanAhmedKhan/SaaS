@@ -12,9 +12,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { getSyllabus, getClasses, getSubjects } from "@/lib/api";
+import { getSyllabus, getClasses } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import type { SyllabusEntry, Class as ClassType, Subject } from "@/types";
+import { AddSyllabusDialog } from "@/components/syllabus/AddSyllabusDialog";
+import { EditSyllabusDialog } from "@/components/syllabus/EditSyllabusDialog";
 
 interface GroupedUnit {
   unitName: string;
@@ -64,8 +66,10 @@ export default function Syllabus() {
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editTopic, setEditTopic] = useState<SyllabusEntry | null>(null);
 
   const showClassFilter = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
+  const canManageSyllabus = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
 
   const fetchData = useCallback(async () => {
     try {
@@ -153,6 +157,9 @@ export default function Syllabus() {
                   {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>)}
                 </SelectContent>
               </Select>
+            )}
+            {canManageSyllabus && (
+              <AddSyllabusDialog onSuccess={fetchData} defaultClassId={classFilter} />
             )}
           </div>
         </div>
@@ -243,13 +250,12 @@ export default function Syllabus() {
                             <AccordionItem key={uIdx} value={`${subject.subjectName}-${uIdx}`} className="border-b-0">
                               <AccordionTrigger className="hover:no-underline py-3 text-left">
                                 <div className="flex items-center gap-3 flex-1 mr-4">
-                                  <div className={`h-2 w-2 rounded-full ${
-                                    completedTopics === unit.topics.length
-                                      ? 'bg-green-500'
-                                      : inProgressTopics > 0
-                                        ? 'bg-amber-500'
-                                        : 'bg-muted-foreground/30'
-                                  }`} />
+                                  <div className={`h-2 w-2 rounded-full ${completedTopics === unit.topics.length
+                                    ? 'bg-green-500'
+                                    : inProgressTopics > 0
+                                      ? 'bg-amber-500'
+                                      : 'bg-muted-foreground/30'
+                                    }`} />
                                   <span className="font-medium text-sm">{unit.unitName}</span>
                                   <span className="text-xs text-muted-foreground ml-auto mr-2">
                                     {completedTopics}/{unit.topics.length} topics
@@ -261,7 +267,8 @@ export default function Syllabus() {
                                   {unit.topics.map((topic) => (
                                     <div
                                       key={topic.id}
-                                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                                      className={`flex items-center justify-between p-3 rounded-lg bg-muted/50 transition-colors ${canManageSyllabus ? "hover:bg-muted cursor-pointer hover:shadow-sm ring-1 ring-transparent hover:ring-border" : ""}`}
+                                      onClick={() => canManageSyllabus && setEditTopic(topic)}
                                     >
                                       <div className="flex items-center gap-3">
                                         {getStatusIcon(topic.status)}
@@ -291,6 +298,15 @@ export default function Syllabus() {
           </>
         )}
       </div>
+
+      {editTopic && (
+        <EditSyllabusDialog
+          entry={editTopic}
+          open={!!editTopic}
+          onOpenChange={(open) => { if (!open) setEditTopic(null); }}
+          onSuccess={fetchData}
+        />
+      )}
     </DashboardLayout>
   );
 }
