@@ -579,6 +579,10 @@ export async function getAssignment(id: string) {
   return api.get<{ assignment: Assignment; submissions: AssignmentSubmission[] }>(`/assignments/${id}`);
 }
 
+export async function getAssignmentDetails(id: string) {
+  return api.get<{ assignment: Assignment; submissions: AssignmentSubmission[] }>(`/assignments/${id}`);
+}
+
 export async function createAssignment(data: Partial<Assignment>) {
   return api.post<{ assignment: Assignment }>('/assignments', data);
 }

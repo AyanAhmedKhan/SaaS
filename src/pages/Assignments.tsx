@@ -17,9 +17,27 @@ import { getAssignments, getClasses, getSubjects } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import type { Assignment, Class as ClassType, Subject } from "@/types";
+import { AssignmentManagement } from "@/components/teacher/AssignmentManagement";
+import { StudentAssignmentDetailsDialog } from "@/components/student/StudentAssignmentDetailsDialog";
 
 export default function Assignments() {
   const { isRole } = useAuth();
+  const isStaff = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
+
+  if (isStaff) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 page-enter pt-4 sm:pt-6">
+          <AssignmentManagement />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  return <StudentAssignments />;
+}
+
+function StudentAssignments() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [classes, setClasses] = useState<ClassType[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -28,8 +46,8 @@ export default function Assignments() {
   const [searchQuery, setSearchQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [subjectFilter, setSubjectFilter] = useState("all");
-
-  const canCreate = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -95,14 +113,8 @@ export default function Assignments() {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Assignments</h1>
-            <p className="text-muted-foreground text-sm">Create, manage and track assignments across classes.</p>
+            <p className="text-muted-foreground text-sm">View and track your assignments.</p>
           </div>
-          {canCreate && (
-            <Button className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Assignment
-            </Button>
-          )}
         </div>
 
         {/* Filters */}
@@ -154,7 +166,8 @@ export default function Assignments() {
             {assignments.map((assignment, idx) => (
               <Card
                 key={assignment.id}
-                className="hover:shadow-card-hover transition-all duration-300 animate-scale-in"
+                onClick={() => { setSelectedAssignment(assignment); setDetailsOpen(true); }}
+                className="hover:shadow-card-hover cursor-pointer transition-all duration-300 animate-scale-in"
                 style={{ animationDelay: `${idx * 50}ms` }}
               >
                 <CardContent className="p-6 space-y-4">
@@ -186,19 +199,6 @@ export default function Assignments() {
                       {assignment.total_marks} marks
                     </span>
                   </div>
-
-                  {assignment.submission_count !== undefined && (
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Submissions</span>
-                        <span className="font-medium">{assignment.submission_count} / {assignment.total_students || '?'}</span>
-                      </div>
-                      <Progress
-                        value={assignment.total_students ? (assignment.submission_count / assignment.total_students) * 100 : 0}
-                        className="h-1.5"
-                      />
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             ))}
@@ -214,6 +214,13 @@ export default function Assignments() {
           </div>
         )}
       </div>
+
+      <StudentAssignmentDetailsDialog
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        assignmentId={selectedAssignment?.id || null}
+        onSuccess={fetchData}
+      />
     </DashboardLayout>
   );
 }

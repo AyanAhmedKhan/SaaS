@@ -14,10 +14,12 @@ import {
 } from "@/components/ui/select";
 import { getInstitutes } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import type { Institute } from "@/types";
 
 export default function Institutes() {
   const { isRole } = useAuth();
+  const { toast } = useToast();
   const [institutes, setInstitutes] = useState<Institute[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +78,10 @@ export default function Institutes() {
             <p className="text-muted-foreground text-sm">Manage registered institutes on the platform.</p>
           </div>
           {canCreate && (
-            <Button className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md">
+            <Button
+              className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md"
+              onClick={() => toast({ title: "Coming Soon", description: "Institute creation will be available in the next release." })}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Add Institute
             </Button>
@@ -167,7 +172,12 @@ export default function Institutes() {
                   </div>
 
                   <div className="flex justify-end">
-                    <Button variant="ghost" size="sm" className="gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => toast({ title: "Coming Soon", description: "Institute management will be available in the next release." })}
+                    >
                       <Settings className="h-3.5 w-3.5" />
                       Manage
                     </Button>

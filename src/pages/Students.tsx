@@ -22,10 +22,12 @@ import {
 import { cn } from "@/lib/utils";
 import { getStudents, getClasses } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import type { Student, Class as ClassType } from "@/types";
 
 export default function Students() {
   const { isRole } = useAuth();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -91,7 +93,10 @@ export default function Students() {
             </p>
           </div>
           {canCreate && (
-            <Button className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md hover:shadow-lg transition-all duration-200">
+            <Button
+              className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md hover:shadow-lg transition-all duration-200"
+              onClick={() => toast({ title: "Coming Soon", description: "Student creation will be available in the next release." })}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Add Student
             </Button>
@@ -180,10 +185,10 @@ export default function Students() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View Profile</DropdownMenuItem>
-                        <DropdownMenuItem>Edit Details</DropdownMenuItem>
-                        <DropdownMenuItem>View Attendance</DropdownMenuItem>
-                        <DropdownMenuItem>View Reports</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toast({ title: "Coming Soon", description: "Student profiles will be available soon." })}>View Profile</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toast({ title: "Coming Soon", description: "Editing details will be available soon." })}>Edit Details</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toast({ title: "Coming Soon", description: "Attendance viewing will be available soon." })}>View Attendance</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toast({ title: "Coming Soon", description: "Reports viewing will be available soon." })}>View Reports</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

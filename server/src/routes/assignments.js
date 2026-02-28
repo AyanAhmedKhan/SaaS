@@ -33,7 +33,7 @@ router.get('/', asyncHandler(async (req, res) => {
     const tr = await query('SELECT id FROM teachers WHERE user_id=$1 AND institute_id=$2', [req.user.id, instId]);
     if (tr.rows[0]) {
       params.push(tr.rows[0].id);
-      sql += ` AND a.class_id IN (SELECT class_id FROM teacher_assignments WHERE teacher_id=$${params.length})`;
+      sql += ` AND (a.teacher_id=$${params.length} OR a.class_id IN (SELECT id FROM classes WHERE class_teacher_id=$${params.length}))`;
     }
   }
 
@@ -80,14 +80,22 @@ router.get('/:id', asyncHandler(async (req, res) => {
   );
   if (!asgn.rows[0]) throw new AppError('Assignment not found', 404);
 
-  const subs = await query(
-    `SELECT asb.*, s.name AS student_name, s.roll_number
+  let subsQuery = `SELECT asb.*, s.name AS student_name, s.roll_number
      FROM assignment_submissions asb
      JOIN students s ON asb.student_id = s.id
-     WHERE asb.assignment_id = $1 AND asb.institute_id = $2
-     ORDER BY asb.submitted_at DESC`,
-    [req.params.id, instId]
-  );
+     WHERE asb.assignment_id = $1 AND s.institute_id = $2`;
+  const subsParams = [req.params.id, instId];
+
+  if (req.user.role === 'student') {
+    const sr = await query('SELECT id FROM students WHERE user_id=$1', [req.user.id]);
+    if (sr.rows[0]) {
+      subsParams.push(sr.rows[0].id);
+      subsQuery += ` AND asb.student_id = $${subsParams.length}`;
+    }
+  }
+
+  subsQuery += ` ORDER BY asb.submitted_at DESC`;
+  const subs = await query(subsQuery, subsParams);
 
   res.json({ success: true, data: { assignment: asgn.rows[0], submissions: subs.rows } });
 }));
@@ -95,7 +103,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 // POST /api/assignments — create
 router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
-  const { title, description, class_id, subject_id, due_date, max_marks, attachment_url } = req.body;
+  const { title, description, instructions, class_id, subject_id, due_date, total_marks, attachment_url, status, allow_late_submission } = req.body;
   if (!title || !class_id || !due_date) throw new AppError('title, class_id, due_date required', 400);
 
   const clsRec = await query('SELECT academic_year_id, class_teacher_id FROM classes WHERE id=$1', [class_id]);
@@ -114,9 +122,9 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher'
 
   const id = `asgn_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
   await query(
-    `INSERT INTO assignments (id, institute_id, class_id, subject_id, teacher_id, academic_year_id, title, description, due_date, max_marks, attachment_url, status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active')`,
-    [id, instId, class_id, subject_id || null, teacherId, academic_year_id, title, description || null, due_date, max_marks || 100, attachment_url || null]
+    `INSERT INTO assignments (id, institute_id, class_id, subject_id, teacher_id, academic_year_id, title, description, instructions, due_date, total_marks, attachment_url, status, allow_late_submission)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+    [id, instId, class_id, subject_id || null, teacherId, academic_year_id, title, description || null, instructions || null, due_date, total_marks || 100, attachment_url || null, status || 'draft', allow_late_submission !== undefined ? allow_late_submission : false]
   );
 
   const { rows } = await query('SELECT * FROM assignments WHERE id=$1', [id]);
@@ -130,13 +138,23 @@ router.put('/:id', authorize('institute_admin', 'class_teacher', 'subject_teache
   const existing = await query('SELECT * FROM assignments WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Assignment not found', 404);
 
-  const { title, description, due_date, max_marks, status, attachment_url } = req.body;
+  if (req.user.role === 'class_teacher' || req.user.role === 'subject_teacher') {
+    const tRec = await query('SELECT id FROM teachers WHERE user_id=$1', [req.user.id]);
+    const teacherId = tRec.rows[0]?.id;
+    const clsRec = await query('SELECT class_teacher_id FROM classes WHERE id=$1', [existing.rows[0].class_id]);
+    if (existing.rows[0].teacher_id !== teacherId && clsRec.rows[0]?.class_teacher_id !== teacherId) {
+      throw new AppError('Permission denied to modify this assignment', 403);
+    }
+  }
+
+  const { title, description, instructions, class_id, subject_id, due_date, total_marks, status, attachment_url, allow_late_submission } = req.body;
   await query(
-    `UPDATE assignments SET title=COALESCE($1,title), description=COALESCE($2,description),
-     due_date=COALESCE($3,due_date), max_marks=COALESCE($4,max_marks), status=COALESCE($5,status),
-     attachment_url=COALESCE($6,attachment_url), updated_at=NOW()
-     WHERE id=$7 AND institute_id=$8`,
-    [title, description, due_date, max_marks, status, attachment_url, req.params.id, instId]
+    `UPDATE assignments SET title=COALESCE($1,title), description=COALESCE($2,description), instructions=COALESCE($3,instructions),
+     class_id=COALESCE($4,class_id), subject_id=$5,
+     due_date=COALESCE($6,due_date), total_marks=COALESCE($7,total_marks), status=COALESCE($8,status),
+     attachment_url=COALESCE($9,attachment_url), allow_late_submission=COALESCE($10,allow_late_submission), updated_at=NOW()
+     WHERE id=$11 AND institute_id=$12`,
+    [title, description, instructions, class_id, subject_id || null, due_date, total_marks, status, attachment_url, allow_late_submission, req.params.id, instId]
   );
 
   const { rows } = await query('SELECT * FROM assignments WHERE id=$1', [req.params.id]);
@@ -144,10 +162,19 @@ router.put('/:id', authorize('institute_admin', 'class_teacher', 'subject_teache
 }));
 
 // DELETE /api/assignments/:id
-router.delete('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
+router.delete('/:id', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-  const existing = await query('SELECT id FROM assignments WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
+  const existing = await query('SELECT * FROM assignments WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Assignment not found', 404);
+
+  if (req.user.role === 'class_teacher' || req.user.role === 'subject_teacher') {
+    const tRec = await query('SELECT id FROM teachers WHERE user_id=$1', [req.user.id]);
+    const teacherId = tRec.rows[0]?.id;
+    const clsRec = await query('SELECT class_teacher_id FROM classes WHERE id=$1', [existing.rows[0].class_id]);
+    if (existing.rows[0].teacher_id !== teacherId && clsRec.rows[0]?.class_teacher_id !== teacherId) {
+      throw new AppError('Permission denied to delete this assignment', 403);
+    }
+  }
 
   await query('DELETE FROM assignments WHERE id=$1', [req.params.id]);
   res.json({ success: true, message: 'Assignment deleted' });
@@ -169,10 +196,10 @@ router.post('/:id/submit', authorize('student'), asyncHandler(async (req, res) =
   const isLate = new Date() > new Date(asgn.rows[0].due_date);
 
   await query(
-    `INSERT INTO assignment_submissions (id, institute_id, assignment_id, student_id, content, attachment_url, status, submitted_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
-     ON CONFLICT (assignment_id, student_id) DO UPDATE SET content=$5, attachment_url=$6, status=$7, submitted_at=NOW()`,
-    [id, instId, req.params.id, sr.rows[0].id, content || null, attachment_url || null, isLate ? 'late' : 'submitted']
+    `INSERT INTO assignment_submissions (id, assignment_id, student_id, submission_text, file_url, is_late, submitted_at)
+     VALUES ($1,$2,$3,$4,$5,$6,NOW())
+     ON CONFLICT (assignment_id, student_id) DO UPDATE SET submission_text=$4, file_url=$5, is_late=$6, submitted_at=NOW()`,
+    [id, req.params.id, sr.rows[0].id, content || null, attachment_url || null, isLate]
   );
 
   res.json({ success: true, message: 'Assignment submitted' });
@@ -183,16 +210,20 @@ router.put('/:assignmentId/submissions/:submissionId/grade',
   authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'),
   asyncHandler(async (req, res) => {
     const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
-    const { marks, feedback } = req.body;
-    if (marks === undefined) throw new AppError('marks required', 400);
+    const { marks_obtained, teacher_remarks } = req.body;
+    if (marks_obtained === undefined) throw new AppError('marks_obtained required', 400);
 
-    const sub = await query('SELECT * FROM assignment_submissions WHERE id=$1 AND institute_id=$2', [req.params.submissionId, instId]);
+    // Verify assignment belongs to institute
+    const asgn = await query('SELECT id FROM assignments WHERE id=$1 AND institute_id=$2', [req.params.assignmentId, instId]);
+    if (!asgn.rows[0]) throw new AppError('Assignment not found', 404);
+
+    const sub = await query('SELECT * FROM assignment_submissions WHERE id=$1 AND assignment_id=$2', [req.params.submissionId, req.params.assignmentId]);
     if (!sub.rows[0]) throw new AppError('Submission not found', 404);
 
     await query(
-      `UPDATE assignment_submissions SET marks_obtained=$1, feedback=$2, graded_by=$3, graded_at=NOW(), status='graded', updated_at=NOW()
-       WHERE id=$4 AND institute_id=$5`,
-      [marks, feedback || null, req.user.id, req.params.submissionId, instId]
+      `UPDATE assignment_submissions SET marks_obtained=$1, teacher_remarks=$2, graded_by=$3, graded_at=NOW(), updated_at=NOW()
+       WHERE id=$4`,
+      [marks_obtained, teacher_remarks || null, req.user.id, req.params.submissionId]
     );
 
     const { rows } = await query('SELECT * FROM assignment_submissions WHERE id=$1', [req.params.submissionId]);

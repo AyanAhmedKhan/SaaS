@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 
 // Lazy-loaded pages
 const Dashboard = lazy(() => import("./pages/Dashboard"));
+const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
 const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
 const ParentDashboard = lazy(() => import("./pages/ParentDashboard"));
 const Students = lazy(() => import("./pages/Students"));
@@ -65,6 +66,9 @@ function RoleBasedDashboard() {
       return <StudentDashboard />;
     case 'parent':
       return <ParentDashboard />;
+    case 'class_teacher':
+    case 'subject_teacher':
+      return <TeacherDashboard />;
     default:
       return <Dashboard />;
   }
