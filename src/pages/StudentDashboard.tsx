@@ -19,6 +19,7 @@ import { AssignmentsPanel } from "@/components/student/AssignmentsPanel";
 import { NotificationsWidget } from "@/components/student/NotificationsWidget";
 import { TeacherFeedback } from "@/components/student/TeacherFeedback";
 import { AIInsightCard } from "@/components/dashboard/AIInsightCard";
+import { StudentAssignmentDetailsDialog } from "@/components/student/StudentAssignmentDetailsDialog";
 import { cn } from "@/lib/utils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Cell } from "recharts";
 import { getStudentDashboard, getTimetable, getAttendanceSubjectWise } from "@/lib/api";
@@ -94,6 +95,9 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
 
   const fetchData = useCallback(async (silent = false) => {
     try {
