@@ -727,33 +727,6 @@ export async function getFeeSummary() {
   return api.get<{ summary: unknown }>('/reports/fee-summary');
 }
 
-// ═══════════════════════════════════════════
-// ACADEMIC YEARS API
-// ═══════════════════════════════════════════
-
-export async function getAcademicYears(params?: Record<string, string>) {
-  return api.get<{ academicYears: AcademicYear[] }>('/academic-years', params);
-}
-
-export async function getCurrentAcademicYear() {
-  return api.get<{ academicYear: AcademicYear }>('/academic-years/current');
-}
-
-export async function createAcademicYear(data: Partial<AcademicYear>) {
-  return api.post<{ academicYear: AcademicYear }>('/academic-years', data);
-}
-
-export async function updateAcademicYear(id: string, data: Partial<AcademicYear>) {
-  return api.put<{ academicYear: AcademicYear }>(`/academic-years/${id}`, data);
-}
-
-export async function archiveAcademicYear(id: string) {
-  return api.post(`/academic-years/${id}/archive`);
-}
-
-export async function bulkPromoteStudents(id: string, data: { to_academic_year_id: string; promotions: { student_id: string; to_class_id?: string; promotion_type: string }[] }) {
-  return api.post(`/academic-years/${id}/promote`, data);
-}
 
 // ═══════════════════════════════════════════
 // INSTITUTES API (super admin)

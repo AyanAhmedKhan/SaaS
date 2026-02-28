@@ -19,11 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { getStudents, getClasses } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import type { Student, Class as ClassType } from "@/types";
+import { BulkImportDialog } from "@/components/student/BulkImportDialog";
+import { BulkPromoteDialog } from "@/components/student/BulkPromoteDialog";
 
 export default function Students() {
   const { isRole } = useAuth();
@@ -35,6 +38,9 @@ export default function Students() {
   const [classes, setClasses] = useState<ClassType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [promoteOpen, setPromoteOpen] = useState(false);
 
   const canCreate = isRole('super_admin', 'institute_admin', 'class_teacher');
 
@@ -81,6 +87,25 @@ export default function Students() {
     }
   };
 
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === students.length && students.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(students.map(s => s.id)));
+    }
+  };
+
+  const selectedStudents = students.filter(s => selectedIds.has(s.id));
+
   return (
     <DashboardLayout>
       <div className="space-y-6 page-enter">
@@ -93,13 +118,16 @@ export default function Students() {
             </p>
           </div>
           {canCreate && (
-            <Button
-              className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md hover:shadow-lg transition-all duration-200"
-              onClick={() => toast({ title: "Coming Soon", description: "Student creation will be available in the next release." })}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Student
-            </Button>
+            <div className="flex items-center gap-3">
+              <BulkImportDialog onSuccess={fetchData} />
+              <Button
+                className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md hover:shadow-lg transition-all duration-200"
+                onClick={() => toast({ title: "Coming Soon", description: "Student creation will be available in the next release." })}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Student
+              </Button>
+            </div>
           )}
         </div>
 
@@ -139,6 +167,25 @@ export default function Students() {
           </Select>
         </div>
 
+        {/* Bulk Actions Bar */}
+        {selectedIds.size > 0 && canCreate && (
+          <div className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-xl animate-in slide-in-from-top-2">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-primary">
+                {selectedIds.size} student{selectedIds.size > 1 ? 's' : ''} selected
+              </span>
+              <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
+                Clear Selection
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => setPromoteOpen(true)}>
+                Bulk Actions
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center h-40 gap-3">
@@ -167,6 +214,13 @@ export default function Students() {
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
+                      {canCreate && (
+                        <Checkbox
+                          checked={selectedIds.has(student.id)}
+                          onCheckedChange={() => toggleSelection(student.id)}
+                          aria-label={`Select ${student.name}`}
+                        />
+                      )}
                       <Avatar className="h-12 w-12 ring-2 ring-primary/10">
                         <AvatarImage src={student.avatar} />
                         <AvatarFallback className="bg-primary/10 text-primary font-semibold">
@@ -229,6 +283,16 @@ export default function Students() {
           </div>
         )}
       </div>
+
+      <BulkPromoteDialog
+        open={promoteOpen}
+        onOpenChange={setPromoteOpen}
+        selectedStudents={selectedStudents}
+        onSuccess={() => {
+          setSelectedIds(new Set());
+          fetchData();
+        }}
+      />
     </DashboardLayout>
   );
 }
