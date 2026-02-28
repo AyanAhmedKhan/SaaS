@@ -191,7 +191,7 @@ router.post('/:id/submit', authorize('student'), asyncHandler(async (req, res) =
   const asgn = await query('SELECT * FROM assignments WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!asgn.rows[0]) throw new AppError('Assignment not found', 404);
 
-  const { content, attachment_url } = req.body;
+  const { submission_text, file_url } = req.body;
   const id = `sub_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
   const isLate = new Date() > new Date(asgn.rows[0].due_date);
 
@@ -199,7 +199,7 @@ router.post('/:id/submit', authorize('student'), asyncHandler(async (req, res) =
     `INSERT INTO assignment_submissions (id, assignment_id, student_id, submission_text, file_url, is_late, submitted_at)
      VALUES ($1,$2,$3,$4,$5,$6,NOW())
      ON CONFLICT (assignment_id, student_id) DO UPDATE SET submission_text=$4, file_url=$5, is_late=$6, submitted_at=NOW()`,
-    [id, req.params.id, sr.rows[0].id, content || null, attachment_url || null, isLate]
+    [id, req.params.id, sr.rows[0].id, submission_text || null, file_url || null, isLate]
   );
 
   res.json({ success: true, message: 'Assignment submitted' });
