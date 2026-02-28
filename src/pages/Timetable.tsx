@@ -13,6 +13,9 @@ import {
 import { getTimetable, getClasses } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import type { TimetableEntry, Class as ClassType } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Settings2 } from "lucide-react";
+import { ManageTimetableDialog } from "@/components/timetable/ManageTimetableDialog";
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -23,6 +26,7 @@ export default function Timetable() {
   const [classFilter, setClassFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showManage, setShowManage] = useState(false);
 
   const showClassFilter = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
 
@@ -82,15 +86,23 @@ export default function Timetable() {
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Weekly Timetable</h1>
             <p className="text-muted-foreground text-sm">View class schedules and period timings.</p>
           </div>
-          {showClassFilter && (
-            <Select value={classFilter} onValueChange={setClassFilter}>
-              <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Classes</SelectItem>
-                {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
+          <div className="flex gap-2 flex-wrap">
+            {showClassFilter && (
+              <Select value={classFilter} onValueChange={setClassFilter}>
+                <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Classes</SelectItem>
+                  {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+            {showClassFilter && classFilter !== "all" && (
+              <Button onClick={() => setShowManage(true)} className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md">
+                <Settings2 className="h-4 w-4 mr-2" />
+                Manage Timetable
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Legend */}
@@ -233,6 +245,17 @@ export default function Timetable() {
           </>
         )}
       </div>
+
+      {showManage && classFilter !== "all" && (
+        <ManageTimetableDialog
+          classId={classFilter}
+          className={classes.find(c => c.id === classFilter)?.name + " " + classes.find(c => c.id === classFilter)?.section || ""}
+          initialEntries={entries}
+          open={showManage}
+          onOpenChange={setShowManage}
+          onSuccess={fetchData}
+        />
+      )}
     </DashboardLayout>
   );
 }

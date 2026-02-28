@@ -812,3 +812,11 @@ export async function bulkCreateStudents(data: { students: Partial<Student>[] })
   return api.post<{ message: string; errors: any[] }>('/students/bulk', data);
 }
 
+// TIMETABLE API
+export async function getTimetableClasses() {
+  return api.get<{ classes: { id: string, name: string, section: string }[] }>('/timetable/classes');
+}
+
+export async function bulkSaveTimetable(classId: string, entries: Partial<TimetableEntry>[]) {
+  return api.post<{ message: string }>('/timetable/bulk', { class_id: classId, entries });
+}
