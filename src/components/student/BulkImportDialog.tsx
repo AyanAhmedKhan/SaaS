@@ -30,6 +30,9 @@ interface ParsedStudent {
     address?: string;
     phone?: string;
     blood_group?: string;
+    parent_name?: string;
+    parent_email?: string;
+    parent_phone?: string;
 }
 
 export function BulkImportDialog({ onSuccess }: BulkImportDialogProps) {
@@ -53,10 +56,16 @@ export function BulkImportDialog({ onSuccess }: BulkImportDialogProps) {
                     name: row.name || row.Name || "",
                     email: row.email || row.Email || "",
                     roll_number: row.roll_number || row.RollNumber || row['Roll Number'] || "",
+                    class_id: row.class_id || row.ClassId || row['Class ID'] || undefined,
                     gender: row.gender || row.Gender || undefined,
+                    date_of_birth: row.date_of_birth || row.DateOfBirth || row['Date of Birth'] || row.DOB || undefined,
+                    admission_date: row.admission_date || row.AdmissionDate || row['Admission Date'] || undefined,
                     phone: row.phone || row.Phone || undefined,
                     blood_group: row.blood_group || row.BloodGroup || row['Blood Group'] || undefined,
                     address: row.address || row.Address || undefined,
+                    parent_name: row.parent_name || row.ParentName || row['Parent Name'] || undefined,
+                    parent_email: row.parent_email || row.ParentEmail || row['Parent Email'] || undefined,
+                    parent_phone: row.parent_phone || row.ParentPhone || row['Parent Phone'] || undefined,
                 })).filter(s => s.name && s.email && s.roll_number); // Rough filter, backend validates fully
 
                 setParsedData(formattedData);
@@ -121,7 +130,7 @@ export function BulkImportDialog({ onSuccess }: BulkImportDialogProps) {
     };
 
     const downloadTemplate = () => {
-        const csvContent = "name,email,roll_number,gender,phone,blood_group,address\nJohn Doe,john@example.com,R1001,Male,1234567890,O+,123 Main St";
+        const csvContent = "name,email,roll_number,class_id,gender,date_of_birth,admission_date,phone,blood_group,address,parent_name,parent_email,parent_phone\nJohn Doe,john@example.com,R1001,,Male,2010-05-15,2024-04-01,1234567890,O+,123 Main St,Jane Doe,jane@example.com,0987654321";
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);

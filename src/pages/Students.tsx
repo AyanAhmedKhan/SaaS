@@ -23,15 +23,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { getStudents, getClasses } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
 import type { Student, Class as ClassType } from "@/types";
 import { BulkImportDialog } from "@/components/student/BulkImportDialog";
 import { BulkPromoteDialog } from "@/components/student/BulkPromoteDialog";
 import { AddStudentDialog } from "@/components/student/AddStudentDialog";
+import { EditStudentDialog } from "@/components/student/EditStudentDialog";
+import { StudentAttendanceDialog } from "@/components/student/StudentAttendanceDialog";
+import { StudentReportsDialog } from "@/components/student/StudentReportsDialog";
 
 export default function Students() {
   const { isRole } = useAuth();
-  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -42,6 +43,11 @@ export default function Students() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [promoteOpen, setPromoteOpen] = useState(false);
+
+  // Dialog states for student actions
+  const [editStudent, setEditStudent] = useState<Student | null>(null);
+  const [attendanceStudent, setAttendanceStudent] = useState<Student | null>(null);
+  const [reportsStudent, setReportsStudent] = useState<Student | null>(null);
 
   const canCreate = isRole('super_admin', 'institute_admin', 'class_teacher');
 
@@ -234,10 +240,9 @@ export default function Students() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => toast({ title: "Coming Soon", description: "Student profiles will be available soon." })}>View Profile</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast({ title: "Coming Soon", description: "Editing details will be available soon." })}>Edit Details</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast({ title: "Coming Soon", description: "Attendance viewing will be available soon." })}>View Attendance</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast({ title: "Coming Soon", description: "Reports viewing will be available soon." })}>View Reports</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setEditStudent(student)}>Edit Details</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setAttendanceStudent(student)}>View Attendance</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setReportsStudent(student)}>View Reports</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -288,6 +293,30 @@ export default function Students() {
           fetchData();
         }}
       />
+
+      {/* Student Action Dialogs */}
+      {editStudent && (
+        <EditStudentDialog
+          student={editStudent}
+          open={!!editStudent}
+          onOpenChange={(open) => { if (!open) setEditStudent(null); }}
+          onSuccess={fetchData}
+        />
+      )}
+      {attendanceStudent && (
+        <StudentAttendanceDialog
+          student={attendanceStudent}
+          open={!!attendanceStudent}
+          onOpenChange={(open) => { if (!open) setAttendanceStudent(null); }}
+        />
+      )}
+      {reportsStudent && (
+        <StudentReportsDialog
+          student={reportsStudent}
+          open={!!reportsStudent}
+          onOpenChange={(open) => { if (!open) setReportsStudent(null); }}
+        />
+      )}
     </DashboardLayout>
   );
 }
