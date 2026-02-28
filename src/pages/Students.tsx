@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Student, Class as ClassType } from "@/types";
 import { BulkImportDialog } from "@/components/student/BulkImportDialog";
 import { BulkPromoteDialog } from "@/components/student/BulkPromoteDialog";
+import { AddStudentDialog } from "@/components/student/AddStudentDialog";
 
 export default function Students() {
   const { isRole } = useAuth();
@@ -120,13 +121,7 @@ export default function Students() {
           {canCreate && (
             <div className="flex items-center gap-3">
               <BulkImportDialog onSuccess={fetchData} />
-              <Button
-                className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md hover:shadow-lg transition-all duration-200"
-                onClick={() => toast({ title: "Coming Soon", description: "Student creation will be available in the next release." })}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Student
-              </Button>
+              <AddStudentDialog onSuccess={fetchData} />
             </div>
           )}
         </div>
