@@ -98,9 +98,9 @@ export function BulkImportDialog({ onSuccess }: BulkImportDialogProps) {
         try {
             const res = await bulkCreateStudents({ students: parsedData });
             if (res.success) {
-                toast({ title: "Import Successful", description: res.message || `Successfully imported students.` });
-                if (res.errors && res.errors.length > 0) {
-                    setImportErrors(res.errors);
+                toast({ title: "Import Successful", description: res.data?.message || `Successfully imported students.` });
+                if (res.data?.errors && res.data.errors.length > 0) {
+                    setImportErrors(res.data.errors);
                 } else {
                     setOpen(false);
                     handleReset();
