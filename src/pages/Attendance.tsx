@@ -21,7 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { getStudents, getClasses, markAttendance as markAttendanceApi, getAttendance, getAttendanceSummary, getAttendanceSubjectWise, getMyStudentProfile, getSyllabus, updateSyllabusEntry, getTimetable, getSubjectsByClass } from "@/lib/api";
+import { getStudents, getClasses, markAttendance as markAttendanceApi, getAttendance, getAttendanceSummary, getAttendanceMonthly, getAttendanceSubjectWise, getMyStudentProfile, getSyllabus, updateSyllabusEntry, getTimetable, getSubjectsByClass } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -297,6 +297,10 @@ function AdminAttendanceView() {
   const [error, setError] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(true);
 
+  // Monthly Data for Calendar Highlights
+  const [monthlyTimetable, setMonthlyTimetable] = useState<TimetableEntry[]>([]);
+  const [monthlyAttendance, setMonthlyAttendance] = useState<AttendanceRecord[]>([]);
+
   const canMark = isRole('super_admin', 'institute_admin', 'faculty');
   const dateStr = currentDate.toISOString().slice(0, 10);
 
@@ -319,6 +323,31 @@ function AdminAttendanceView() {
   useEffect(() => {
     fetchPeriodsForDate(currentDate);
   }, [currentDate, fetchPeriodsForDate]);
+
+  // Fetch Monthly Data for Calendar Highlighting
+  useEffect(() => {
+    async function loadMonthlyData() {
+      try {
+        const y = currentMonth.getFullYear().toString();
+        const m = (currentMonth.getMonth() + 1).toString();
+        const [ttRes, attRes] = await Promise.all([
+          getTimetable(), // fetches all classes for this teacher
+          getAttendanceMonthly({ year: y, month: m })
+        ]);
+        if (ttRes.success && ttRes.data) {
+          setMonthlyTimetable((ttRes.data as { timetable: TimetableEntry[] }).timetable || []);
+        }
+        if (attRes.success && attRes.data) {
+          setMonthlyAttendance((attRes.data as { records: AttendanceRecord[] }).records || []);
+        }
+      } catch (e) {
+        console.error("Failed to load monthly data", e);
+      }
+    }
+    if (canMark) {
+      loadMonthlyData();
+    }
+  }, [currentMonth, canMark]);
 
   // 2. Fetch Details when a Period is Selected
   useEffect(() => {
@@ -442,6 +471,31 @@ function AdminAttendanceView() {
     return date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
   };
 
+  const getDayStatus = (day: number | null): 'mass_bunk' | 'scheduled' | null => {
+    if (!day) return null;
+    const dateObj = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+    const dayOfWeek = dateObj.getDay().toString();
+
+    // Find all classes scheduled for this day of the week
+    const scheduledClasses = monthlyTimetable.filter(t => t.day_of_week === dayOfWeek);
+    if (scheduledClasses.length === 0) return null;
+
+    // Check for mass bunk
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const dateStrLocal = `${currentMonth.getFullYear()}-${pad(currentMonth.getMonth() + 1)}-${pad(day)}`;
+    const scheduledClassIds = scheduledClasses.map(t => t.class_id);
+
+    const dayRecords = monthlyAttendance.filter(r =>
+      r.date.startsWith(dateStrLocal) &&
+      scheduledClassIds.includes(r.class_id)
+    );
+
+    if (dayRecords.length > 0 && dayRecords.every(r => r.status === 'absent')) {
+      return 'mass_bunk';
+    }
+    return 'scheduled';
+  };
+
   const isCurrentRunningPeriod = (period: TimetableEntry) => {
     if (!isToday(currentDate)) return false;
     if (!period.start_time || !period.end_time) return false;
@@ -518,6 +572,7 @@ function AdminAttendanceView() {
                     {calendarDays.map((day, idx) => {
                       const isSelected = day && currentDate.getDate() === day && currentDate.getMonth() === currentMonth.getMonth() && currentDate.getFullYear() === currentMonth.getFullYear();
                       const isTdy = day && isToday(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day));
+                      const status = getDayStatus(day);
 
                       return (
                         <button
@@ -525,15 +580,24 @@ function AdminAttendanceView() {
                           onClick={() => day && handleCalendarDateClick(day)}
                           disabled={!day}
                           className={cn(
-                            "h-8 text-xs font-semibold rounded-lg transition-all",
+                            "h-10 w-full text-xs font-semibold rounded-lg transition-all relative overflow-hidden flex items-center justify-center",
                             !day && "invisible",
-                            day && "hover:bg-blue-200 dark:hover:bg-blue-800",
-                            isSelected && "bg-primary text-white shadow-lg scale-105",
-                            isTdy && !isSelected && "border-2 border-primary font-bold",
-                            day && !isTdy && !isSelected && "bg-white dark:bg-zinc-900"
+                            day && "hover:bg-blue-200 dark:hover:bg-blue-800 cursor-pointer",
+                            day && !isTdy && !isSelected && status === null && "bg-white dark:bg-zinc-900 border border-transparent",
+                            isTdy && !isSelected && "border-2 border-primary font-bold bg-white dark:bg-zinc-900",
+                            isSelected && "bg-primary text-white shadow-lg scale-105 z-10",
+                            !isSelected && status === 'scheduled' && "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
+                            !isSelected && status === 'mass_bunk' && "bg-red-50 text-red-700 dark:bg-red-900/50 dark:text-red-300 border border-red-200 dark:border-red-800"
                           )}
+                          title={status === 'mass_bunk' ? 'Mass Bunk (All Absent)' : status === 'scheduled' ? 'Classes Scheduled' : ''}
                         >
-                          {day}
+                          <span className="relative z-10">{day}</span>
+                          {status === 'scheduled' && !isSelected && (
+                            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-emerald-500" />
+                          )}
+                          {status === 'mass_bunk' && !isSelected && (
+                            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-red-500" />
+                          )}
                         </button>
                       );
                     })}
