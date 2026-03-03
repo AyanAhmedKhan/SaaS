@@ -280,160 +280,110 @@ function StudentAttendanceView() {
    ══════════════════════════════════════════════ */
 function AdminAttendanceView() {
   const { isRole } = useAuth();
-  const [classes, setClasses] = useState<ClassType[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [syllabusList, setSyllabusList] = useState<SyllabusEntry[]>([]);
-  const [timetableList, setTimetableList] = useState<TimetableEntry[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState("");
-  const [selectedSubjectId, setSelectedSubjectId] = useState("");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'late' | null>>({});
-  const [loading, setLoading] = useState(true);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // Timetable State
+  const [periods, setPeriods] = useState<TimetableEntry[]>([]);
+  const [loadingPeriods, setLoadingPeriods] = useState(true);
+
+  // Marking View State
+  const [selectedPeriod, setSelectedPeriod] = useState<TimetableEntry | null>(null);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'late' | 'excused' | null>>({});
+  const [syllabusList, setSyllabusList] = useState<SyllabusEntry[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showTopicDialog, setShowTopicDialog] = useState(false);
-  const [selectedTopic, setSelectedTopic] = useState<SyllabusEntry | null>(null);
-  const [topicPercentage, setTopicPercentage] = useState(0);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [showClassesDialog, setShowClassesDialog] = useState(false);
-  const [classesForDate, setClassesForDate] = useState<TimetableEntry[]>([]);
-  const [selectedDateForClasses, setSelectedDateForClasses] = useState<Date | null>(null);
-  const [loadingClasses, setLoadingClasses] = useState(false);
 
   const canMark = isRole('super_admin', 'institute_admin', 'faculty');
-  const isTeacher = isRole('faculty');
   const dateStr = currentDate.toISOString().slice(0, 10);
 
-  // Load classes on mount
-  useEffect(() => {
-    getClasses().then(res => {
-      if (res.success && res.data) {
-        const classList = (res.data as { classes: ClassType[] }).classes || [];
-        setClasses(classList);
-        if (classList.length > 0 && !selectedClassId) {
-          setSelectedClassId(classList[0].id);
-        }
-      }
-    }).finally(() => setLoading(false));
-  }, []);
-
-  // Load subjects when class changes
-  useEffect(() => {
-    if (selectedClassId) {
-      getSubjectsByClass(selectedClassId).then(res => {
-        if (res.success && res.data) {
-          const subjectList = (res.data as { subjects: Subject[] }).subjects || [];
-          setSubjects(subjectList);
-          if (isTeacher && subjectList.length > 0 && !selectedSubjectId) {
-            setSelectedSubjectId(subjectList[0].id);
-          }
-        }
-      });
-    }
-  }, [selectedClassId, isTeacher]);
-
-  // Load students + existing attendance + syllabus items when class or date changes
-  const fetchData = useCallback(async () => {
-    if (!selectedClassId) return;
+  // 1. Fetch Schedule for the Selected Date
+  const fetchPeriodsForDate = useCallback(async (date: Date) => {
     try {
-      setLoading(true);
-      setError(null);
-
-      const params: Record<string, string> = { class_id: selectedClassId, date: dateStr };
-      if (selectedSubjectId) {
-        params.subject_id = selectedSubjectId;
-      }
-
-      const [studentRes, attRes, syllabusRes] = await Promise.all([
-        getStudents({ class_id: selectedClassId, status: 'active' }),
-        getAttendance(params),
-        getSyllabus({ class_id: selectedClassId }),
-      ]);
-
-      if (studentRes.success && studentRes.data) {
-        setStudents((studentRes.data as { students: Student[] }).students || []);
-      }
-
-      // Prefill attendance from existing records
-      const existing: Record<string, 'present' | 'absent' | 'late' | null> = {};
-      if (attRes.success && attRes.data) {
-        const records = (attRes.data as { records: AttendanceRecord[] }).records || [];
-        records.forEach(r => {
-          existing[r.student_id] = r.status as 'present' | 'absent' | 'late';
-        });
-      }
-      setAttendance(existing);
-
-      // Load syllabus for the class
-      if (syllabusRes.success && syllabusRes.data) {
-        setSyllabusList((syllabusRes.data as { syllabus: SyllabusEntry[] }).syllabus || []);
+      setLoadingPeriods(true);
+      const dayNum = date.getDay().toString();
+      const res = await getTimetable({ day: dayNum });
+      if (res.success && res.data) {
+        setPeriods((res.data as { timetable: TimetableEntry[] }).timetable || []);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load data";
-      setError(message);
+      toast.error("Failed to load schedule for this date");
     } finally {
-      setLoading(false);
+      setLoadingPeriods(false);
     }
-  }, [selectedClassId, selectedSubjectId, dateStr]);
+  }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchPeriodsForDate(currentDate);
+  }, [currentDate, fetchPeriodsForDate]);
 
-  const formatDate = (date: Date) =>
-    date.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+  // 2. Fetch Details when a Period is Selected
+  useEffect(() => {
+    async function loadDetails() {
+      if (!selectedPeriod) return;
+      try {
+        setLoadingDetails(true);
+        setError(null);
 
-  const getDaysInMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  };
+        const params: Record<string, string> = { class_id: selectedPeriod.class_id, date: dateStr };
+        if (selectedPeriod.subject_id) {
+          params.subject_id = selectedPeriod.subject_id;
+        }
 
-  const getFirstDayOfMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  };
+        const [studentRes, attRes, syllabusRes] = await Promise.all([
+          getStudents({ class_id: selectedPeriod.class_id, status: 'active' }),
+          getAttendance(params),
+          getSyllabus({ class_id: selectedPeriod.class_id })
+        ]);
 
-  const handlePrevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
-  };
+        if (studentRes.success && studentRes.data) {
+          setStudents((studentRes.data as { students: Student[] }).students || []);
+        }
 
-  const handleNextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
-  };
+        const existing: Record<string, 'present' | 'absent' | 'late' | 'excused' | null> = {};
+        if (attRes.success && attRes.data) {
+          const records = (attRes.data as { records: AttendanceRecord[] }).records || [];
+          records.forEach(r => {
+            existing[r.student_id] = r.status as 'present' | 'absent' | 'late' | 'excused';
+          });
+        }
+        setAttendance(existing);
 
+        if (syllabusRes.success && syllabusRes.data) {
+          const allSyllabus = (syllabusRes.data as { syllabus: SyllabusEntry[] }).syllabus || [];
+          setSyllabusList(selectedPeriod.subject_id ? allSyllabus.filter(s => s.subject_id === selectedPeriod.subject_id) : allSyllabus);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load details");
+      } finally {
+        setLoadingDetails(false);
+      }
+    }
+    loadDetails();
+  }, [selectedPeriod, dateStr]);
+
+  // Calendar Helpers
+  const formatDate = (date: Date) => date.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+  const getDaysInMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const getFirstDayOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  const handlePrevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+  const handleNextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
   const handleCalendarDateClick = (day: number) => {
     const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
     setCurrentDate(newDate);
-    setSelectedDateForClasses(newDate);
-    fetchClassesForDate(newDate);
+    setSelectedPeriod(null); // Return to list view
   };
 
-  const getDayOfWeekNumber = (date: Date): string => {
-    return date.getDay().toString();
+  // Marking Actions
+  const handleMarkAll = (status: 'present' | 'absent') => {
+    const updated: Record<string, 'present' | 'absent' | 'late' | 'excused' | null> = {};
+    students.forEach(s => { updated[s.id] = status; });
+    setAttendance(updated);
   };
 
-  const getDayOfWeekName = (date: Date) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[date.getDay()];
-  };
-
-  const fetchClassesForDate = async (date: Date) => {
-    try {
-      setLoadingClasses(true);
-      const dayNum = getDayOfWeekNumber(date);
-      const res = await getTimetable({ day: dayNum });
-      if (res.success && res.data) {
-        const entries = (res.data as { timetable: TimetableEntry[] }).timetable || [];
-        setClassesForDate(entries);
-        setShowClassesDialog(true);
-      }
-    } catch (err) {
-      toast.error("Failed to load classes for this date");
-    } finally {
-      setLoadingClasses(false);
-    }
-  };
-
-  const toggleAttendance = (studentId: string, status: 'present' | 'absent' | 'late') => {
+  const toggleAttendance = (studentId: string, status: 'present' | 'absent' | 'late' | 'excused') => {
     setAttendance(prev => ({
       ...prev,
       [studentId]: prev[studentId] === status ? null : status,
@@ -441,17 +391,10 @@ function AdminAttendanceView() {
   };
 
   const handleSave = async () => {
-    if (isTeacher && !selectedSubjectId) {
-      toast.warning("Please select a subject before marking attendance.");
-      return;
-    }
-
+    if (!selectedPeriod) return;
     const records = Object.entries(attendance)
       .filter(([, status]) => status !== null)
-      .map(([student_id, status]) => ({
-        student_id,
-        status: status as string,
-      }));
+      .map(([student_id, status]) => ({ student_id, status: status as string }));
 
     if (records.length === 0) {
       toast.warning("Mark at least one student before saving.");
@@ -460,27 +403,12 @@ function AdminAttendanceView() {
 
     try {
       setSaving(true);
-      const payload: {
-        records: { student_id: string; status: string }[];
-        class_id: string;
-        date: string;
-        subject_id?: string;
-      } = {
-        records,
-        class_id: selectedClassId,
-        date: dateStr,
-      };
-
-      if (selectedSubjectId) {
-        payload.subject_id = selectedSubjectId;
-      }
+      const payload: any = { records, class_id: selectedPeriod.class_id, date: dateStr };
+      if (selectedPeriod.subject_id) payload.subject_id = selectedPeriod.subject_id;
 
       const res = await markAttendanceApi(payload);
-      if (res.success) {
-        toast.success(`Attendance saved for ${records.length} students.`);
-      } else {
-        toast.error("Failed to save attendance.");
-      }
+      if (res.success) toast.success(`Attendance saved for ${records.length} students.`);
+      else toast.error("Failed to save attendance.");
     } catch {
       toast.error("Failed to save attendance.");
     } finally {
@@ -488,33 +416,49 @@ function AdminAttendanceView() {
     }
   };
 
-  const handleUpdateTopic = async () => {
-    if (!selectedTopic) return;
+  const toggleTopicCompletion = async (topic: SyllabusEntry) => {
+    const newStatus = topic.status === 'completed' ? 'not_started' : 'completed';
+    const newPct = newStatus === 'completed' ? 100 : 0;
+
+    setSyllabusList(prev => prev.map(t => t.id === topic.id ? { ...t, status: newStatus, completion_percentage: newPct } : t));
 
     try {
-      setSaving(true);
-      const res = await updateSyllabusEntry(selectedTopic.id, {
-        completion_percentage: topicPercentage,
-        status: topicPercentage === 100 ? 'completed' : topicPercentage > 0 ? 'in_progress' : 'not_started',
-      });
+      const res = await updateSyllabusEntry(topic.id, { completion_percentage: newPct, status: newStatus });
       if (res.success) {
-        toast.success(`Updated "${selectedTopic.topic_name}" completion to ${topicPercentage}%`);
-        setShowTopicDialog(false);
-        fetchData();
+        toast.success(`Marked "${topic.topic_name}" as ${newStatus === 'completed' ? 'Done' : 'Pending'}`);
+      } else {
+        throw new Error();
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to update topic");
-    } finally {
-      setSaving(false);
+      setSyllabusList(prev => prev.map(t => t.id === topic.id ? topic : t));
     }
   };
 
-  const getStatusColor = (status: 'present' | 'absent' | 'late' | null) => {
+  // Helper properties
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+  };
+
+  const isCurrentRunningPeriod = (period: TimetableEntry) => {
+    if (!isToday(currentDate)) return false;
+    if (!period.start_time || !period.end_time) return false;
+
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const [startH, startM] = period.start_time.split(':').map(Number);
+    const [endH, endM] = period.end_time.split(':').map(Number);
+    return currentMins >= (startH * 60 + startM) && currentMins <= (endH * 60 + endM);
+  };
+
+  const getStatusColor = (status: 'present' | 'absent' | 'late' | 'excused' | null) => {
     switch (status) {
-      case 'present': return 'bg-emerald-500 text-white';
-      case 'absent': return 'bg-red-500 text-white';
-      case 'late': return 'bg-amber-500 text-white';
-      default: return 'bg-muted text-muted-foreground';
+      case 'present': return 'bg-emerald-500 text-white border-emerald-500';
+      case 'absent': return 'bg-red-500 text-white border-red-500';
+      case 'late': return 'bg-amber-500 text-white border-amber-500';
+      case 'excused': return 'bg-blue-500 text-white border-blue-500';
+      default: return 'bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 text-muted-foreground';
     }
   };
 
@@ -524,28 +468,8 @@ function AdminAttendanceView() {
     late: Object.values(attendance).filter(s => s === 'late').length,
   };
 
-  const selectedClass = classes.find(c => c.id === selectedClassId);
   const daysInMonth = getDaysInMonth(currentMonth);
-  const firstDay = getFirstDayOfMonth(currentMonth);
-  const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const calendarDays = [
-    ...Array(firstDay).fill(null),
-    ...days,
-  ];
-
-  const isToday = (day: number) => {
-    const today = new Date();
-    return day === today.getDate() &&
-      currentMonth.getMonth() === today.getMonth() &&
-      currentMonth.getFullYear() === today.getFullYear();
-  };
-
-  const isSelectedDate = (day: number) => {
-    return day === currentDate.getDate() &&
-      currentMonth.getMonth() === currentDate.getMonth() &&
-      currentMonth.getFullYear() === currentDate.getFullYear();
-  };
+  const calendarDays = [...Array(getFirstDayOfMonth(currentMonth)).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
 
   return (
     <DashboardLayout>
@@ -553,409 +477,377 @@ function AdminAttendanceView() {
         {/* Page Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Attendance Management</h1>
-            <p className="text-muted-foreground text-sm mt-1">Track attendance and update lesson progress</p>
-          </div>
-          <div className="flex gap-3 flex-wrap">
-            <Select value={selectedClassId} onValueChange={setSelectedClassId}>
-              <SelectTrigger className="w-[200px] bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-2 border-blue-200 dark:border-blue-800">
-                <SelectValue placeholder="Select Class" />
-              </SelectTrigger>
-              <SelectContent>
-                {classes.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedClassId && subjects.length > 0 && (
-              <Select value={selectedSubjectId} onValueChange={setSelectedSubjectId}>
-                <SelectTrigger className="w-[200px] bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 border-2 border-purple-200 dark:border-purple-800">
-                  <SelectValue placeholder={isTeacher ? "Select Subject" : "All Subjects"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {!isTeacher && (
-                    <SelectItem value="">All Subjects</SelectItem>
-                  )}
-                  {subjects.map(s => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <h1 className="text-3xl font-bold tracking-tight">Daily Schedule & Attendance</h1>
+            <p className="text-muted-foreground text-sm mt-1">Select a date to view your classes and mark attendance</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: Calendar */}
-          <Card className="lg:col-span-1 shadow-lg border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Calendar</CardTitle>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-8 w-8">
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-8 w-8">
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <p className="text-sm font-semibold text-center mt-2">{monthName}</p>
-            </CardHeader>
-            <CardContent>
-              {/* Day Headers */}
-              <div className="grid grid-cols-7 gap-1 mb-2">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="text-center text-xs font-bold text-muted-foreground h-8 flex items-center justify-center">
-                    {day}
-                  </div>
-                ))}
-              </div>
-              {/* Calendar Grid */}
-              <div className="grid grid-cols-7 gap-1">
-                {calendarDays.map((day, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => day && handleCalendarDateClick(day)}
-                    disabled={!day}
-                    className={cn(
-                      "h-8 text-xs font-semibold rounded-lg transition-all",
-                      !day && "invisible",
-                      day && "hover:bg-blue-200 dark:hover:bg-blue-800",
-                      isSelectedDate(day) && "bg-primary text-white shadow-lg",
-                      isToday(day) && !isSelectedDate(day) && "border-2 border-primary font-bold",
-                      day && !isToday(day) && !isSelectedDate(day) && "bg-white dark:bg-zinc-900"
-                    )}
-                  >
-                    {day}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-4 text-sm">
-                <p className="font-semibold">{formatDate(currentDate)}</p>
-                <p className="text-xs text-muted-foreground">{students.length} students</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Right Column: Attendance & Topics */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Stats Cards */}
-            {students.length > 0 && (
-              <div className="grid grid-cols-3 gap-3">
-                <Card className="shadow-md border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                      <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.present}</p>
-                      <p className="text-xs font-medium text-muted-foreground">Present</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="shadow-md border-red-200 dark:border-red-800 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950 dark:to-red-900">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-red-500/20 flex items-center justify-center">
-                      <X className="h-5 w-5 text-red-600 dark:text-red-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.absent}</p>
-                      <p className="text-xs font-medium text-muted-foreground">Absent</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="shadow-md border-amber-200 dark:border-amber-800 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                      <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.late}</p>
-                      <p className="text-xs font-medium text-muted-foreground">Late</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {/* Topic Completion Section */}
-            {syllabusList.length > 0 && (
-              <Card className="shadow-lg border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Target className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                      <CardTitle className="text-lg">Today's Topics</CardTitle>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{syllabusList.length} topics</p>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {syllabusList.map(topic => (
-                      <div key={topic.id} className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-800 hover:shadow-md transition-shadow">
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{topic.topic_name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Progress value={topic.completion_percentage || 0} className="h-1.5 flex-1" />
-                            <span className="text-xs font-bold text-muted-foreground w-8 text-right">{topic.completion_percentage || 0}%</span>
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedTopic(topic);
-                            setTopicPercentage(topic.completion_percentage || 0);
-                            setShowTopicDialog(true);
-                          }}
-                          className="ml-2"
-                        >
-                          <BookOpen className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Students Attendance */}
-            {!loading && !error && students.length > 0 && (
-              <Card className="shadow-lg border-blue-200 dark:border-blue-800">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">
-                      Mark Attendance
-                      <span className="text-sm font-medium text-muted-foreground ml-2">({students.length} students)</span>
-                    </CardTitle>
-                    {canMark && (
-                      <Button
-                        onClick={handleSave}
-                        disabled={saving || Object.values(attendance).every(s => s === null)}
-                        className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700"
-                      >
-                        {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                        Save
-                      </Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {students.map((student, index) => (
-                      <div
-                        key={student.id}
-                        className="flex justify-between items-center p-3 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow animate-scale-in"
-                        style={{ animationDelay: `${index * 15}ms` }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-9 w-9">
-                            <AvatarFallback className="bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-semibold">
-                              {student.name.split(' ').map(n => n[0]).join('')}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium text-sm">{student.name}</p>
-                            <p className="text-xs text-muted-foreground">Roll: {student.roll_number}</p>
-                          </div>
-                        </div>
-                        {canMark ? (
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => toggleAttendance(student.id, 'present')}
-                              className={cn("h-9 w-9 p-0 rounded-lg transition-all", attendance[student.id] === 'present' && "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600")}
-                              title="Present"
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => toggleAttendance(student.id, 'absent')}
-                              className={cn("h-9 w-9 p-0 rounded-lg transition-all", attendance[student.id] === 'absent' && "bg-red-500 text-white border-red-500 hover:bg-red-600")}
-                              title="Absent"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => toggleAttendance(student.id, 'late')}
-                              className={cn("h-9 w-9 p-0 rounded-lg transition-all", attendance[student.id] === 'late' && "bg-amber-500 text-white border-amber-500 hover:bg-amber-600")}
-                              title="Late"
-                            >
-                              <Clock className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className={cn("text-xs font-bold px-2.5 py-1.5 rounded-lg capitalize",
-                            attendance[student.id] ? getStatusColor(attendance[student.id]) : "bg-muted text-muted-foreground"
-                          )}>
-                            {attendance[student.id] || 'Not marked'}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Loading */}
-            {loading && (
-              <div className="flex items-center justify-center h-40 gap-3">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                <p className="text-muted-foreground text-sm">Loading...</p>
-              </div>
-            )}
-
-            {/* Error */}
-            {error && !loading && (
-              <div className="flex flex-col items-center justify-center h-40 text-center gap-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-6">
-                <AlertCircle className="h-8 w-8 text-red-500" />
-                <p className="text-muted-foreground text-sm">{error}</p>
-              </div>
-            )}
-
-            {!loading && !error && students.length === 0 && selectedClassId && (
-              <div className="text-center py-12 rounded-lg bg-gray-50 dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800">
-                <GraduationCap className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-                <p className="text-muted-foreground text-sm">No active students in this class.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Topic Completion Dialog */}
-        <Dialog open={showTopicDialog} onOpenChange={setShowTopicDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Update Topic Progress</DialogTitle>
-              <DialogDescription>
-                Mark how much of "{selectedTopic?.topic_name}" was completed in today's class
-              </DialogDescription>
-            </DialogHeader>
-            {selectedTopic && (
-              <div className="space-y-4 py-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Completion Percentage</label>
-                  <div className="flex items-center gap-4">
-                    <Input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="5"
-                      value={topicPercentage}
-                      onChange={(e) => setTopicPercentage(Number(e.target.value))}
-                      className="flex-1"
-                    />
-                    <div className="text-right">
-                      <span className="text-2xl font-bold text-primary">{topicPercentage}%</span>
-                    </div>
-                  </div>
-                  <Progress value={topicPercentage} className="mt-2" />
-                </div>
-                <div className="grid grid-cols-4 gap-2 pt-2">
-                  {[0, 25, 50, 75, 100].map(pct => (
-                    <Button
-                      key={pct}
-                      variant={topicPercentage === pct ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTopicPercentage(pct)}
-                    >
-                      {pct}%
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column: Calendar (Span 4) */}
+          <div className="lg:col-span-4 space-y-6">
+            <Card className="shadow-lg border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">Calendar</CardTitle>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-8 w-8">
+                      <ChevronLeft className="h-4 w-4" />
                     </Button>
+                    <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-8 w-8">
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-sm font-semibold text-center mt-2">{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-7 gap-1 mb-2">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div key={day} className="text-center text-xs font-bold text-muted-foreground h-8 flex items-center justify-center">{day}</div>
                   ))}
                 </div>
-              </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {calendarDays.map((day, idx) => {
+                    const isSelected = day && currentDate.getDate() === day && currentDate.getMonth() === currentMonth.getMonth() && currentDate.getFullYear() === currentMonth.getFullYear();
+                    const isTdy = day && isToday(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day));
+
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => day && handleCalendarDateClick(day)}
+                        disabled={!day}
+                        className={cn(
+                          "h-8 text-xs font-semibold rounded-lg transition-all",
+                          !day && "invisible",
+                          day && "hover:bg-blue-200 dark:hover:bg-blue-800",
+                          isSelected && "bg-primary text-white shadow-lg scale-105",
+                          isTdy && !isSelected && "border-2 border-primary font-bold",
+                          day && !isTdy && !isSelected && "bg-white dark:bg-zinc-900"
+                        )}
+                      >
+                        {day}
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {!selectedPeriod && (
+              <Card className="shadow-md border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 animate-fade-in-up">
+                <CardContent className="p-5 flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-purple-500/20 flex items-center justify-center">
+                    <Calendar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-purple-600 dark:text-purple-400">Selected Date</p>
+                    <p className="text-xl font-black">{formatDate(currentDate)}</p>
+                  </div>
+                </CardContent>
+              </Card>
             )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowTopicDialog(false)}>Cancel</Button>
-              <Button onClick={handleUpdateTopic} disabled={saving} className="bg-primary hover:bg-primary/90">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Update
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </div>
 
-        {/* Classes for Date Dialog */}
-        <Dialog open={showClassesDialog} onOpenChange={setShowClassesDialog}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-xl">
-                Classes on {selectedDateForClasses ? selectedDateForClasses.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : ''}
-              </DialogTitle>
-              <DialogDescription>
-                {selectedDateForClasses && getDayOfWeekName(selectedDateForClasses)} — All scheduled classes
-              </DialogDescription>
-            </DialogHeader>
+          {/* Right Column: Schedule List OR Marking View (Span 8) */}
+          <div className="lg:col-span-8">
+            {!selectedPeriod ? (
+              /* =======================
+                 CLASS PERIODS LIST VIEW 
+                 ======================= */
+              <div className="space-y-4 animate-fade-in-up">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  Scheduled Classes
+                </h2>
 
-            {loadingClasses ? (
-              <div className="flex items-center justify-center h-40 gap-3">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                <p className="text-muted-foreground text-sm">Loading classes...</p>
-              </div>
-            ) : classesForDate.length === 0 ? (
-              <div className="text-center py-12">
-                <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-                <p className="text-muted-foreground text-sm">No classes scheduled for this date</p>
+                {loadingPeriods ? (
+                  <div className="flex items-center justify-center h-40 gap-3">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <p className="text-muted-foreground text-sm">Loading schedule...</p>
+                  </div>
+                ) : periods.length === 0 ? (
+                  <div className="text-center py-16 rounded-xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 border-dashed">
+                    <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                    <p className="text-lg font-semibold text-muted-foreground">No classes scheduled</p>
+                    <p className="text-sm text-muted-foreground mt-1">Select a different date from the calendar</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {periods.map((period, index) => {
+                      const isRunning = isCurrentRunningPeriod(period);
+
+                      return (
+                        <Card
+                          key={period.id}
+                          className={cn(
+                            "group cursor-pointer hover:shadow-xl transition-all duration-300 border-2",
+                            isRunning
+                              ? "border-primary shadow-primary/20 bg-primary/5 scale-[1.02]"
+                              : "border-transparent hover:border-primary/50"
+                          )}
+                          onClick={() => setSelectedPeriod(period)}
+                          style={{ animationDelay: `${index * 50}ms` }}
+                        >
+                          <CardContent className="p-5">
+                            <div className="flex justify-between items-start mb-4">
+                              <span className={cn(
+                                "text-xs font-bold px-3 py-1 rounded-full",
+                                isRunning ? "bg-primary text-white animate-pulse" : "bg-primary/10 text-primary"
+                              )}>
+                                {isRunning ? "Running Now" : `Period ${period.period_number}`}
+                              </span>
+                              <span className="text-sm font-semibold text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3.5 w-3.5" />
+                                {period.start_time} - {period.end_time}
+                              </span>
+                            </div>
+
+                            <h3 className="text-2xl font-black mb-1">{period.class_name} {period.section}</h3>
+                            <p className="text-muted-foreground font-medium flex items-center gap-2">
+                              <Book className="h-4 w-4" />
+                              {period.subject_name || 'General'}
+                            </p>
+
+                            <div className="mt-6 flex items-center justify-between">
+                              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                                <Target className="h-4 w-4 opacity-70" />
+                                Room: {period.room || 'N/A'}
+                              </p>
+                              <Button size="sm" className={cn("rounded-full px-6 transition-all", isRunning && "px-8 shadow-lg shadow-primary/30")}>
+                                Mark
+                                <ChevronRight className="h-4 w-4 ml-1" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto py-4">
-                {classesForDate.map((entry, index) => (
-                  <div
-                    key={entry.id}
-                    className="flex flex-col p-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 hover:shadow-md transition-shadow animate-scale-in"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-sm font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
-                            Period {entry.period_number}
-                          </span>
-                          <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-                            {entry.start_time} - {entry.end_time}
-                          </span>
-                        </div>
-                        <p className="font-bold text-lg">
-                          {entry.class_name} {entry.section}
-                        </p>
-                        <div className="flex gap-4 mt-3 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">Subject:</span>
-                            <p className="font-semibold text-blue-700 dark:text-blue-300">{entry.subject_name || 'Not assigned'}</p>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Teacher:</span>
-                            <p className="font-semibold text-green-700 dark:text-green-300">{entry.teacher_name || 'Not assigned'}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-2 border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900"
-                      >
-                        <Edit3 className="h-4 w-4" />
-                        Edit
+              /* =======================
+                 MARKING VIEW 
+                 ======================= */
+              <div className="space-y-6 animate-slide-in-right">
+                {/* Header Card */}
+                <Card className="shadow-lg border-primary/20 bg-gradient-to-r from-primary/10 via-background to-primary/5 overflow-hidden relative">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedPeriod(null)} className="gap-2 -ml-2 text-muted-foreground hover:text-foreground">
+                        <ChevronLeft className="h-4 w-4" /> Back to Schedule
                       </Button>
+                      <span className="text-sm font-bold bg-primary/10 text-primary px-3 py-1 rounded-full">
+                        {formatDate(currentDate)}
+                      </span>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-2xl font-black">
+                          {selectedPeriod.class_name} {selectedPeriod.section}
+                        </CardTitle>
+                        <p className="text-muted-foreground font-medium mt-1 flex items-center gap-2">
+                          <Book className="h-4 w-4" />
+                          {selectedPeriod.subject_name || 'General Class'}
+                          <span className="mx-2 opacity-50">•</span>
+                          <Clock className="h-4 w-4" />
+                          {selectedPeriod.start_time} - {selectedPeriod.end_time}
+                        </p>
+                      </div>
+
+                      {isCurrentRunningPeriod(selectedPeriod) && (
+                        <div className="hidden sm:flex items-center gap-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-4 py-2 rounded-xl border border-emerald-500/20">
+                          <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping absolute" />
+                          <div className="h-2 w-2 rounded-full bg-emerald-500 relative" />
+                          <span className="text-sm font-bold uppercase tracking-wider">Live Class</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardHeader>
+                </Card>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Stats & Topics Sidebar */}
+                  <div className="lg:col-span-1 space-y-6">
+                    {/* Real-time Stats */}
+                    <Card className="shadow-lg border-white/10">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Snapshot</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full bg-emerald-500" /> <span className="text-sm font-medium">Present</span></div>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">{stats.present}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full bg-red-500" /> <span className="text-sm font-medium">Absent</span></div>
+                          <span className="font-bold text-red-500 dark:text-red-400">{stats.absent}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full bg-amber-500" /> <span className="text-sm font-medium">Late</span></div>
+                          <span className="font-bold text-amber-500 dark:text-amber-400">{stats.late}</span>
+                        </div>
+                        <div className="pt-4 border-t border-border mt-4 flex justify-between items-center">
+                          <span className="text-sm font-bold">Total Students</span>
+                          <span className="font-black text-lg">{students.length}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Topics Checklist */}
+                    {syllabusList.length > 0 && (
+                      <Card className="shadow-lg border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm font-bold flex items-center gap-2">
+                            <Target className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                            Topics Checklist
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                            {syllabusList.map(topic => {
+                              const isCompleted = topic.status === 'completed';
+                              return (
+                                <button
+                                  key={topic.id}
+                                  onClick={() => toggleTopicCompletion(topic)}
+                                  className={cn(
+                                    "w-full text-left flex items-start gap-3 p-3 rounded-xl border transition-all text-sm group",
+                                    isCompleted
+                                      ? "bg-purple-100 dark:bg-purple-900/40 border-purple-300 dark:border-purple-700"
+                                      : "bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 hover:border-purple-400"
+                                  )}
+                                >
+                                  <div className={cn(
+                                    "mt-0.5 flex-shrink-0 h-5 w-5 rounded-md flex items-center justify-center border transition-colors",
+                                    isCompleted ? "bg-purple-500 border-purple-500 text-white" : "border-gray-300 dark:border-gray-600 bg-transparent"
+                                  )}>
+                                    {isCompleted && <Check className="h-3.5 w-3.5" />}
+                                  </div>
+                                  <span className={cn(
+                                    "font-medium leading-tight",
+                                    isCompleted ? "text-purple-900 dark:text-purple-100 line-through opacity-70" : "text-foreground"
+                                  )}>
+                                    {topic.topic_name}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
-                ))}
+
+                  {/* Student Roster */}
+                  <div className="lg:col-span-2 space-y-4">
+                    {/* Bulk Actions Menu */}
+                    {students.length > 0 && (
+                      <Card className="shadow-sm">
+                        <CardContent className="p-3 flex flex-col sm:flex-row items-center justify-between gap-4">
+                          <div className="flex gap-2 w-full sm:w-auto">
+                            <Button
+                              variant="outline"
+                              onClick={() => handleMarkAll('present')}
+                              className="flex-1 sm:flex-none border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400 font-semibold shadow-sm"
+                            >
+                              <CheckCircle2 className="h-4 w-4 mr-2" /> Mark All Present
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => handleMarkAll('absent')}
+                              className="flex-1 sm:flex-none border-red-200 bg-red-50 hover:bg-red-100 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400 font-semibold shadow-sm"
+                            >
+                              <XCircle className="h-4 w-4 mr-2" /> Mark All Absent
+                            </Button>
+                          </div>
+                          {canMark && (
+                            <Button
+                              onClick={handleSave}
+                              disabled={saving || Object.values(attendance).every(s => s === null)}
+                              className="w-full sm:w-auto bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-lg font-bold"
+                            >
+                              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                              Save Register
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {loadingDetails ? (
+                      <div className="flex items-center justify-center h-40 gap-3">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        <p className="text-muted-foreground text-sm">Loading students...</p>
+                      </div>
+                    ) : error ? (
+                      <div className="flex flex-col items-center justify-center p-8 text-center border-dashed border-2 rounded-xl">
+                        <AlertCircle className="h-8 w-8 text-destructive mb-2" />
+                        <p className="font-semibold">{error}</p>
+                      </div>
+                    ) : students.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center p-12 text-center border-dashed border-2 rounded-xl">
+                        <GraduationCap className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                        <p className="font-semibold text-lg">No Students Found</p>
+                        <p className="text-muted-foreground text-sm mt-1">There are no active students in this class.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {students.map((student, index) => (
+                          <div
+                            key={student.id}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border bg-white dark:bg-zinc-900 hover:border-primary/50 hover:shadow-md transition-all animate-scale-in"
+                            style={{ animationDelay: `${index * 15}ms` }}
+                          >
+                            <div className="flex items-center gap-4">
+                              <Avatar className="h-10 w-10 border-2 border-primary/10">
+                                <AvatarFallback className="bg-gradient-to-br from-primary/20 to-blue-500/20 text-primary font-bold">
+                                  {student.name.split(' ').map(n => n[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-bold text-sm tracking-tight">{student.name}</p>
+                                <p className="text-xs text-muted-foreground font-medium">Roll No. <span className="text-foreground">{student.roll_number}</span></p>
+                              </div>
+                            </div>
+
+                            {canMark ? (
+                              <div className="flex bg-muted/50 p-1.5 rounded-xl w-full sm:w-auto gap-1 border border-border/50 shadow-inner">
+                                <button
+                                  onClick={() => toggleAttendance(student.id, 'present')}
+                                  className={cn("flex-1 sm:flex-none flex items-center justify-center gap-1.5 py-1.5 px-4 rounded-lg text-xs font-bold transition-all", attendance[student.id] === 'present' ? "bg-emerald-500 text-white shadow-md" : "hover:bg-muted-foreground/10 text-muted-foreground")}
+                                >
+                                  P
+                                </button>
+                                <button
+                                  onClick={() => toggleAttendance(student.id, 'absent')}
+                                  className={cn("flex-1 sm:flex-none flex items-center justify-center gap-1.5 py-1.5 px-4 rounded-lg text-xs font-bold transition-all", attendance[student.id] === 'absent' ? "bg-red-500 text-white shadow-md" : "hover:bg-muted-foreground/10 text-muted-foreground")}
+                                >
+                                  A
+                                </button>
+                                <button
+                                  onClick={() => toggleAttendance(student.id, 'late')}
+                                  className={cn("flex-1 sm:flex-none flex items-center justify-center gap-1.5 py-1.5 px-4 rounded-lg text-xs font-bold transition-all", attendance[student.id] === 'late' ? "bg-amber-500 text-white shadow-md" : "hover:bg-muted-foreground/10 text-muted-foreground")}
+                                >
+                                  L
+                                </button>
+                              </div>
+                            ) : (
+                              <div className={cn("px-4 py-1.5 rounded-full text-xs font-bold border", getStatusColor(attendance[student.id]))}>
+                                {attendance[student.id] ? attendance[student.id]?.toUpperCase() : 'UNMARKED'}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowClassesDialog(false)}>Close</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );
