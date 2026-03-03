@@ -38,12 +38,12 @@ async function seed() {
         // Institute admin
         { id: 'user_admin_01', inst: 'inst_01', name: 'Rajesh Kumar', email: 'admin@springfield.edu', role: 'institute_admin', phone: '+91 9000000002' },
         // Class teachers
-        { id: 'user_ct_01', inst: 'inst_01', name: 'Priya Sharma', email: 'priya.sharma@springfield.edu', role: 'class_teacher', phone: '+91 9000000003' },
-        { id: 'user_ct_02', inst: 'inst_01', name: 'Amit Patel', email: 'amit.patel@springfield.edu', role: 'class_teacher', phone: '+91 9000000004' },
+        { id: 'user_ct_01', inst: 'inst_01', name: 'Priya Sharma', email: 'priya.sharma@springfield.edu', role: 'faculty', phone: '+91 9000000003' },
+        { id: 'user_ct_02', inst: 'inst_01', name: 'Amit Patel', email: 'amit.patel@springfield.edu', role: 'faculty', phone: '+91 9000000004' },
         // Subject teachers
-        { id: 'user_st_01', inst: 'inst_01', name: 'Sunita Verma', email: 'sunita.verma@springfield.edu', role: 'subject_teacher', phone: '+91 9000000005' },
-        { id: 'user_st_02', inst: 'inst_01', name: 'Deepak Joshi', email: 'deepak.joshi@springfield.edu', role: 'subject_teacher', phone: '+91 9000000006' },
-        { id: 'user_st_03', inst: 'inst_01', name: 'Kavita Singh', email: 'kavita.singh@springfield.edu', role: 'subject_teacher', phone: '+91 9000000007' },
+        { id: 'user_st_01', inst: 'inst_01', name: 'Sunita Verma', email: 'sunita.verma@springfield.edu', role: 'faculty', phone: '+91 9000000005' },
+        { id: 'user_st_02', inst: 'inst_01', name: 'Deepak Joshi', email: 'deepak.joshi@springfield.edu', role: 'faculty', phone: '+91 9000000006' },
+        { id: 'user_st_03', inst: 'inst_01', name: 'Kavita Singh', email: 'kavita.singh@springfield.edu', role: 'faculty', phone: '+91 9000000007' },
         // Students
         { id: 'user_stu_01', inst: 'inst_01', name: 'Arjun Sharma', email: 'arjun@springfield.edu', role: 'student', phone: null },
         { id: 'user_stu_02', inst: 'inst_01', name: 'Meera Patel', email: 'meera@springfield.edu', role: 'student', phone: null },

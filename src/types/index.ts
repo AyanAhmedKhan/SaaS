@@ -1,5 +1,5 @@
 // ── Role Types ──
-export type UserRole = 'super_admin' | 'institute_admin' | 'class_teacher' | 'subject_teacher' | 'student' | 'parent';
+export type UserRole = 'super_admin' | 'institute_admin' | 'faculty' | 'student' | 'parent';
 
 // ── Core Entities ──
 export interface User {

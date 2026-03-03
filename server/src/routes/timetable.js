@@ -26,7 +26,7 @@ router.get('/', asyncHandler(async (req, res) => {
   if (teacher_id) { params.push(teacher_id); sql += ` AND tt.teacher_id = $${params.length}`; }
 
   // scope for teachers
-  if (req.user.role === 'class_teacher' || req.user.role === 'subject_teacher') {
+  if (req.user.role === 'faculty') {
     const tr = await query('SELECT id FROM teachers WHERE user_id=$1 AND institute_id=$2', [req.user.id, instId]);
     if (tr.rows[0]) { params.push(tr.rows[0].id); sql += ` AND tt.teacher_id = $${params.length}`; }
   }

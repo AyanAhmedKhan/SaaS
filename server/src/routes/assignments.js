@@ -29,7 +29,7 @@ router.get('/', asyncHandler(async (req, res) => {
   if (status) { params.push(status); sql += ` AND a.status = $${params.length}`; }
 
   // scope for teachers
-  if (req.user.role === 'class_teacher' || req.user.role === 'subject_teacher') {
+  if (req.user.role === 'faculty') {
     const tr = await query('SELECT id FROM teachers WHERE user_id=$1 AND institute_id=$2', [req.user.id, instId]);
     if (tr.rows[0]) {
       params.push(tr.rows[0].id);
@@ -101,7 +101,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/assignments — create
-router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const { title, description, instructions, class_id, subject_id, due_date, total_marks, attachment_url, status, allow_late_submission } = req.body;
   if (!title || !class_id || !due_date) throw new AppError('title, class_id, due_date required', 400);
@@ -110,7 +110,7 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher'
   const academic_year_id = clsRec.rows[0]?.academic_year_id;
 
   let teacherId = null;
-  if (req.user.role === 'class_teacher' || req.user.role === 'subject_teacher') {
+  if (req.user.role === 'faculty') {
     const tRec = await query('SELECT id FROM teachers WHERE user_id=$1', [req.user.id]);
     teacherId = tRec.rows[0]?.id;
   }
@@ -133,12 +133,12 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher'
 }));
 
 // PUT /api/assignments/:id — update
-router.put('/:id', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.put('/:id', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const existing = await query('SELECT * FROM assignments WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Assignment not found', 404);
 
-  if (req.user.role === 'class_teacher' || req.user.role === 'subject_teacher') {
+  if (req.user.role === 'faculty') {
     const tRec = await query('SELECT id FROM teachers WHERE user_id=$1', [req.user.id]);
     const teacherId = tRec.rows[0]?.id;
     const clsRec = await query('SELECT class_teacher_id FROM classes WHERE id=$1', [existing.rows[0].class_id]);
@@ -162,12 +162,12 @@ router.put('/:id', authorize('institute_admin', 'class_teacher', 'subject_teache
 }));
 
 // DELETE /api/assignments/:id
-router.delete('/:id', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.delete('/:id', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
   const existing = await query('SELECT * FROM assignments WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Assignment not found', 404);
 
-  if (req.user.role === 'class_teacher' || req.user.role === 'subject_teacher') {
+  if (req.user.role === 'faculty') {
     const tRec = await query('SELECT id FROM teachers WHERE user_id=$1', [req.user.id]);
     const teacherId = tRec.rows[0]?.id;
     const clsRec = await query('SELECT class_teacher_id FROM classes WHERE id=$1', [existing.rows[0].class_id]);
@@ -207,7 +207,7 @@ router.post('/:id/submit', authorize('student'), asyncHandler(async (req, res) =
 
 // PUT /api/assignments/:assignmentId/submissions/:submissionId/grade — teacher grades
 router.put('/:assignmentId/submissions/:submissionId/grade',
-  authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'),
+  authorize('institute_admin', 'faculty', 'super_admin'),
   asyncHandler(async (req, res) => {
     const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
     const { marks_obtained, teacher_remarks } = req.body;

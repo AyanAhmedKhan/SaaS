@@ -30,7 +30,7 @@ router.get('/', asyncHandler(async (req, res) => {
     sql += ` AND (n.target_roles IS NULL OR $${params.length} = ANY(n.target_roles))`;
   }
 
-  const countSql = sql.replace(/SELECT n\.\*.*?FROM/, 'SELECT COUNT(*) FROM');
+  const countSql = sql.replace(/SELECT n\.\*[\s\S]*?FROM/, 'SELECT COUNT(*) FROM');
   sql += ` ORDER BY n.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
   params.push(parseInt(limit), offset);
 
@@ -66,7 +66,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/notices
-router.post('/', authorize('institute_admin', 'class_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const { title, content, priority, target_roles, target_class_ids, attachment_url } = req.body;
   if (!title || !content) throw new AppError('Title and content required', 400);
@@ -89,7 +89,7 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'super_admin'), a
 }));
 
 // PUT /api/notices/:id
-router.put('/:id', authorize('institute_admin', 'class_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.put('/:id', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const existing = await query('SELECT * FROM notices WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Notice not found', 404);

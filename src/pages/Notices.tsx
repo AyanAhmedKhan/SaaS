@@ -25,7 +25,7 @@ export default function Notices() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const canCreate = isRole('super_admin', 'institute_admin', 'class_teacher');
+  const canCreate = isRole('super_admin', 'institute_admin', 'faculty');
 
   const fetchNotices = useCallback(async () => {
     try {

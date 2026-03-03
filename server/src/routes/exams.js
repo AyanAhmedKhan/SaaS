@@ -128,7 +128,7 @@ router.delete('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(
 // ── Exam Results ──
 
 // POST /api/exams/:id/results — bulk enter results
-router.post('/:id/results', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.post('/:id/results', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const { results } = req.body;
   // results: [{ student_id, marks_obtained, remarks?, is_absent? }]

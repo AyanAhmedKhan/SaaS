@@ -27,7 +27,7 @@ router.get('/', asyncHandler(async (req, res) => {
   if (remark_type) { params.push(remark_type); sql += ` AND tr.remark_type = $${params.length}`; }
 
   // scope for teachers
-  if (req.user.role === 'class_teacher' || req.user.role === 'subject_teacher') {
+  if (req.user.role === 'faculty') {
     const tr = await query('SELECT id FROM teachers WHERE user_id=$1 AND institute_id=$2', [req.user.id, instId]);
     if (tr.rows[0]) { params.push(tr.rows[0].id); sql += ` AND tr.teacher_id = $${params.length}`; }
   }
@@ -52,16 +52,51 @@ router.get('/', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/remarks — create remark
-router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const { student_id, remark_type, content, subject_id, is_visible_to_parent, academic_year_id } = req.body;
   if (!student_id || !content) throw new AppError('student_id and content required', 400);
 
+  // Get student class
+  const studentReq = await query('SELECT class_id FROM students WHERE id=$1 AND institute_id=$2', [student_id, instId]);
+  if (!studentReq.rows[0]) throw new AppError('Student not found', 404);
+  const studentClassId = studentReq.rows[0].class_id;
+
   // resolve teacher_id
   let teacher_id = null;
-  if (['class_teacher', 'subject_teacher'].includes(req.user.role)) {
+  if (['faculty'].includes(req.user.role)) {
     const tr = await query('SELECT id FROM teachers WHERE user_id=$1 AND institute_id=$2', [req.user.id, instId]);
-    if (tr.rows[0]) teacher_id = tr.rows[0].id;
+    if (tr.rows[0]) {
+      teacher_id = tr.rows[0].id;
+
+      // Faculty Permission Check
+      // Check if they are class teacher
+      const classTeacherCheck = await query(
+        'SELECT 1 FROM teacher_assignments WHERE teacher_id=$1 AND class_id=$2 AND is_class_teacher=true',
+        [teacher_id, studentClassId]
+      );
+
+      // Check if they are a subject teacher for this class
+      const subjectTeacherCheck = await query(
+        'SELECT subject_id FROM teacher_assignments WHERE teacher_id=$1 AND class_id=$2',
+        [teacher_id, studentClassId]
+      );
+
+      if (classTeacherCheck.rowCount === 0) {
+        // Not a class teacher. If not a subject teacher either, they can't add remarks.
+        if (subjectTeacherCheck.rowCount === 0) {
+          throw new AppError('You are not assigned to teach this class', 403);
+        }
+        // Subject teachers can only add subject-specific remarks
+        if (remark_type !== 'subject') {
+          throw new AppError('Subject teachers can only add subject-specific remarks', 403);
+        }
+        // Subject teachers must provide a valid subject_id they teach
+        if (!subject_id || !subjectTeacherCheck.rows.some(r => r.subject_id === subject_id)) {
+          throw new AppError('Invalid subject_id or you do not teach this subject to this class', 403);
+        }
+      }
+    }
   }
   if (!teacher_id && req.user.role === 'super_admin') teacher_id = req.body.teacher_id;
   if (!teacher_id && req.user.role === 'institute_admin') {
@@ -83,7 +118,7 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher'
   await query(
     `INSERT INTO teacher_remarks (id, institute_id, student_id, teacher_id, subject_id, remark_type, content, is_visible_to_parent, academic_year_id)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [id, instId, student_id, teacher_id, subject_id||null, remark_type||'general', content, is_visible_to_parent !== undefined ? is_visible_to_parent : true, ayId]
+    [id, instId, student_id, teacher_id, subject_id || null, remark_type || 'general', content, is_visible_to_parent !== undefined ? is_visible_to_parent : true, ayId]
   );
 
   const { rows } = await query('SELECT * FROM teacher_remarks WHERE id=$1', [id]);
@@ -92,10 +127,18 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher'
 }));
 
 // PUT /api/remarks/:id — update remark
-router.put('/:id', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.put('/:id', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const existing = await query('SELECT * FROM teacher_remarks WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Remark not found', 404);
+
+  // Determine if faculty owns this remark
+  if (req.user.role === 'faculty') {
+    const tr = await query('SELECT id FROM teachers WHERE user_id=$1', [req.user.id]);
+    if (!tr.rows[0] || tr.rows[0].id !== existing.rows[0].teacher_id) {
+      throw new AppError('You can only edit your own remarks', 403);
+    }
+  }
 
   const { remark_type, content, is_visible_to_parent } = req.body;
   await query(

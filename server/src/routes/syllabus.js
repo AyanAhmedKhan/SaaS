@@ -52,7 +52,7 @@ router.get('/summary', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/syllabus — create topic
-router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const { class_id, subject_id, academic_year_id, unit, topic, description, status, completion_percentage } = req.body;
   if (!class_id || !subject_id || !topic) throw new AppError('class_id, subject_id, and topic required', 400);
@@ -81,7 +81,7 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher'
 }));
 
 // PUT /api/syllabus/:id — update topic / mark progress
-router.put('/:id', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.put('/:id', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const existing = await query('SELECT * FROM syllabus WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Syllabus entry not found', 404);

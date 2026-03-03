@@ -22,7 +22,7 @@ import { StudentAssignmentDetailsDialog } from "@/components/student/StudentAssi
 
 export default function Assignments() {
   const { isRole } = useAuth();
-  const isStaff = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
+  const isStaff = isRole('super_admin', 'institute_admin', 'faculty');
 
   if (isStaff) {
     return (

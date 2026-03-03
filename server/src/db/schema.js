@@ -34,7 +34,7 @@ export async function createSchema() {
         name TEXT NOT NULL,
         email TEXT NOT NULL,
         password_hash TEXT NOT NULL,
-        role TEXT NOT NULL CHECK(role IN ('super_admin','institute_admin','class_teacher','subject_teacher','student','parent')),
+        role TEXT NOT NULL CHECK(role IN ('super_admin','institute_admin','faculty','student','parent')),
         avatar TEXT,
         phone TEXT,
         is_active BOOLEAN DEFAULT true,
@@ -45,6 +45,11 @@ export async function createSchema() {
         updated_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(email, institute_id)
       );
+
+      -- Update users_role_check if the table already existed
+      UPDATE users SET role = 'faculty' WHERE role IN ('class_teacher', 'subject_teacher');
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+      ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('super_admin','institute_admin','faculty','student','parent'));
 
       -- Academic years
       CREATE TABLE IF NOT EXISTS academic_years (
@@ -237,7 +242,7 @@ export async function createSchema() {
         content TEXT NOT NULL,
         date DATE,
         priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low','medium','high','urgent')),
-        target_roles TEXT[] DEFAULT ARRAY['student','parent','class_teacher','subject_teacher','institute_admin'],
+        target_roles TEXT[] DEFAULT ARRAY['student','parent','faculty','institute_admin'],
         target_class_ids TEXT[],
         attachment_url TEXT,
         is_published BOOLEAN DEFAULT true,

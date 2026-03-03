@@ -68,8 +68,8 @@ export default function Syllabus() {
   const [error, setError] = useState<string | null>(null);
   const [editTopic, setEditTopic] = useState<SyllabusEntry | null>(null);
 
-  const showClassFilter = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
-  const canManageSyllabus = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
+  const showClassFilter = isRole('super_admin', 'institute_admin', 'faculty');
+  const canManageSyllabus = isRole('super_admin', 'institute_admin', 'faculty');
 
   const fetchData = useCallback(async () => {
     try {

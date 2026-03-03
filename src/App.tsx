@@ -59,8 +59,8 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?
 }
 
 const ADMIN_ROLES: UserRole[] = ['super_admin', 'institute_admin'];
-const STAFF_ROLES: UserRole[] = ['super_admin', 'institute_admin', 'class_teacher', 'subject_teacher'];
-const ALL_ROLES: UserRole[] = ['super_admin', 'institute_admin', 'class_teacher', 'subject_teacher', 'student', 'parent'];
+const STAFF_ROLES: UserRole[] = ['super_admin', 'institute_admin', 'faculty'];
+const ALL_ROLES: UserRole[] = ['super_admin', 'institute_admin', 'faculty', 'student', 'parent'];
 
 function RoleBasedDashboard() {
   const { user } = useAuth();
@@ -69,8 +69,8 @@ function RoleBasedDashboard() {
       return <StudentDashboard />;
     case 'parent':
       return <ParentDashboard />;
-    case 'class_teacher':
-    case 'subject_teacher':
+    case 'faculty':
+    case 'faculty':
       return <TeacherDashboard />;
     default:
       return <Dashboard />;

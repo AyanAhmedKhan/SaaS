@@ -49,7 +49,7 @@ export default function Students() {
   const [attendanceStudent, setAttendanceStudent] = useState<Student | null>(null);
   const [reportsStudent, setReportsStudent] = useState<Student | null>(null);
 
-  const canCreate = isRole('super_admin', 'institute_admin', 'class_teacher');
+  const canCreate = isRole('super_admin', 'institute_admin', 'faculty');
 
   const fetchData = useCallback(async () => {
     try {

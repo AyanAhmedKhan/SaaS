@@ -35,7 +35,7 @@ router.get('/', asyncHandler(async (req, res) => {
     }
 
     // For teachers, scope to their assigned classes
-    if (req.user.role === 'class_teacher' || req.user.role === 'subject_teacher') {
+    if (req.user.role === 'faculty') {
         const teacherResult = await query('SELECT id FROM teachers WHERE user_id = $1', [req.user.id]);
         if (teacherResult.rows[0]) {
             const teacherId = teacherResult.rows[0].id;
@@ -313,7 +313,7 @@ router.post('/bulk', authorize('institute_admin', 'super_admin'), asyncHandler(a
 }));
 
 // POST /api/students — create student (admin/teacher)
-router.post('/', authorize('institute_admin', 'class_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
     const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
     const { name, email, roll_number, class_id, admission_date, date_of_birth, gender, address, phone,
         parent_name, parent_email, parent_phone, blood_group, create_login, password } = req.body;
@@ -399,7 +399,7 @@ router.post('/', authorize('institute_admin', 'class_teacher', 'super_admin'), a
 }));
 
 // PUT /api/students/:id
-router.put('/:id', authorize('institute_admin', 'class_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.put('/:id', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
     const existingResult = await query('SELECT * FROM students WHERE id = $1', [req.params.id]);
     if (!existingResult.rows[0]) throw new AppError('Student not found', 404);
     if (req.user.role !== 'super_admin' && existingResult.rows[0].institute_id !== req.instituteId) {
@@ -407,6 +407,20 @@ router.put('/:id', authorize('institute_admin', 'class_teacher', 'super_admin'),
     }
 
     const e = existingResult.rows[0];
+
+    // Restrict faculty edits: they must be is_class_teacher = true for that student's class
+    if (req.user.role === 'faculty') {
+        const assignmentCheck = await query(
+            `SELECT ta.id FROM teacher_assignments ta
+             JOIN teachers t ON ta.teacher_id = t.id
+             WHERE t.user_id = $1 AND ta.class_id = $2 AND ta.is_class_teacher = true`,
+            [req.user.id, e.class_id]
+        );
+        if (assignmentCheck.rows.length === 0) {
+            throw new AppError('Only the assigned class teacher can edit student details', 403);
+        }
+    }
+
     const { name, email, roll_number, class_id, admission_date, date_of_birth, gender, address, phone,
         parent_name, parent_email, parent_phone, blood_group, status } = req.body;
 

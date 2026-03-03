@@ -321,7 +321,7 @@ export function AssignmentManagement() {
                             <Edit className="h-4 w-4 sm:mr-2" />
                             <span className="hidden sm:inline">Edit</span>
                           </Button>
-                          {(user?.role === 'institute_admin' || user?.role === 'super_admin' || user?.role === 'class_teacher' || user?.role === 'subject_teacher') && (
+                          {(user?.role === 'institute_admin' || user?.role === 'super_admin' || user?.role === 'faculty' || user?.role === 'faculty') && (
                             <Button
                               variant="outline"
                               size="sm"

@@ -48,7 +48,7 @@ interface MenuItem {
 }
 
 const ADMIN: UserRole[] = ['super_admin', 'institute_admin'];
-const STAFF: UserRole[] = ['super_admin', 'institute_admin', 'class_teacher', 'subject_teacher'];
+const STAFF: UserRole[] = ['super_admin', 'institute_admin', 'faculty'];
 
 const menuItems: MenuItem[] = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },

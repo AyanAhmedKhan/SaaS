@@ -90,7 +90,7 @@ router.post('/register', asyncHandler(async (req, res) => {
     email = email.trim().toLowerCase();
     role = role.trim().toLowerCase();
 
-    const allowedRoles = ['super_admin', 'institute_admin', 'class_teacher', 'subject_teacher', 'student', 'parent'];
+    const allowedRoles = ['super_admin', 'institute_admin', 'faculty', 'student', 'parent'];
     if (!allowedRoles.includes(role)) {
         throw new AppError('Invalid role specified', 400);
     }
@@ -166,7 +166,7 @@ router.post('/register', asyncHandler(async (req, res) => {
                     [studentId, userId, instituteId, ayId, name, email, 'TBD']
                 );
             }
-        } else if ((role === 'class_teacher' || role === 'subject_teacher') && instituteId) {
+        } else if (role === 'faculty' && instituteId) {
             const teacherId = `t_${randomUUID().replace(/-/g, '').substring(0, 8)}`;
             await client.query(
                 'INSERT INTO teachers (id, user_id, institute_id, name, email) VALUES ($1, $2, $3, $4, $5)',

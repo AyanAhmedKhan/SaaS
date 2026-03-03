@@ -18,16 +18,29 @@ router.get('/', asyncHandler(async (req, res) => {
 
 // ── GET /api/subjects/by-class/:classId ──
 router.get('/by-class/:classId', asyncHandler(async (req, res) => {
-    const { rows } = await query(
-        `SELECT s.*, cs.teacher_id, cs.periods_per_week,
+    const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+    
+    let sql = `SELECT s.*, cs.teacher_id, cs.periods_per_week,
                 t.name as teacher_name
          FROM class_subjects cs
          JOIN subjects s ON cs.subject_id = s.id
          LEFT JOIN teachers t ON cs.teacher_id = t.id
-         WHERE cs.class_id = $1 AND s.is_active = true
-         ORDER BY s.name`,
-        [req.params.classId]
-    );
+         WHERE cs.class_id = $1 AND s.is_active = true`;
+    const params = [req.params.classId];
+    
+    // For class/subject teachers, only show subjects they teach
+    if (req.user.role === 'faculty') {
+        const teacherResult = await query('SELECT id FROM teachers WHERE user_id = $1 AND institute_id = $2', [req.user.id, instId]);
+        if (teacherResult.rows[0]) {
+            const teacherId = teacherResult.rows[0].id;
+            params.push(teacherId);
+            sql += ` AND cs.teacher_id = $${params.length}`;
+        }
+    }
+    
+    sql += ' ORDER BY s.name';
+    
+    const { rows } = await query(sql, params);
     res.json({ success: true, data: { subjects: rows } });
 }));
 

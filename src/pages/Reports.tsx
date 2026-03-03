@@ -86,7 +86,7 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const showClassFilter = isRole('super_admin', 'institute_admin', 'class_teacher');
+  const showClassFilter = isRole('super_admin', 'institute_admin', 'faculty');
 
   const fetchData = useCallback(async () => {
     try {

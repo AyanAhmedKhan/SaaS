@@ -9,7 +9,7 @@ router.use(authenticate, requireInstitute);
 
 // ── helper: resolve teacher id if role is teacher ──
 async function resolveTeacherId(user) {
-  if (user.role === 'class_teacher' || user.role === 'subject_teacher') {
+  if (user.role === 'faculty') {
     const r = await query('SELECT id FROM teachers WHERE user_id = $1 AND institute_id = $2', [user.id, user.institute_id]);
     return r.rows[0]?.id || null;
   }
@@ -186,7 +186,7 @@ router.get('/monthly', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/attendance — bulk mark attendance
-router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
+router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const { records, class_id, date, subject_id } = req.body;
 

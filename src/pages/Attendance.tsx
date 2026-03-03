@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Calendar, Check, X, Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, Save, GraduationCap, CheckCircle2, XCircle, BookOpen, Target, Edit3 } from "lucide-react";
+import { Calendar, Check, X, Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, Save, GraduationCap, CheckCircle2, XCircle, BookOpen, Target, Edit3, Book } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,13 +21,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { getStudents, getClasses, markAttendance as markAttendanceApi, getAttendance, getAttendanceSummary, getAttendanceSubjectWise, getMyStudentProfile, getSyllabus, updateSyllabusEntry, getTimetable } from "@/lib/api";
+import { getStudents, getClasses, markAttendance as markAttendanceApi, getAttendance, getAttendanceSummary, getAttendanceSubjectWise, getMyStudentProfile, getSyllabus, updateSyllabusEntry, getTimetable, getSubjectsByClass } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AttendanceCalendar } from "@/components/student/AttendanceCalendar";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import type { Student, Class as ClassType, AttendanceRecord, SyllabusEntry, TimetableEntry } from "@/types";
+import type { Student, Class as ClassType, AttendanceRecord, SyllabusEntry, TimetableEntry, Subject } from "@/types";
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | null;
 
@@ -284,7 +284,9 @@ function AdminAttendanceView() {
   const [students, setStudents] = useState<Student[]>([]);
   const [syllabusList, setSyllabusList] = useState<SyllabusEntry[]>([]);
   const [timetableList, setTimetableList] = useState<TimetableEntry[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("");
+  const [selectedSubjectId, setSelectedSubjectId] = useState("");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'late' | null>>({});
   const [loading, setLoading] = useState(true);
@@ -299,7 +301,8 @@ function AdminAttendanceView() {
   const [selectedDateForClasses, setSelectedDateForClasses] = useState<Date | null>(null);
   const [loadingClasses, setLoadingClasses] = useState(false);
 
-  const canMark = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
+  const canMark = isRole('super_admin', 'institute_admin', 'faculty');
+  const isTeacher = isRole('faculty');
   const dateStr = currentDate.toISOString().slice(0, 10);
 
   // Load classes on mount
@@ -315,6 +318,21 @@ function AdminAttendanceView() {
     }).finally(() => setLoading(false));
   }, []);
 
+  // Load subjects when class changes
+  useEffect(() => {
+    if (selectedClassId) {
+      getSubjectsByClass(selectedClassId).then(res => {
+        if (res.success && res.data) {
+          const subjectList = (res.data as { subjects: Subject[] }).subjects || [];
+          setSubjects(subjectList);
+          if (isTeacher && subjectList.length > 0 && !selectedSubjectId) {
+            setSelectedSubjectId(subjectList[0].id);
+          }
+        }
+      });
+    }
+  }, [selectedClassId, isTeacher]);
+
   // Load students + existing attendance + syllabus items when class or date changes
   const fetchData = useCallback(async () => {
     if (!selectedClassId) return;
@@ -322,9 +340,14 @@ function AdminAttendanceView() {
       setLoading(true);
       setError(null);
 
+      const params: Record<string, string> = { class_id: selectedClassId, date: dateStr };
+      if (selectedSubjectId) {
+        params.subject_id = selectedSubjectId;
+      }
+
       const [studentRes, attRes, syllabusRes] = await Promise.all([
         getStudents({ class_id: selectedClassId, status: 'active' }),
-        getAttendance({ class_id: selectedClassId, date: dateStr }),
+        getAttendance(params),
         getSyllabus({ class_id: selectedClassId }),
       ]);
 
@@ -352,7 +375,7 @@ function AdminAttendanceView() {
     } finally {
       setLoading(false);
     }
-  }, [selectedClassId, dateStr]);
+  }, [selectedClassId, selectedSubjectId, dateStr]);
 
   useEffect(() => {
     fetchData();
@@ -418,6 +441,11 @@ function AdminAttendanceView() {
   };
 
   const handleSave = async () => {
+    if (isTeacher && !selectedSubjectId) {
+      toast.warning("Please select a subject before marking attendance.");
+      return;
+    }
+
     const records = Object.entries(attendance)
       .filter(([, status]) => status !== null)
       .map(([student_id, status]) => ({
@@ -432,11 +460,22 @@ function AdminAttendanceView() {
 
     try {
       setSaving(true);
-      const res = await markAttendanceApi({
+      const payload: {
+        records: { student_id: string; status: string }[];
+        class_id: string;
+        date: string;
+        subject_id?: string;
+      } = {
         records,
         class_id: selectedClassId,
         date: dateStr,
-      });
+      };
+
+      if (selectedSubjectId) {
+        payload.subject_id = selectedSubjectId;
+      }
+
+      const res = await markAttendanceApi(payload);
       if (res.success) {
         toast.success(`Attendance saved for ${records.length} students.`);
       } else {
@@ -451,7 +490,7 @@ function AdminAttendanceView() {
 
   const handleUpdateTopic = async () => {
     if (!selectedTopic) return;
-    
+
     try {
       setSaving(true);
       const res = await updateSyllabusEntry(selectedTopic.id, {
@@ -459,7 +498,7 @@ function AdminAttendanceView() {
         status: topicPercentage === 100 ? 'completed' : topicPercentage > 0 ? 'in_progress' : 'not_started',
       });
       if (res.success) {
-        toast.success(`Updated "${selectedTopic.topic}" completion to ${topicPercentage}%`);
+        toast.success(`Updated "${selectedTopic.topic_name}" completion to ${topicPercentage}%`);
         setShowTopicDialog(false);
         fetchData();
       }
@@ -497,15 +536,15 @@ function AdminAttendanceView() {
 
   const isToday = (day: number) => {
     const today = new Date();
-    return day === today.getDate() && 
-           currentMonth.getMonth() === today.getMonth() && 
-           currentMonth.getFullYear() === today.getFullYear();
+    return day === today.getDate() &&
+      currentMonth.getMonth() === today.getMonth() &&
+      currentMonth.getFullYear() === today.getFullYear();
   };
 
   const isSelectedDate = (day: number) => {
-    return day === currentDate.getDate() && 
-           currentMonth.getMonth() === currentDate.getMonth() && 
-           currentMonth.getFullYear() === currentDate.getFullYear();
+    return day === currentDate.getDate() &&
+      currentMonth.getMonth() === currentDate.getMonth() &&
+      currentMonth.getFullYear() === currentDate.getFullYear();
   };
 
   return (
@@ -517,16 +556,33 @@ function AdminAttendanceView() {
             <h1 className="text-3xl font-bold tracking-tight">Attendance Management</h1>
             <p className="text-muted-foreground text-sm mt-1">Track attendance and update lesson progress</p>
           </div>
-          <Select value={selectedClassId} onValueChange={setSelectedClassId}>
-            <SelectTrigger className="w-[200px] bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-2 border-blue-200 dark:border-blue-800">
-              <SelectValue placeholder="Select Class" />
-            </SelectTrigger>
-            <SelectContent>
-              {classes.map(c => (
-                <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-3 flex-wrap">
+            <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+              <SelectTrigger className="w-[200px] bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-2 border-blue-200 dark:border-blue-800">
+                <SelectValue placeholder="Select Class" />
+              </SelectTrigger>
+              <SelectContent>
+                {classes.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedClassId && subjects.length > 0 && (
+              <Select value={selectedSubjectId} onValueChange={setSelectedSubjectId}>
+                <SelectTrigger className="w-[200px] bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 border-2 border-purple-200 dark:border-purple-800">
+                  <SelectValue placeholder={isTeacher ? "Select Subject" : "All Subjects"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {!isTeacher && (
+                    <SelectItem value="">All Subjects</SelectItem>
+                  )}
+                  {subjects.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -640,7 +696,7 @@ function AdminAttendanceView() {
                     {syllabusList.map(topic => (
                       <div key={topic.id} className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-800 hover:shadow-md transition-shadow">
                         <div className="flex-1">
-                          <p className="font-medium text-sm">{topic.topic}</p>
+                          <p className="font-medium text-sm">{topic.topic_name}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <Progress value={topic.completion_percentage || 0} className="h-1.5 flex-1" />
                             <span className="text-xs font-bold text-muted-foreground w-8 text-right">{topic.completion_percentage || 0}%</span>
@@ -780,7 +836,7 @@ function AdminAttendanceView() {
             <DialogHeader>
               <DialogTitle>Update Topic Progress</DialogTitle>
               <DialogDescription>
-                Mark how much of "{selectedTopic?.topic}" was completed in today's class
+                Mark how much of "{selectedTopic?.topic_name}" was completed in today's class
               </DialogDescription>
             </DialogHeader>
             {selectedTopic && (
@@ -838,7 +894,7 @@ function AdminAttendanceView() {
                 {selectedDateForClasses && getDayOfWeekName(selectedDateForClasses)} — All scheduled classes
               </DialogDescription>
             </DialogHeader>
-            
+
             {loadingClasses ? (
               <div className="flex items-center justify-center h-40 gap-3">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -894,7 +950,7 @@ function AdminAttendanceView() {
                 ))}
               </div>
             )}
-            
+
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowClassesDialog(false)}>Close</Button>
             </DialogFooter>

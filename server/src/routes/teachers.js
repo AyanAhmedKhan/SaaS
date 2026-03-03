@@ -86,7 +86,7 @@ router.post('/', authorize('institute_admin', 'super_admin'), asyncHandler(async
             const passwordHash = bcrypt.hashSync(password, 12);
             await client.query(
                 'INSERT INTO users (id, institute_id, name, email, password_hash, role, phone) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                [userId, instId, name, email, passwordHash, 'class_teacher', phone || null]
+                [userId, instId, name, email, passwordHash, 'faculty', phone || null]
             );
         }
 

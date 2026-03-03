@@ -28,7 +28,7 @@ export default function Timetable() {
   const [error, setError] = useState<string | null>(null);
   const [showManage, setShowManage] = useState(false);
 
-  const showClassFilter = isRole('super_admin', 'institute_admin', 'class_teacher', 'subject_teacher');
+  const showClassFilter = isRole('super_admin', 'institute_admin', 'faculty');
 
   const fetchData = useCallback(async () => {
     try {

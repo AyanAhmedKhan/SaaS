@@ -147,7 +147,7 @@ export default function TeacherDashboard() {
                                 <Badge variant="secondary" className="text-[10px] sm:text-xs">
                                     {(data?.assignedClasses?.some(c => !c.subject_name) && data?.assignedClasses?.some(c => c.subject_name))
                                         ? 'Class & Subject Teacher'
-                                        : (user?.role === 'class_teacher' || data?.assignedClasses?.some(c => !c.subject_name))
+                                        : (user?.role === 'faculty' || data?.assignedClasses?.some(c => !c.subject_name))
                                             ? 'Class Teacher'
                                             : 'Subject Teacher'}
                                 </Badge>
