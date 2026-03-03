@@ -75,7 +75,7 @@ export function EditSyllabusDialog({ entry, open, onOpenChange, onSuccess }: Edi
         } else if (status === "in_progress" && completionPercentage === 0) {
             setCompletionPercentage(50);
         }
-    }, [status]);
+    }, [status, completionPercentage]);
 
     const handleSubmit = async () => {
         const newErrors: Record<string, string> = {};
@@ -86,7 +86,7 @@ export function EditSyllabusDialog({ entry, open, onOpenChange, onSuccess }: Edi
 
         setIsSubmitting(true);
         try {
-            const payload: Record<string, any> = {
+            const payload: Record<string, string | number | null> = {
                 unit: unit.trim() || null,
                 topic: topic.trim(),
                 description: description.trim() || null,
@@ -100,8 +100,9 @@ export function EditSyllabusDialog({ entry, open, onOpenChange, onSuccess }: Edi
                 onOpenChange(false);
                 onSuccess();
             }
-        } catch (err: any) {
-            toast({ title: "Error", description: err?.message || "Failed to update topic.", variant: "destructive" });
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : "Failed to update topic.";
+            toast({ title: "Error", description: errorMessage, variant: "destructive" });
         } finally {
             setIsSubmitting(false);
         }
@@ -117,8 +118,9 @@ export function EditSyllabusDialog({ entry, open, onOpenChange, onSuccess }: Edi
                 onOpenChange(false);
                 onSuccess();
             }
-        } catch (err: any) {
-            toast({ title: "Error", description: err?.message || "Failed to delete topic.", variant: "destructive" });
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : "Failed to delete topic.";
+            toast({ title: "Error", description: errorMessage, variant: "destructive" });
         } finally {
             setIsDeleting(false);
         }
@@ -130,7 +132,7 @@ export function EditSyllabusDialog({ entry, open, onOpenChange, onSuccess }: Edi
                 <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden">
                     <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5 text-white">
                         <DialogHeader className="space-y-1">
-                            <DialogTitle className="text-white text-lg font-bold flex items-center justify-between">
+                            <DialogTitle className="text-white text-lg font-bold flex items-start justify-between">
                                 <div className="flex items-center gap-2">
                                     <div className="p-1.5 bg-white/20 rounded-lg backdrop-blur-sm">
                                         <Pencil className="h-5 w-5" />
@@ -140,7 +142,7 @@ export function EditSyllabusDialog({ entry, open, onOpenChange, onSuccess }: Edi
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 text-white/80 hover:bg-white/20 hover:text-white transition-colors"
+                                    className="h-8 w-8 text-white/80 hover:bg-white/20 hover:text-white transition-colors absolute right-8 top-12"
                                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDeleteConfirm(true); }}
                                 >
                                     <Trash2 className="h-4 w-4" />

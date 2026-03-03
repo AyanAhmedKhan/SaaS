@@ -54,14 +54,25 @@ router.get('/summary', asyncHandler(async (req, res) => {
 // POST /api/syllabus — create topic
 router.post('/', authorize('institute_admin', 'class_teacher', 'subject_teacher', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
-  const { class_id, subject_id, unit, topic, description, status, completion_percentage } = req.body;
+  const { class_id, subject_id, academic_year_id, unit, topic, description, status, completion_percentage } = req.body;
   if (!class_id || !subject_id || !topic) throw new AppError('class_id, subject_id, and topic required', 400);
+
+  const classResult = await query(
+    'SELECT academic_year_id FROM classes WHERE id=$1 AND institute_id=$2',
+    [class_id, instId]
+  );
+  if (!classResult.rows[0]) throw new AppError('Invalid class_id for this institute', 400);
+
+  const classAcademicYearId = classResult.rows[0].academic_year_id;
+  if (academic_year_id && academic_year_id !== classAcademicYearId) {
+    throw new AppError('academic_year_id does not match selected class', 400);
+  }
 
   const id = `syl_${randomUUID().replace(/-/g, '').substring(0, 12)}`;
   await query(
-    `INSERT INTO syllabus (id, institute_id, class_id, subject_id, unit_name, topic_name, description, status, completion_percentage)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [id, instId, class_id, subject_id, unit || null, topic, description || null, status || 'not_started', completion_percentage || 0]
+    `INSERT INTO syllabus (id, institute_id, class_id, subject_id, academic_year_id, unit_name, topic_name, description, status, completion_percentage)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [id, instId, class_id, subject_id, classAcademicYearId, unit || null, topic, description || null, status || 'not_started', completion_percentage || 0]
   );
 
   const { rows } = await query('SELECT * FROM syllabus WHERE id=$1', [id]);

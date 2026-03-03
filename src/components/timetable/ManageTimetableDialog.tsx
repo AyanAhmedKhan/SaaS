@@ -253,20 +253,19 @@ export function ManageTimetableDialog({ classId, className, initialEntries, open
                         <div className="space-y-4 py-4">
                             <div>
                                 <Label>Subject <span className="text-destructive">*</span></Label>
-                                <Select value={cellData.subject_id} onValueChange={(v) => setCellData({ ...cellData, subject_id: v })}>
+                                <Select value={cellData.subject_id || ""} onValueChange={(v) => setCellData({ ...cellData, subject_id: v })}>
                                     <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select Subject" /></SelectTrigger>
                                     <SelectContent>
-                                        {subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                        {subjects.filter(s => s.id).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div>
                                 <Label>Teacher</Label>
-                                <Select value={cellData.teacher_id} onValueChange={(v) => setCellData({ ...cellData, teacher_id: v })}>
-                                    <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select Teacher" /></SelectTrigger>
+                                <Select value={cellData.teacher_id || ""} onValueChange={(v) => setCellData({ ...cellData, teacher_id: v || "" })}>
+                                    <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select Teacher (Optional)" /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">None</SelectItem>
-                                        {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                        {teachers.filter(t => t.id).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>

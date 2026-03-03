@@ -809,7 +809,7 @@ export async function bulkPromoteStudents(id: string, data: { to_academic_year_i
 }
 
 export async function bulkCreateStudents(data: { students: Partial<Student>[] }) {
-  return api.post<{ message: string; errors: any[] }>('/students/bulk', data);
+  return api.post<{ message: string; errors: unknown[] }>('/students/bulk', data);
 }
 
 // TIMETABLE API
