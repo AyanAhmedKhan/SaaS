@@ -262,9 +262,10 @@ export function ManageTimetableDialog({ classId, className, initialEntries, open
                             </div>
                             <div>
                                 <Label>Teacher</Label>
-                                <Select value={cellData.teacher_id || ""} onValueChange={(v) => setCellData({ ...cellData, teacher_id: v || "" })}>
+                                <Select value={cellData.teacher_id || "none"} onValueChange={(v) => setCellData({ ...cellData, teacher_id: v === "none" ? "" : v })}>
                                     <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select Teacher (Optional)" /></SelectTrigger>
                                     <SelectContent>
+                                        <SelectItem value="none">None (Optional)</SelectItem>
                                         {teachers.filter(t => t.id).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>

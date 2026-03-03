@@ -384,6 +384,10 @@ function AdminAttendanceView() {
     fetchClassesForDate(newDate);
   };
 
+  const getDayOfWeekNumber = (date: Date): string => {
+    return date.getDay().toString();
+  };
+
   const getDayOfWeekName = (date: Date) => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     return days[date.getDay()];
@@ -392,8 +396,8 @@ function AdminAttendanceView() {
   const fetchClassesForDate = async (date: Date) => {
     try {
       setLoadingClasses(true);
-      const dayName = getDayOfWeekName(date);
-      const res = await getTimetable({ day: dayName });
+      const dayNum = getDayOfWeekNumber(date);
+      const res = await getTimetable({ day: dayNum });
       if (res.success && res.data) {
         const entries = (res.data as { timetable: TimetableEntry[] }).timetable || [];
         setClassesForDate(entries);
