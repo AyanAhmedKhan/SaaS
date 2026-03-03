@@ -151,7 +151,7 @@ router.get('/monthly', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
   let { class_id, student_id, year, month } = req.query;
   const params = [instId];
-  let sql = `SELECT ar.date, ar.status, ar.student_id, s.name AS student_name, sub.name AS subject_name
+  let sql = `SELECT ar.date, ar.status, ar.student_id, ar.class_id, s.name AS student_name, sub.name AS subject_name
              FROM attendance_records ar 
              JOIN students s ON ar.student_id = s.id
              LEFT JOIN subjects sub ON ar.subject_id = sub.id
