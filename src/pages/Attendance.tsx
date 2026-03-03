@@ -295,6 +295,7 @@ function AdminAttendanceView() {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCalendar, setShowCalendar] = useState(true);
 
   const canMark = isRole('super_admin', 'institute_admin', 'faculty');
   const dateStr = currentDate.toISOString().slice(0, 10);
@@ -480,76 +481,84 @@ function AdminAttendanceView() {
             <h1 className="text-3xl font-bold tracking-tight">Daily Schedule & Attendance</h1>
             <p className="text-muted-foreground text-sm mt-1">Select a date to view your classes and mark attendance</p>
           </div>
+          <div className="flex items-center">
+            <Button variant="outline" size="sm" onClick={() => setShowCalendar(!showCalendar)} className="gap-2">
+              <Calendar className="h-4 w-4" />
+              {showCalendar ? "Hide Calendar" : "Show Calendar"}
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column: Calendar (Span 4) */}
-          <div className="lg:col-span-4 space-y-6">
-            <Card className="shadow-lg border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">Calendar</CardTitle>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-8 w-8">
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-8 w-8">
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+          <div className={cn("transition-all duration-300", showCalendar ? "lg:col-span-4 block" : "hidden")}>
+            <div className="space-y-6">
+              <Card className="shadow-lg border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Calendar</CardTitle>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-8 w-8">
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-8 w-8">
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                <p className="text-sm font-semibold text-center mt-2">{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-7 gap-1 mb-2">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="text-center text-xs font-bold text-muted-foreground h-8 flex items-center justify-center">{day}</div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-7 gap-1">
-                  {calendarDays.map((day, idx) => {
-                    const isSelected = day && currentDate.getDate() === day && currentDate.getMonth() === currentMonth.getMonth() && currentDate.getFullYear() === currentMonth.getFullYear();
-                    const isTdy = day && isToday(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day));
-
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => day && handleCalendarDateClick(day)}
-                        disabled={!day}
-                        className={cn(
-                          "h-8 text-xs font-semibold rounded-lg transition-all",
-                          !day && "invisible",
-                          day && "hover:bg-blue-200 dark:hover:bg-blue-800",
-                          isSelected && "bg-primary text-white shadow-lg scale-105",
-                          isTdy && !isSelected && "border-2 border-primary font-bold",
-                          day && !isTdy && !isSelected && "bg-white dark:bg-zinc-900"
-                        )}
-                      >
-                        {day}
-                      </button>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {!selectedPeriod && (
-              <Card className="shadow-md border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 animate-fade-in-up">
-                <CardContent className="p-5 flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-2xl bg-purple-500/20 flex items-center justify-center">
-                    <Calendar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  <p className="text-sm font-semibold text-center mt-2">{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="text-center text-xs font-bold text-muted-foreground h-8 flex items-center justify-center">{day}</div>
+                    ))}
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-purple-600 dark:text-purple-400">Selected Date</p>
-                    <p className="text-xl font-black">{formatDate(currentDate)}</p>
+                  <div className="grid grid-cols-7 gap-1">
+                    {calendarDays.map((day, idx) => {
+                      const isSelected = day && currentDate.getDate() === day && currentDate.getMonth() === currentMonth.getMonth() && currentDate.getFullYear() === currentMonth.getFullYear();
+                      const isTdy = day && isToday(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day));
+
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => day && handleCalendarDateClick(day)}
+                          disabled={!day}
+                          className={cn(
+                            "h-8 text-xs font-semibold rounded-lg transition-all",
+                            !day && "invisible",
+                            day && "hover:bg-blue-200 dark:hover:bg-blue-800",
+                            isSelected && "bg-primary text-white shadow-lg scale-105",
+                            isTdy && !isSelected && "border-2 border-primary font-bold",
+                            day && !isTdy && !isSelected && "bg-white dark:bg-zinc-900"
+                          )}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
-            )}
+
+              {!selectedPeriod && (
+                <Card className="shadow-md border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 animate-fade-in-up">
+                  <CardContent className="p-5 flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-purple-500/20 flex items-center justify-center">
+                      <Calendar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-purple-600 dark:text-purple-400">Selected Date</p>
+                      <p className="text-xl font-black">{formatDate(currentDate)}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
 
-          {/* Right Column: Schedule List OR Marking View (Span 8) */}
-          <div className="lg:col-span-8">
+          {/* Right Column: Schedule List OR Marking View */}
+          <div className={cn("transition-all duration-300", showCalendar ? "lg:col-span-8" : "lg:col-span-12")}>
             {!selectedPeriod ? (
               /* =======================
                  CLASS PERIODS LIST VIEW 
