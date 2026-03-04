@@ -156,6 +156,17 @@ export async function createSchema() {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(teacher_id, class_id, subject_id, academic_year_id)
       );
+
+      -- Institute Role Permissions (Granular Faculty Access Control)
+      CREATE TABLE IF NOT EXISTS institute_role_permissions (
+        id TEXT PRIMARY KEY,
+        institute_id TEXT NOT NULL REFERENCES institutes(id) ON DELETE CASCADE,
+        role TEXT NOT NULL CHECK(role IN ('class_teacher', 'subject_teacher')),
+        permissions JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(institute_id, role)
+      );
     `);
 
     // ── DEFERRED FK CONSTRAINTS (tables referenced after creation) ──
@@ -626,6 +637,7 @@ export async function createSchema() {
       'students', 'teachers', 'attendance_records', 'timetable',
       'notices', 'syllabus', 'exams', 'exam_results', 'assignments',
       'assignment_submissions', 'fee_structures', 'fee_payments',
+      'institute_role_permissions',
     ];
 
     for (const table of tablesWithUpdatedAt) {

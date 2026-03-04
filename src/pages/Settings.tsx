@@ -11,6 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { changePasswordApi, getNotificationPreferences, updateNotificationPreferences } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SettingsPermissions } from "@/components/settings/SettingsPermissions";
 import {
     Settings as SettingsIcon, Lock, Bell, User, Shield, LogOut,
     Eye, EyeOff, CheckCircle2, Loader2, Smartphone, Mail, GraduationCap,
@@ -120,217 +122,248 @@ export default function Settings() {
                     <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Manage your account and preferences.</p>
                 </div>
 
-                {/* ═══════ PROFILE OVERVIEW ═══════ */}
-                <Card className="border-border/40">
-                    <CardContent className="p-4 sm:p-6">
-                        <div className="flex items-center gap-3 sm:gap-4">
-                            <Avatar className="h-12 w-12 sm:h-14 sm:w-14 ring-2 ring-primary/20">
-                                <AvatarImage src={user?.avatar} />
-                                <AvatarFallback className="bg-primary/10 text-primary text-lg sm:text-xl font-bold">
-                                    {user?.name?.charAt(0) || "U"}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0 flex-1">
-                                <p className="text-base sm:text-lg font-semibold text-foreground truncate">{user?.name || "User"}</p>
-                                <p className="text-xs sm:text-sm text-muted-foreground truncate">{user?.email}</p>
-                                <div className="flex items-center gap-1.5 mt-1">
-                                    <Badge variant="secondary" className="text-[10px] sm:text-xs">
-                                        <Shield className="h-3 w-3 mr-1" />
-                                        {roleLabel}
-                                    </Badge>
-                                </div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* ═══════ CHANGE PASSWORD ═══════ */}
-                <Card className="border-border/40">
-                    <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2 sm:pb-3">
-                        <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2">
-                            <Lock className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                            Change Password
-                        </CardTitle>
-                        <CardDescription className="text-[10px] sm:text-xs">
-                            Update your password to keep your account secure.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6 pb-4 sm:pb-6">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="current-pw" className="text-xs sm:text-sm">Current Password</Label>
-                            <div className="relative">
-                                <Input
-                                    id="current-pw"
-                                    type={showCurrentPassword ? "text" : "password"}
-                                    value={currentPassword}
-                                    onChange={(e) => setCurrentPassword(e.target.value)}
-                                    placeholder="Enter current password"
-                                    className="pr-10 h-9 sm:h-10 text-xs sm:text-sm"
-                                />
-                                <button
-                                    type="button"
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                                >
-                                    {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <Label htmlFor="new-pw" className="text-xs sm:text-sm">New Password</Label>
-                            <div className="relative">
-                                <Input
-                                    id="new-pw"
-                                    type={showNewPassword ? "text" : "password"}
-                                    value={newPassword}
-                                    onChange={(e) => setNewPassword(e.target.value)}
-                                    placeholder="Enter new password (min 6 chars)"
-                                    className="pr-10 h-9 sm:h-10 text-xs sm:text-sm"
-                                />
-                                <button
-                                    type="button"
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                                    onClick={() => setShowNewPassword(!showNewPassword)}
-                                >
-                                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <Label htmlFor="confirm-pw" className="text-xs sm:text-sm">Confirm New Password</Label>
-                            <Input
-                                id="confirm-pw"
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                placeholder="Re-enter new password"
-                                className="h-9 sm:h-10 text-xs sm:text-sm"
-                            />
-                            {confirmPassword && newPassword && confirmPassword !== newPassword && (
-                                <p className="text-[10px] sm:text-xs text-destructive">Passwords do not match</p>
-                            )}
-                        </div>
-
-                        <Button
-                            onClick={handlePasswordChange}
-                            disabled={changingPassword || !currentPassword || !newPassword || newPassword !== confirmPassword}
-                            className="w-full sm:w-auto h-9 sm:h-10 text-xs sm:text-sm"
+                <Tabs defaultValue="account" className="w-full space-y-4">
+                    <TabsList className="w-full justify-start overflow-x-auto rounded-none border-b bg-transparent p-0">
+                        <TabsTrigger
+                            value="account"
+                            className="relative h-10 rounded-none border-b-2 border-b-transparent bg-transparent px-4 pb-3 pt-2 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none"
                         >
-                            {changingPassword ? (
-                                <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Changing...</>
-                            ) : (
-                                <><Lock className="h-3.5 w-3.5 mr-1.5" /> Update Password</>
-                            )}
-                        </Button>
-                    </CardContent>
-                </Card>
+                            Account Settings
+                        </TabsTrigger>
+                        {user?.role === 'institute_admin' && (
+                            <TabsTrigger
+                                value="permissions"
+                                className="relative h-10 rounded-none border-b-2 border-b-transparent bg-transparent px-4 pb-3 pt-2 font-medium text-muted-foreground shadow-none transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                            >
+                                Faculty Powers
+                            </TabsTrigger>
+                        )}
+                    </TabsList>
 
-                {/* ═══════ NOTIFICATION PREFERENCES ═══════ */}
-                <Card className="border-border/40">
-                    <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2 sm:pb-3">
-                        <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2">
-                            <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                            Notifications
-                        </CardTitle>
-                        <CardDescription className="text-[10px] sm:text-xs">
-                            Choose how you want to receive notifications.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4 sm:space-y-5 px-4 sm:px-6 pb-4 sm:pb-6">
-                        {loadingPrefs ? (
-                            <div className="flex items-center justify-center py-8 gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                <span className="text-xs text-muted-foreground">Loading preferences...</span>
-                            </div>
-                        ) : (
-                            <>
-                                {/* Email Notifications */}
-                                <div className="flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-2.5 sm:gap-3">
-                                        <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/10">
-                                            <Mail className="h-4 w-4 text-blue-600" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs sm:text-sm font-medium text-foreground">Email Notifications</p>
-                                            <p className="text-[10px] sm:text-xs text-muted-foreground">Receive updates via email</p>
+                    {/* ──── ACCOUNT SETTINGS TAB ──── */}
+                    <TabsContent value="account" className="space-y-4 sm:space-y-6 pt-2 m-0 mt-0">
+
+                        {/* ═══════ PROFILE OVERVIEW ═══════ */}
+                        <Card className="border-border/40">
+                            <CardContent className="p-4 sm:p-6">
+                                <div className="flex items-center gap-3 sm:gap-4">
+                                    <Avatar className="h-12 w-12 sm:h-14 sm:w-14 ring-2 ring-primary/20">
+                                        <AvatarImage src={user?.avatar} />
+                                        <AvatarFallback className="bg-primary/10 text-primary text-lg sm:text-xl font-bold">
+                                            {user?.name?.charAt(0) || "U"}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-base sm:text-lg font-semibold text-foreground truncate">{user?.name || "User"}</p>
+                                        <p className="text-xs sm:text-sm text-muted-foreground truncate">{user?.email}</p>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                            <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                                                <Shield className="h-3 w-3 mr-1" />
+                                                {roleLabel}
+                                            </Badge>
                                         </div>
                                     </div>
-                                    <Switch checked={emailNotif} onCheckedChange={setEmailNotif} />
                                 </div>
+                            </CardContent>
+                        </Card>
 
-                                <Separator />
-
-                                {/* WhatsApp Notifications */}
-                                <div className="flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-2.5 sm:gap-3">
-                                        <div className="p-1.5 sm:p-2 rounded-lg bg-green-500/10">
-                                            <Smartphone className="h-4 w-4 text-green-600" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs sm:text-sm font-medium text-foreground">WhatsApp Notifications</p>
-                                            <p className="text-[10px] sm:text-xs text-muted-foreground">Receive updates via WhatsApp</p>
-                                        </div>
-                                    </div>
-                                    <Switch checked={whatsappNotif} onCheckedChange={setWhatsappNotif} />
-                                </div>
-
-                                {/* Phone number (shown when WhatsApp is enabled) */}
-                                {whatsappNotif && (
-                                    <div className="space-y-1.5 pl-9 sm:pl-11">
-                                        <Label htmlFor="phone" className="text-xs sm:text-sm">Phone Number</Label>
+                        {/* ═══════ CHANGE PASSWORD ═══════ */}
+                        <Card className="border-border/40">
+                            <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2 sm:pb-3">
+                                <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2">
+                                    <Lock className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                                    Change Password
+                                </CardTitle>
+                                <CardDescription className="text-[10px] sm:text-xs">
+                                    Update your password to keep your account secure.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6 pb-4 sm:pb-6">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="current-pw" className="text-xs sm:text-sm">Current Password</Label>
+                                    <div className="relative">
                                         <Input
-                                            id="phone"
-                                            type="tel"
-                                            value={phone}
-                                            onChange={(e) => setPhone(e.target.value)}
-                                            placeholder="+91 9876543210"
-                                            className="h-9 sm:h-10 text-xs sm:text-sm max-w-xs"
+                                            id="current-pw"
+                                            type={showCurrentPassword ? "text" : "password"}
+                                            value={currentPassword}
+                                            onChange={(e) => setCurrentPassword(e.target.value)}
+                                            placeholder="Enter current password"
+                                            className="pr-10 h-9 sm:h-10 text-xs sm:text-sm"
                                         />
+                                        <button
+                                            type="button"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                        >
+                                            {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </button>
                                     </div>
-                                )}
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="new-pw" className="text-xs sm:text-sm">New Password</Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="new-pw"
+                                            type={showNewPassword ? "text" : "password"}
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="Enter new password (min 6 chars)"
+                                            className="pr-10 h-9 sm:h-10 text-xs sm:text-sm"
+                                        />
+                                        <button
+                                            type="button"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                            onClick={() => setShowNewPassword(!showNewPassword)}
+                                        >
+                                            {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="confirm-pw" className="text-xs sm:text-sm">Confirm New Password</Label>
+                                    <Input
+                                        id="confirm-pw"
+                                        type="password"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        placeholder="Re-enter new password"
+                                        className="h-9 sm:h-10 text-xs sm:text-sm"
+                                    />
+                                    {confirmPassword && newPassword && confirmPassword !== newPassword && (
+                                        <p className="text-[10px] sm:text-xs text-destructive">Passwords do not match</p>
+                                    )}
+                                </div>
 
                                 <Button
-                                    onClick={handleSavePrefs}
-                                    disabled={savingPrefs}
-                                    variant="outline"
+                                    onClick={handlePasswordChange}
+                                    disabled={changingPassword || !currentPassword || !newPassword || newPassword !== confirmPassword}
                                     className="w-full sm:w-auto h-9 sm:h-10 text-xs sm:text-sm"
                                 >
-                                    {savingPrefs ? (
-                                        <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Saving...</>
+                                    {changingPassword ? (
+                                        <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Changing...</>
                                     ) : (
-                                        <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Save Preferences</>
+                                        <><Lock className="h-3.5 w-3.5 mr-1.5" /> Update Password</>
                                     )}
                                 </Button>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
+                            </CardContent>
+                        </Card>
 
-                {/* ═══════ ACCOUNT ACTIONS ═══════ */}
-                <Card className="border-border/40 border-destructive/20">
-                    <CardContent className="p-4 sm:p-6">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                            <div>
-                                <p className="text-xs sm:text-sm font-medium text-foreground">Sign Out</p>
-                                <p className="text-[10px] sm:text-xs text-muted-foreground">Log out of your account on this device.</p>
-                            </div>
-                            <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={logout}
-                                className="h-9 sm:h-10 text-xs sm:text-sm w-full sm:w-auto"
-                            >
-                                <LogOut className="h-3.5 w-3.5 mr-1.5" />
-                                Sign Out
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                        {/* ═══════ NOTIFICATION PREFERENCES ═══════ */}
+                        <Card className="border-border/40">
+                            <CardHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2 sm:pb-3">
+                                <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2">
+                                    <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                                    Notifications
+                                </CardTitle>
+                                <CardDescription className="text-[10px] sm:text-xs">
+                                    Choose how you want to receive notifications.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4 sm:space-y-5 px-4 sm:px-6 pb-4 sm:pb-6">
+                                {loadingPrefs ? (
+                                    <div className="flex items-center justify-center py-8 gap-2">
+                                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                        <span className="text-xs text-muted-foreground">Loading preferences...</span>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Email Notifications */}
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div className="flex items-center gap-2.5 sm:gap-3">
+                                                <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/10">
+                                                    <Mail className="h-4 w-4 text-blue-600" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs sm:text-sm font-medium text-foreground">Email Notifications</p>
+                                                    <p className="text-[10px] sm:text-xs text-muted-foreground">Receive updates via email</p>
+                                                </div>
+                                            </div>
+                                            <Switch checked={emailNotif} onCheckedChange={setEmailNotif} />
+                                        </div>
 
-                {/* Bottom safe area for mobile */}
-                <div className="h-4 sm:h-0" />
+                                        <Separator />
+
+                                        {/* WhatsApp Notifications */}
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div className="flex items-center gap-2.5 sm:gap-3">
+                                                <div className="p-1.5 sm:p-2 rounded-lg bg-green-500/10">
+                                                    <Smartphone className="h-4 w-4 text-green-600" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs sm:text-sm font-medium text-foreground">WhatsApp Notifications</p>
+                                                    <p className="text-[10px] sm:text-xs text-muted-foreground">Receive updates via WhatsApp</p>
+                                                </div>
+                                            </div>
+                                            <Switch checked={whatsappNotif} onCheckedChange={setWhatsappNotif} />
+                                        </div>
+
+                                        {/* Phone number (shown when WhatsApp is enabled) */}
+                                        {whatsappNotif && (
+                                            <div className="space-y-1.5 pl-9 sm:pl-11">
+                                                <Label htmlFor="phone" className="text-xs sm:text-sm">Phone Number</Label>
+                                                <Input
+                                                    id="phone"
+                                                    type="tel"
+                                                    value={phone}
+                                                    onChange={(e) => setPhone(e.target.value)}
+                                                    placeholder="+91 9876543210"
+                                                    className="h-9 sm:h-10 text-xs sm:text-sm max-w-xs"
+                                                />
+                                            </div>
+                                        )}
+
+                                        <Button
+                                            onClick={handleSavePrefs}
+                                            disabled={savingPrefs}
+                                            variant="outline"
+                                            className="w-full sm:w-auto h-9 sm:h-10 text-xs sm:text-sm"
+                                        >
+                                            {savingPrefs ? (
+                                                <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Saving...</>
+                                            ) : (
+                                                <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Save Preferences</>
+                                            )}
+                                        </Button>
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* ═══════ ACCOUNT ACTIONS ═══════ */}
+                        <Card className="border-border/40 border-destructive/20">
+                            <CardContent className="p-4 sm:p-6">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                    <div>
+                                        <p className="text-xs sm:text-sm font-medium text-foreground">Sign Out</p>
+                                        <p className="text-[10px] sm:text-xs text-muted-foreground">Log out of your account on this device.</p>
+                                    </div>
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={logout}
+                                        className="h-9 sm:h-10 text-xs sm:text-sm w-full sm:w-auto"
+                                    >
+                                        <LogOut className="h-3.5 w-3.5 mr-1.5" />
+                                        Sign Out
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* ──── FACULTY POWERS TAB ──── */}
+                    {user?.role === 'institute_admin' && (
+                        <TabsContent value="permissions" className="m-0 mt-4 space-y-4">
+                            <SettingsPermissions />
+                        </TabsContent>
+                    )}
+
+
+                    {/* Bottom safe area for mobile */}
+                    <div className="h-4 sm:h-0" />
+                </Tabs>
             </div>
         </DashboardLayout>
     );

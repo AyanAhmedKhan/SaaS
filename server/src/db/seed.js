@@ -182,6 +182,36 @@ async function seed() {
       console.log('[SEED] Teacher assignments seeded:', taIdx);
 
       // ════════════════════════════════════════
+      // 8.5 INSTITUTE ROLE PERMISSIONS
+      // ════════════════════════════════════════
+      const defaultCtPermissions = {
+        manage_students: true,
+        manage_attendance: true,
+        manage_remarks: true,
+        manage_exams: false,
+      };
+
+      const defaultStPermissions = {
+        manage_students: false,
+        manage_attendance: false,
+        manage_remarks: false,
+        manage_exams: false,
+      };
+
+      await client.query(
+        `INSERT INTO institute_role_permissions (id, institute_id, role, permissions)
+         VALUES ($1,$2,$3,$4) ON CONFLICT (institute_id, role) DO NOTHING`,
+        ['irp_01', 'inst_01', 'class_teacher', JSON.stringify(defaultCtPermissions)]
+      );
+
+      await client.query(
+        `INSERT INTO institute_role_permissions (id, institute_id, role, permissions)
+         VALUES ($1,$2,$3,$4) ON CONFLICT (institute_id, role) DO NOTHING`,
+        ['irp_02', 'inst_01', 'subject_teacher', JSON.stringify(defaultStPermissions)]
+      );
+      console.log('[SEED] Institute role permissions seeded');
+
+      // ════════════════════════════════════════
       // 9. STUDENTS
       // ════════════════════════════════════════
       const studentData = [

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query, getClient } from '../db/connection.js';
-import { authenticate, authorize, requireInstitute, logAudit } from '../middleware/auth.js';
+import { authenticate, authorize, requireInstitute, logAudit, checkFacultyPermission } from '../middleware/auth.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 import bcrypt from 'bcryptjs';
 
@@ -408,16 +408,11 @@ router.put('/:id', authorize('institute_admin', 'faculty', 'super_admin'), async
 
     const e = existingResult.rows[0];
 
-    // Restrict faculty edits: they must be is_class_teacher = true for that student's class
+    // Restrict faculty edits via new dynamic permissions matrix
     if (req.user.role === 'faculty') {
-        const assignmentCheck = await query(
-            `SELECT ta.id FROM teacher_assignments ta
-             JOIN teachers t ON ta.teacher_id = t.id
-             WHERE t.user_id = $1 AND ta.class_id = $2 AND ta.is_class_teacher = true`,
-            [req.user.id, e.class_id]
-        );
-        if (assignmentCheck.rows.length === 0) {
-            throw new AppError('Only the assigned class teacher can edit student details', 403);
+        const hasPermission = await checkFacultyPermission(req, e.class_id, 'manage_students');
+        if (!hasPermission) {
+            throw new AppError('You do not have permission to edit students in this class. Please contact the Institute Admin.', 403);
         }
     }
 

@@ -77,10 +77,33 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/exams — create exam
-router.post('/', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
+router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
   const { name, exam_type, class_id, academic_year_id, subject_id, exam_date, total_marks, passing_marks, weightage } = req.body;
   if (!name || !exam_type || !class_id) throw new AppError('name, exam_type, class_id required', 400);
+
+  // Enforce dynamic manage_exams permission for faculty
+  if (req.user.role === 'faculty') {
+    let allowed = false;
+    const hasGlobalPermission = await checkFacultyPermission(req, class_id, 'manage_exams');
+
+    if (hasGlobalPermission) {
+      allowed = true;
+    } else if (subject_id) {
+      const { rows: tRows } = await query('SELECT id FROM teachers WHERE user_id=$1 AND institute_id=$2', [req.user.id, instId]);
+      if (tRows[0]) {
+        const { rows } = await query(
+          'SELECT 1 FROM teacher_assignments WHERE teacher_id = $1 AND class_id = $2 AND subject_id = $3',
+          [tRows[0].id, class_id, subject_id]
+        );
+        if (rows.length > 0) allowed = true;
+      }
+    }
+
+    if (!allowed) {
+      throw new AppError('You do not have permission to create an exam for this class/subject', 403);
+    }
+  }
 
   const id = `exam_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
   await query(
@@ -95,12 +118,37 @@ router.post('/', authorize('institute_admin', 'super_admin'), asyncHandler(async
 }));
 
 // PUT /api/exams/:id — update exam
-router.put('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
+router.put('/:id', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
-  const existing = await query('SELECT id FROM exams WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
+  const existing = await query('SELECT id, class_id FROM exams WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Exam not found', 404);
 
   const { name, exam_type, exam_date, subject_id, total_marks, passing_marks, weightage, status } = req.body;
+
+  // Enforce dynamic manage_exams permission for faculty
+  if (req.user.role === 'faculty') {
+    let allowed = false;
+    const classId = existing.rows[0].class_id;
+    const hasGlobalPermission = await checkFacultyPermission(req, classId, 'manage_exams');
+
+    if (hasGlobalPermission) {
+      allowed = true;
+    } else if (subject_id) {
+      const { rows: tRows } = await query('SELECT id FROM teachers WHERE user_id=$1 AND institute_id=$2', [req.user.id, instId]);
+      if (tRows[0]) {
+        const { rows } = await query(
+          'SELECT 1 FROM teacher_assignments WHERE teacher_id = $1 AND class_id = $2 AND subject_id = $3',
+          [tRows[0].id, classId, subject_id]
+        );
+        if (rows.length > 0) allowed = true;
+      }
+    }
+
+    if (!allowed) {
+      throw new AppError('You do not have permission to edit this exam', 403);
+    }
+  }
+
   await query(
     `UPDATE exams SET name=COALESCE($1,name), exam_type=COALESCE($2,exam_type),
      exam_date=COALESCE($3,exam_date), subject_id=COALESCE($4,subject_id),
@@ -117,8 +165,33 @@ router.put('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(asy
 // DELETE /api/exams/:id
 router.delete('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-  const existing = await query('SELECT id FROM exams WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
+  const existing = await query('SELECT id, class_id, subject_id FROM exams WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Exam not found', 404);
+
+  // Enforce dynamic manage_exams permission for faculty
+  if (req.user.role === 'faculty') {
+    let allowed = false;
+    const classId = existing.rows[0].class_id;
+    const subjectId = existing.rows[0].subject_id;
+    const hasGlobalPermission = await checkFacultyPermission(req, classId, 'manage_exams');
+
+    if (hasGlobalPermission) {
+      allowed = true;
+    } else if (subjectId) {
+      const { rows: tRows } = await query('SELECT id FROM teachers WHERE user_id=$1 AND institute_id=$2', [req.user.id, instId]);
+      if (tRows[0]) {
+        const { rows } = await query(
+          'SELECT 1 FROM teacher_assignments WHERE teacher_id = $1 AND class_id = $2 AND subject_id = $3',
+          [tRows[0].id, classId, subjectId]
+        );
+        if (rows.length > 0) allowed = true;
+      }
+    }
+
+    if (!allowed) {
+      throw new AppError('You do not have permission to delete this exam', 403);
+    }
+  }
 
   // cascading delete on exam_results via FK
   await query('DELETE FROM exams WHERE id=$1', [req.params.id]);
@@ -137,6 +210,31 @@ router.post('/:id/results', authorize('institute_admin', 'faculty', 'super_admin
 
   const exam = await query('SELECT * FROM exams WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!exam.rows[0]) throw new AppError('Exam not found', 404);
+
+  // Enforce dynamic manage_exams permission for faculty
+  if (req.user.role === 'faculty') {
+    let allowed = false;
+    const classId = exam.rows[0].class_id;
+    const subjectId = exam.rows[0].subject_id;
+    const hasGlobalPermission = await checkFacultyPermission(req, classId, 'manage_exams');
+
+    if (hasGlobalPermission) {
+      allowed = true;
+    } else if (subjectId) {
+      const { rows: tRows } = await query('SELECT id FROM teachers WHERE user_id=$1 AND institute_id=$2', [req.user.id, instId]);
+      if (tRows[0]) {
+        const { rows } = await query(
+          'SELECT 1 FROM teacher_assignments WHERE teacher_id = $1 AND class_id = $2 AND subject_id = $3',
+          [tRows[0].id, classId, subjectId]
+        );
+        if (rows.length > 0) allowed = true;
+      }
+    }
+
+    if (!allowed) {
+      throw new AppError('You do not have permission to enter results for this exam', 403);
+    }
+  }
 
   const client = await getClient();
   try {

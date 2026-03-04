@@ -112,7 +112,6 @@ export function requireInstitute(req, res, next) {
     }
 }
 
-// Audit logging helper
 export async function logAudit({ instituteId, userId, action, entityType, entityId, oldValues, newValues, req }) {
     try {
         const { randomUUID } = await import('crypto');
@@ -136,4 +135,46 @@ export async function logAudit({ instituteId, userId, action, entityType, entity
         console.error('[AUDIT] Failed to log audit:', error.message);
         // Don't throw — audit failure shouldn't break the main operation
     }
+}
+
+// Check if faculty has specific permission based on their assignment role (class_teacher or subject_teacher)
+export async function checkFacultyPermission(req, classId, permissionKey) {
+    if (['super_admin', 'institute_admin'].includes(req.user.role)) return true;
+    if (req.user.role !== 'faculty') return false;
+
+    // Check if they are class teacher or subject teacher for this class
+    const { rows: assignmentRows } = await query(
+        `SELECT is_class_teacher FROM teacher_assignments ta
+         JOIN teachers t ON ta.teacher_id = t.id
+         WHERE t.user_id = $1 AND ta.class_id = $2`,
+        [req.user.id, classId]
+    );
+
+    if (assignmentRows.length === 0) return false; // Not assigned to this class at all
+
+    // If they have multiple assignments in this class (e.g. they teach two subjects),
+    // they are a 'class_teacher' if ANY assignment is is_class_teacher = true
+    const isClassTeacher = assignmentRows.some(row => row.is_class_teacher);
+    const assignedRole = isClassTeacher ? 'class_teacher' : 'subject_teacher';
+
+    // Now check the institute permissions for this role
+    const { rows: permRows } = await query(
+        `SELECT permissions FROM institute_role_permissions 
+         WHERE institute_id = $1 AND role = $2`,
+        [req.instituteId, assignedRole]
+    );
+
+    // If no permission object exists yet in DB, fall back to safe defaults
+    let permissions = {};
+    if (permRows.length > 0) {
+        permissions = permRows[0].permissions;
+    } else {
+        if (assignedRole === 'class_teacher') {
+            permissions = { manage_students: true, manage_attendance: true, manage_remarks: true, manage_exams: false };
+        } else {
+            permissions = { manage_students: false, manage_attendance: false, manage_remarks: false, manage_exams: false };
+        }
+    }
+
+    return permissions[permissionKey] === true;
 }

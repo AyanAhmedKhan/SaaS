@@ -113,7 +113,24 @@ router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHa
   if (req.user.role === 'faculty') {
     const tRec = await query('SELECT id FROM teachers WHERE user_id=$1', [req.user.id]);
     teacherId = tRec.rows[0]?.id;
+
+    // Check global permission
+    const hasGlobalPermission = await checkFacultyPermission(req, class_id, 'manage_assignments');
+
+    // If no global permission, but a subject_id is provided, check if they teach this specific subject for this class
+    if (!hasGlobalPermission && subject_id && teacherId) {
+      const subCheck = await query(
+        'SELECT 1 FROM teacher_assignments WHERE teacher_id=$1 AND class_id=$2 AND subject_id=$3',
+        [teacherId, class_id, subject_id]
+      );
+      if (subCheck.rowCount === 0) {
+        throw new AppError('You do not have permission to create an assignment for this class/subject', 403);
+      }
+    } else if (!hasGlobalPermission && (!subject_id || !teacherId)) {
+      throw new AppError('You do not have permission to create assignments for this class', 403);
+    }
   }
+
   if (!teacherId) teacherId = clsRec.rows[0]?.class_teacher_id;
   if (!teacherId) {
     const fallback = await query('SELECT id FROM teachers WHERE institute_id=$1 LIMIT 1', [instId]);
@@ -142,7 +159,20 @@ router.put('/:id', authorize('institute_admin', 'faculty', 'super_admin'), async
     const tRec = await query('SELECT id FROM teachers WHERE user_id=$1', [req.user.id]);
     const teacherId = tRec.rows[0]?.id;
     const clsRec = await query('SELECT class_teacher_id FROM classes WHERE id=$1', [existing.rows[0].class_id]);
-    if (existing.rows[0].teacher_id !== teacherId && clsRec.rows[0]?.class_teacher_id !== teacherId) {
+
+    // Check if they are the original creator OR the class teacher
+    let allowed = existing.rows[0].teacher_id === teacherId || clsRec.rows[0]?.class_teacher_id === teacherId;
+
+    // If neither, check if they are the subject teacher for this assignment's subject
+    if (!allowed && existing.rows[0].subject_id && teacherId) {
+      const subCheck = await query(
+        'SELECT 1 FROM teacher_assignments WHERE teacher_id=$1 AND class_id=$2 AND subject_id=$3',
+        [teacherId, existing.rows[0].class_id, existing.rows[0].subject_id]
+      );
+      if (subCheck.rowCount > 0) allowed = true;
+    }
+
+    if (!allowed) {
       throw new AppError('Permission denied to modify this assignment', 403);
     }
   }
@@ -171,7 +201,20 @@ router.delete('/:id', authorize('institute_admin', 'faculty', 'super_admin'), as
     const tRec = await query('SELECT id FROM teachers WHERE user_id=$1', [req.user.id]);
     const teacherId = tRec.rows[0]?.id;
     const clsRec = await query('SELECT class_teacher_id FROM classes WHERE id=$1', [existing.rows[0].class_id]);
-    if (existing.rows[0].teacher_id !== teacherId && clsRec.rows[0]?.class_teacher_id !== teacherId) {
+
+    // Check if they are the original creator OR the class teacher
+    let allowed = existing.rows[0].teacher_id === teacherId || clsRec.rows[0]?.class_teacher_id === teacherId;
+
+    // If neither, check if they are the subject teacher for this assignment's subject
+    if (!allowed && existing.rows[0].subject_id && teacherId) {
+      const subCheck = await query(
+        'SELECT 1 FROM teacher_assignments WHERE teacher_id=$1 AND class_id=$2 AND subject_id=$3',
+        [teacherId, existing.rows[0].class_id, existing.rows[0].subject_id]
+      );
+      if (subCheck.rowCount > 0) allowed = true;
+    }
+
+    if (!allowed) {
       throw new AppError('Permission denied to delete this assignment', 403);
     }
   }
@@ -214,8 +257,28 @@ router.put('/:assignmentId/submissions/:submissionId/grade',
     if (marks_obtained === undefined) throw new AppError('marks_obtained required', 400);
 
     // Verify assignment belongs to institute
-    const asgn = await query('SELECT id FROM assignments WHERE id=$1 AND institute_id=$2', [req.params.assignmentId, instId]);
+    const asgn = await query('SELECT id, class_id, subject_id, teacher_id FROM assignments WHERE id=$1 AND institute_id=$2', [req.params.assignmentId, instId]);
     if (!asgn.rows[0]) throw new AppError('Assignment not found', 404);
+
+    if (req.user.role === 'faculty') {
+      const tRec = await query('SELECT id FROM teachers WHERE user_id=$1', [req.user.id]);
+      const teacherId = tRec.rows[0]?.id;
+      const clsRec = await query('SELECT class_teacher_id FROM classes WHERE id=$1', [asgn.rows[0].class_id]);
+
+      let allowed = asgn.rows[0].teacher_id === teacherId || clsRec.rows[0]?.class_teacher_id === teacherId;
+
+      if (!allowed && asgn.rows[0].subject_id && teacherId) {
+        const subCheck = await query(
+          'SELECT 1 FROM teacher_assignments WHERE teacher_id=$1 AND class_id=$2 AND subject_id=$3',
+          [teacherId, asgn.rows[0].class_id, asgn.rows[0].subject_id]
+        );
+        if (subCheck.rowCount > 0) allowed = true;
+      }
+
+      if (!allowed) {
+        throw new AppError('Permission denied to grade this assignment', 403);
+      }
+    }
 
     const sub = await query('SELECT * FROM assignment_submissions WHERE id=$1 AND assignment_id=$2', [req.params.submissionId, req.params.assignmentId]);
     if (!sub.rows[0]) throw new AppError('Submission not found', 404);

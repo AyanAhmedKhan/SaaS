@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { query, getClient } from '../db/connection.js';
-import { authenticate, authorize, requireInstitute, logAudit } from '../middleware/auth.js';
+import { authenticate, authorize, requireInstitute, logAudit, checkFacultyPermission } from '../middleware/auth.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
@@ -192,6 +192,34 @@ router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHa
 
   if (!Array.isArray(records) || !records.length || !class_id || !date) {
     throw new AppError('records[], class_id, and date are required', 400);
+  }
+
+  // Enforce permissions for faculty
+  if (req.user.role === 'faculty') {
+    let allowed = false;
+
+    // First check if they have the global manage_attendance permission for this class
+    const hasGlobalPermission = await checkFacultyPermission(req, class_id, 'manage_attendance');
+
+    if (hasGlobalPermission) {
+      allowed = true;
+    } else if (subject_id) {
+      // If no global permission, but a subject_id is provided, check if they teach this specific subject for this class
+      const teacherId = await resolveTeacherId(req.user);
+      if (teacherId) {
+        const { rows } = await query(
+          'SELECT 1 FROM teacher_assignments WHERE teacher_id = $1 AND class_id = $2 AND subject_id = $3',
+          [teacherId, class_id, subject_id]
+        );
+        if (rows.length > 0) {
+          allowed = true; // They are the subject teacher for this class & subject
+        }
+      }
+    }
+
+    if (!allowed) {
+      throw new AppError('You do not have permission to manage attendance for this class/subject', 403);
+    }
   }
 
   const client = await getClient();

@@ -631,6 +631,14 @@ export async function recordFeePayment(data: Partial<FeePayment>) {
   return api.post<{ payment: FeePayment }>('/fees/payments', data);
 }
 
+export async function updateFeePayment(id: string, data: Partial<FeePayment>) {
+  return api.put<{ payment: FeePayment }>(`/fees/payments/${id}`, data);
+}
+
+export async function deleteFeePayment(id: string) {
+  return api.delete(`/fees/payments/${id}`);
+}
+
 export async function getStudentFees(studentId: string) {
   return api.get<{ fees: unknown[]; payments: FeePayment[]; summary: unknown }>(`/fees/student/${studentId}`);
 }

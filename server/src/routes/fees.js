@@ -160,6 +160,36 @@ router.post('/payments', authorize('institute_admin', 'super_admin'), asyncHandl
   res.status(201).json({ success: true, data: { payment: rows[0] } });
 }));
 
+// PUT /api/fees/payments/:id — update a payment
+router.put('/payments/:id', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
+  const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
+  const existing = await query('SELECT id FROM fee_payments WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
+  if (!existing.rows[0]) throw new AppError('Fee payment not found', 404);
+
+  const { paid_amount, payment_method, receipt_number, remarks, due_date, status } = req.body;
+
+  await query(
+    `UPDATE fee_payments SET paid_amount=COALESCE($1,paid_amount), payment_method=COALESCE($2,payment_method),
+     receipt_number=COALESCE($3,receipt_number), remarks=COALESCE($4,remarks),
+     due_date=COALESCE($5,due_date), status=COALESCE($6,status), updated_at=NOW()
+     WHERE id=$7 AND institute_id=$8`,
+    [paid_amount, payment_method, receipt_number, remarks, due_date, status, req.params.id, instId]
+  );
+
+  const { rows } = await query('SELECT * FROM fee_payments WHERE id=$1', [req.params.id]);
+  res.json({ success: true, data: { payment: rows[0] } });
+}));
+
+// DELETE /api/fees/payments/:id — delete a payment
+router.delete('/payments/:id', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
+  const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  const existing = await query('SELECT id FROM fee_payments WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
+  if (!existing.rows[0]) throw new AppError('Fee payment not found', 404);
+
+  await query('DELETE FROM fee_payments WHERE id=$1', [req.params.id]);
+  res.json({ success: true, message: 'Fee payment deleted' });
+}));
+
 // GET /api/fees/student/:studentId — student fee overview (dues & payments)
 router.get('/student/:studentId', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { query } from '../db/connection.js';
-import { authenticate, authorize, requireInstitute, logAudit } from '../middleware/auth.js';
+import { authenticate, authorize, requireInstitute, logAudit, checkFacultyPermission } from '../middleware/auth.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
@@ -69,29 +69,26 @@ router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHa
     if (tr.rows[0]) {
       teacher_id = tr.rows[0].id;
 
-      // Faculty Permission Check
-      // Check if they are class teacher
-      const classTeacherCheck = await query(
-        'SELECT 1 FROM teacher_assignments WHERE teacher_id=$1 AND class_id=$2 AND is_class_teacher=true',
-        [teacher_id, studentClassId]
-      );
+      // Faculty Permission Check via dynamic matrix
+      const hasPermission = await checkFacultyPermission(req, studentClassId, 'manage_remarks');
 
-      // Check if they are a subject teacher for this class
-      const subjectTeacherCheck = await query(
-        'SELECT subject_id FROM teacher_assignments WHERE teacher_id=$1 AND class_id=$2',
-        [teacher_id, studentClassId]
-      );
+      if (!hasPermission) {
+        // If no global manage_remarks power, check if they are at least a subject teacher
+        const subjectTeacherCheck = await query(
+          'SELECT subject_id FROM teacher_assignments WHERE teacher_id=$1 AND class_id=$2',
+          [teacher_id, studentClassId]
+        );
 
-      if (classTeacherCheck.rowCount === 0) {
-        // Not a class teacher. If not a subject teacher either, they can't add remarks.
         if (subjectTeacherCheck.rowCount === 0) {
           throw new AppError('You are not assigned to teach this class', 403);
         }
-        // Subject teachers can only add subject-specific remarks
+
+        // If they are a subject teacher without global remark power, they can ONLY add 'subject' remarks 
+        // (assuming they don't have manage_remarks = true globally, we restrict them strictly)
+        // *Note: if Institute Admin gave them "manage_remarks: true", they would bypass this block completely.*
         if (remark_type !== 'subject') {
-          throw new AppError('Subject teachers can only add subject-specific remarks', 403);
+          throw new AppError('You do not have permission to add general remarks. You can only add subject-specific remarks.', 403);
         }
-        // Subject teachers must provide a valid subject_id they teach
         if (!subject_id || !subjectTeacherCheck.rows.some(r => r.subject_id === subject_id)) {
           throw new AppError('Invalid subject_id or you do not teach this subject to this class', 403);
         }
