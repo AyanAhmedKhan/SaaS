@@ -1,16 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, GraduationCap, Calendar, Clock, AlertCircle, Loader2 } from "lucide-react";
+import { Plus, Search, GraduationCap, Calendar, Clock, AlertCircle, Loader2, BarChart2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -18,17 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { getExams, getClasses } from "@/lib/api";
+import { getExams, getClasses, getSubjectsByClass } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import type { Exam, Class as ClassType } from "@/types";
+import type { Exam, Class as ClassType, Subject } from "@/types";
+import { CreateExamDialog } from "@/components/institute/CreateExamDialog";
+import { ExamDetailsDialog } from "@/components/institute/ExamDetailsDialog";
 
 export default function Exams() {
   const { isRole } = useAuth();
@@ -39,9 +27,11 @@ export default function Exams() {
   const [searchQuery, setSearchQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
 
-  const canCreate = isRole('super_admin', 'institute_admin');
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
+
+  const canCreate = isRole('super_admin', 'institute_admin', 'faculty'); // Faculty can often schedule too
 
   const fetchData = useCallback(async () => {
     try {
@@ -79,203 +69,200 @@ export default function Exams() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "upcoming":
-        return <Badge className="bg-blue-500/10 text-blue-600">Upcoming</Badge>;
+      case "scheduled":
+        return <Badge className="bg-blue-500/10 text-blue-600 border-blue-200">Upcoming</Badge>;
       case "ongoing":
-        return <Badge className="bg-emerald-500/10 text-emerald-600">Ongoing</Badge>;
+        return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200">Ongoing</Badge>;
       case "completed":
-        return <Badge variant="secondary">Completed</Badge>;
+        return <Badge variant="secondary" className="bg-muted text-muted-foreground">Completed</Badge>;
       case "cancelled":
-        return <Badge variant="destructive">Cancelled</Badge>;
+        return <Badge variant="destructive" className="bg-red-500/10 text-red-600 border-red-200">Cancelled</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline" className="capitalize">{status}</Badge>;
     }
   };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 page-enter">
-        {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Exams</h1>
-            <p className="text-muted-foreground text-sm">Schedule and manage exams across your institute.</p>
+      <div className="space-y-8 page-enter font-sans max-w-7xl mx-auto">
+        {/* Header - Premium Look */}
+        <div className="flex flex-col gap-6 md:flex-row md:items-end justify-between bg-gradient-to-r from-primary/5 to-blue-500/5 p-8 rounded-3xl border border-border/50 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+
+          <div className="relative z-10 space-y-2">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-xl bg-primary/20 flex items-center justify-center">
+                <GraduationCap className="h-5 w-5 text-primary" />
+              </div>
+              <Badge variant="outline" className="bg-background/80 backdrop-blur">Examination Center</Badge>
+            </div>
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
+              Manage Exams & Grades
+            </h1>
+            <p className="text-muted-foreground max-w-xl text-sm md:text-base">
+              Schedule assessments, track syllabus completion, and analyze student performance across classes.
+            </p>
           </div>
+
           {canCreate && (
-            <Button className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button
+              onClick={() => setIsCreateOpen(true)}
+              size="lg"
+              className="relative z-10 shrink-0 rounded-2xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5"
+            >
+              <Plus className="h-5 w-5 mr-2" />
               Schedule Exam
             </Button>
           )}
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        {/* Filters Bar */}
+        <div className="flex flex-col gap-4 sm:flex-row p-4 bg-card rounded-2xl border border-border/50 shadow-sm">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search exams..."
+              placeholder="Search by exam name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 rounded-xl border-border/50"
+              className="pl-11 rounded-xl h-11 bg-muted/30 border-transparent focus-visible:ring-primary/20"
             />
           </div>
-          <Select value={classFilter} onValueChange={setClassFilter}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Classes</SelectItem>
-              {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="All Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="upcoming">Upcoming</SelectItem>
-              <SelectItem value="ongoing">Ongoing</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex gap-3">
+            <Select value={classFilter} onValueChange={setClassFilter}>
+              <SelectTrigger className="w-[160px] h-11 rounded-xl bg-muted/30 border-transparent">
+                <SelectValue placeholder="All Classes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Classes</SelectItem>
+                {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[160px] h-11 rounded-xl bg-muted/30 border-transparent">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="scheduled">Scheduled</SelectItem>
+                <SelectItem value="ongoing">Ongoing</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        {/* Loading */}
+        {/* Loading / Error States */}
         {loading && (
-          <div className="flex items-center justify-center h-40 gap-3">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <p className="text-muted-foreground text-sm">Loading exams...</p>
+          <div className="flex flex-col items-center justify-center h-64 gap-4">
+            <div className="p-4 rounded-full bg-primary/10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+            <p className="text-muted-foreground font-medium animate-pulse">Fetching examinations...</p>
           </div>
         )}
 
-        {/* Error */}
         {error && !loading && (
-          <div className="flex flex-col items-center justify-center h-40 text-center gap-3">
-            <AlertCircle className="h-8 w-8 text-destructive/60" />
-            <p className="text-muted-foreground text-sm">{error}</p>
+          <div className="flex flex-col items-center justify-center h-64 text-center gap-4 bg-destructive/5 rounded-2xl border border-destructive/20">
+            <AlertCircle className="h-10 w-10 text-destructive/60" />
+            <p className="text-muted-foreground font-medium">{error}</p>
+            <Button variant="outline" onClick={fetchData}>Try Again</Button>
           </div>
-        )}
-
-        {/* Exams Table */}
-        {!loading && !error && exams.length > 0 && (
-          <Card className="border-border/40 shadow-card">
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead>Exam</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Start Date</TableHead>
-                    <TableHead>End Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {exams.map((exam) => (
-                    <TableRow key={exam.id} className="hover:bg-muted/20 transition-colors">
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                            <GraduationCap className="h-4 w-4 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{exam.name}</p>
-                            {exam.subject_name && (
-                              <p className="text-xs text-muted-foreground line-clamp-1">{exam.subject_name}</p>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">{exam.exam_type}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          {exam.exam_date ? new Date(exam.exam_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                          {exam.exam_date ? new Date(exam.exam_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                        </div>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(exam.status)}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedExam(exam)}>View</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
         )}
 
         {!loading && !error && exams.length === 0 && (
-          <div className="text-center py-16">
-            <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
-              <GraduationCap className="h-8 w-8 text-muted-foreground/30" />
+          <div className="text-center py-24 bg-card rounded-3xl border border-dashed border-border flex flex-col items-center justify-center shadow-sm">
+            <div className="h-20 w-20 rounded-full bg-muted/50 flex items-center justify-center mb-6 ring-8 ring-background/50">
+              <GraduationCap className="h-10 w-10 text-muted-foreground/40" />
             </div>
-            <p className="text-muted-foreground text-sm font-medium">No exams found.</p>
+            <h3 className="text-xl font-bold mb-2">No Exams Found</h3>
+            <p className="text-muted-foreground max-w-sm mx-auto mb-6">
+              There are no examinations scheduled that match your current filters.
+            </p>
+            {canCreate && (
+              <Button variant="outline" onClick={() => setIsCreateOpen(true)} className="rounded-xl">
+                Schedule your first exam
+              </Button>
+            )}
           </div>
         )}
 
-        {/* Exam Detail Dialog */}
-        <Dialog open={!!selectedExam} onOpenChange={(open) => !open && setSelectedExam(null)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <GraduationCap className="h-5 w-5 text-primary" />
-                {selectedExam?.name}
-              </DialogTitle>
-            </DialogHeader>
-            {selectedExam && (
-              <div className="space-y-4 mt-2">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Type</p>
-                    <Badge variant="outline" className="capitalize">{selectedExam.exam_type}</Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Status</p>
-                    {getStatusBadge(selectedExam.status)}
-                  </div>
-                  {selectedExam.subject_name && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Subject</p>
-                      <p className="text-sm font-medium">{selectedExam.subject_name}</p>
+        {/* Exams Grid */}
+        {!loading && !error && exams.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {exams.map((exam) => (
+              <Card
+                key={exam.id}
+                className="group overflow-hidden rounded-2xl border-border/40 shadow-sm hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 bg-card/50 backdrop-blur flex flex-col"
+              >
+                <div className="h-2 w-full bg-gradient-to-r from-primary/80 to-blue-500/80"></div>
+
+                <CardContent className="p-6 flex-1 flex flex-col">
+                  <div className="flex justify-between items-start mb-4 gap-4">
+                    <div>
+                      <Badge variant="secondary" className="mb-2 bg-primary/10 text-primary hover:bg-primary/20 capitalize font-semibold tracking-wide text-[10px]">
+                        {exam.exam_type.replace('_', ' ')}
+                      </Badge>
+                      <h3 className="font-bold text-lg line-clamp-1 group-hover:text-primary transition-colors">{exam.name}</h3>
+                      <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+                        <span className="font-medium text-foreground/80">{exam.class_name}</span>
+                        {exam.subject_name && (
+                          <><span className="text-border">•</span> <span className="truncate">{exam.subject_name}</span></>
+                        )}
+                      </p>
                     </div>
-                  )}
-                  {selectedExam.class_name && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Class</p>
-                      <p className="text-sm font-medium">{selectedExam.class_name}</p>
-                    </div>
-                  )}
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Date</p>
-                    <p className="text-sm font-medium">
-                      {selectedExam.exam_date
-                        ? new Date(selectedExam.exam_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                        : '—'}
-                    </p>
+                    {getStatusBadge(exam.status)}
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Total Marks</p>
-                    <p className="text-sm font-medium">{selectedExam.total_marks}</p>
-                  </div>
-                  {selectedExam.passing_marks != null && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Passing Marks</p>
-                      <p className="text-sm font-medium">{selectedExam.passing_marks}</p>
+
+                  <div className="grid grid-cols-2 gap-y-4 gap-x-2 py-5 my-auto border-y border-border/40">
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1.5">
+                        <Calendar className="h-3 w-3" /> Date
+                      </div>
+                      <div className="text-sm font-semibold">
+                        {exam.exam_date ? new Date(exam.exam_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}
+                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1.5">
+                        <BarChart2 className="h-3 w-3" /> Marks
+                      </div>
+                      <div className="text-sm font-semibold flex items-baseline gap-1">
+                        {exam.total_marks}
+                        {exam.passing_marks && <span className="text-xs text-muted-foreground font-normal"> (Pass: {exam.passing_marks})</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-5 mt-auto">
+                    <Button
+                      onClick={() => setSelectedExamId(exam.id)}
+                      className="w-full rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-all group-hover:shadow-md"
+                      variant="ghost"
+                    >
+                      Grade & Analyze
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Dialogs */}
+      <CreateExamDialog
+        open={isCreateOpen}
+        onOpenChange={setIsCreateOpen}
+        onSuccess={fetchData}
+      />
+
+      <ExamDetailsDialog
+        examId={selectedExamId}
+        onOpenChange={(open) => !open && setSelectedExamId(null)}
+        onSuccess={fetchData}
+      />
+
     </DashboardLayout>
   );
 }

@@ -54,15 +54,15 @@ function AddSubjectDialog({ onSuccess }: { onSuccess: () => void }) {
             if (code) payload.code = code.trim().toUpperCase();
             if (description) payload.description = description.trim();
 
-            const res = await createSubject(payload as any);
+            const res = await createSubject(payload as Partial<Subject>);
             if (res.success) {
                 toast({ title: "Subject Created", description: `${name} has been added.` });
                 setName(""); setCode(""); setDescription(""); setErrors({});
                 setOpen(false);
                 onSuccess();
             }
-        } catch (err: any) {
-            toast({ title: "Error", description: err?.message || "Failed to create subject.", variant: "destructive" });
+        } catch (err: unknown) {
+            toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to create subject.", variant: "destructive" });
         } finally {
             setIsSubmitting(false);
         }
@@ -160,14 +160,14 @@ function EditSubjectDialog({ subject, open, onOpenChange, onSuccess }: {
                 description: description.trim() || null,
                 is_active: isActive,
             };
-            const res = await updateSubject(subject.id, payload as any);
+            const res = await updateSubject(subject.id, payload as Partial<Subject>);
             if (res.success) {
                 toast({ title: "Subject Updated", description: `${name} has been updated.` });
                 onOpenChange(false);
                 onSuccess();
             }
-        } catch (err: any) {
-            toast({ title: "Error", description: err?.message || "Failed to update.", variant: "destructive" });
+        } catch (err: unknown) {
+            toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to update.", variant: "destructive" });
         } finally {
             setIsSubmitting(false);
         }

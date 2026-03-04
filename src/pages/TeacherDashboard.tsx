@@ -303,7 +303,7 @@ export default function TeacherDashboard() {
                     </Card>
 
                     <div className="col-span-1 lg:col-span-2 mt-4 sm:mt-6">
-                        <NoticeBoard notices={data?.recentNotices?.map(n => ({ ...n, date: n.date || n.created_at || new Date().toISOString() })) as any} />
+                        <NoticeBoard notices={data?.recentNotices?.map(n => ({ ...n, date: n.date || n.created_at || new Date().toISOString() })) as React.ComponentProps<typeof NoticeBoard>['notices']} />
                     </div>
                 </div>
 

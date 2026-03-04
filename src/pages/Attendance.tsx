@@ -36,7 +36,7 @@ type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | null;
    ══════════════════════════════════════════════ */
 function StudentAttendanceView() {
   const [summary, setSummary] = useState<{ total: number; present: number; absent: number; late: number; percentage: number } | null>(null);
-  const [subjectStats, setSubjectStats] = useState<any[]>([]);
+  const [subjectStats, setSubjectStats] = useState<{ name: string; percentage: number; total: number; present: number }[]>([]);
   const [studentId, setStudentId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
@@ -77,12 +77,12 @@ function StudentAttendanceView() {
             // Fetch subject-wise stats
             const subRes = await getAttendanceSubjectWise({ student_id: profile.student.id });
             if (subRes.success && subRes.data) {
-              const dataList = (subRes.data as { subjectWise: any[] }).subjectWise || [];
+              const dataList = (subRes.data as { subjectWise: { subject_name: string; percentage: string | number; total_classes: string | number; present: string | number }[] }).subjectWise || [];
               setSubjectStats(dataList.map(d => ({
-                name: d.subject_name,
-                percentage: parseFloat(d.percentage) || 0,
-                total: parseInt(d.total_classes) || 0,
-                present: parseInt(d.present) || 0
+                name: String(d.subject_name),
+                percentage: Number(d.percentage) || 0,
+                total: Number(d.total_classes) || 0,
+                present: Number(d.present) || 0
               })));
             }
           }
@@ -433,7 +433,7 @@ function AdminAttendanceView() {
 
     try {
       setSaving(true);
-      const payload: any = { records, class_id: selectedPeriod.class_id, date: dateStr };
+      const payload: Parameters<typeof markAttendanceApi>[0] = { records, class_id: selectedPeriod.class_id, date: dateStr };
       if (selectedPeriod.subject_id) payload.subject_id = selectedPeriod.subject_id;
 
       const res = await markAttendanceApi(payload);

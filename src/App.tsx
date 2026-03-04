@@ -70,7 +70,6 @@ function RoleBasedDashboard() {
     case 'parent':
       return <ParentDashboard />;
     case 'faculty':
-    case 'faculty':
       return <TeacherDashboard />;
     default:
       return <Dashboard />;

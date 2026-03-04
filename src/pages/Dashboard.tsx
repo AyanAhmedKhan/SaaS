@@ -9,19 +9,35 @@ import { NoticeBoard } from "@/components/dashboard/NoticeBoard";
 import { AIInsightCard } from "@/components/dashboard/AIInsightCard";
 import { getDashboardStats } from "@/lib/api";
 
+interface Notice {
+  id: string | number;
+  title: string;
+  content: string;
+  date?: string;
+  priority: 'high' | 'medium' | 'low';
+  created_at?: string;
+}
+
+interface Student {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
 interface DashboardData {
   stats: {
     totalStudents: number;
     totalTeachers: number;
-    totalParents: number;
+    totalClasses: number;
     averageAttendance: number;
-    pendingFees: number;
-    upcomingEvents: number;
+    totalFeeCollected: number;
+    totalFeePending: number;
   };
   attendanceData: { month: string; attendance: number }[];
-  performanceData: { subject: string; score: number }[];
-  recentStudents: any[];
-  recentNotices: any[];
+  performanceData: { subject: string; average: number }[];
+  recentStudents?: Student[];
+  recentNotices?: Notice[];
+  classOverview?: unknown[];
 }
 
 export default function Dashboard() {
@@ -121,23 +137,23 @@ export default function Dashboard() {
             delay={100}
           />
           <StatCard
-            title="Total Parents"
-            value={stats?.totalParents?.toLocaleString() || '0'}
-            subtitle="Registered"
+            title="Total Classes"
+            value={stats?.totalClasses?.toLocaleString() || '0'}
+            subtitle="Active classes"
             icon={Users}
             delay={150}
           />
           <StatCard
-            title="Pending Fees"
-            value={`₹${((stats?.pendingFees || 0) / 1000).toFixed(0)}k`}
-            subtitle="To be collected"
+            title="Fees Collected"
+            value={`₹${((stats?.totalFeeCollected || 0) / 1000).toFixed(0)}k`}
+            subtitle="This academic year"
             icon={DollarSign}
             delay={200}
           />
           <StatCard
-            title="Upcoming Events"
-            value={stats?.upcomingEvents || 0}
-            subtitle="This month"
+            title="Pending Fees"
+            value={`₹${((stats?.totalFeePending || 0) / 1000).toFixed(0)}k`}
+            subtitle="To be collected"
             icon={Calendar}
             delay={250}
           />
@@ -160,7 +176,7 @@ export default function Dashboard() {
         {/* Charts Row */}
         <div className="grid gap-6 lg:grid-cols-2">
           <AttendanceChart data={data?.attendanceData} />
-          <PerformanceChart data={data?.performanceData} />
+          <PerformanceChart data={data?.performanceData?.map(d => ({ subject: d.subject, score: d.average }))} />
         </div>
 
         {/* Bottom Row */}

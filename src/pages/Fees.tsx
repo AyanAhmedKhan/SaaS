@@ -195,15 +195,15 @@ export default function Fees() {
                     >
                       <div className="flex items-center gap-3">
                         <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${fee.status === 'paid' ? 'bg-emerald-500/10' :
-                            fee.status === 'overdue' ? 'bg-red-500/10' : 'bg-amber-500/10'
+                          fee.status === 'overdue' ? 'bg-red-500/10' : 'bg-amber-500/10'
                           }`}>
                           <IndianRupee className={`h-5 w-5 ${fee.status === 'paid' ? 'text-emerald-600' :
-                              fee.status === 'overdue' ? 'text-red-500' : 'text-amber-600'
+                            fee.status === 'overdue' ? 'text-red-500' : 'text-amber-600'
                             }`} />
                         </div>
                         <div>
                           <p className="font-medium text-sm text-foreground">
-                            {(fee as any).fee_type ? (fee as any).fee_type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Fee Payment'}
+                            {(fee as FeePayment & { fee_type?: string }).fee_type ? (fee as FeePayment & { fee_type?: string }).fee_type?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Fee Payment'}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Due: {new Date(fee.due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -410,11 +410,11 @@ export default function Fees() {
                       <p className="text-sm font-medium">{selectedFee.class_name}</p>
                     </div>
                   )}
-                  {(selectedFee as any).fee_type && (
+                  {(selectedFee as FeePayment & { fee_type?: string }).fee_type && (
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">Fee Type</p>
                       <Badge variant="outline" className="capitalize">
-                        {(selectedFee as any).fee_type.replace(/_/g, ' ')}
+                        {(selectedFee as FeePayment & { fee_type?: string }).fee_type?.replace(/_/g, ' ')}
                       </Badge>
                     </div>
                   )}

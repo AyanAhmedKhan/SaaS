@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Clock, MapPin, AlertCircle, Loader2 } from "lucide-react";
+import { Clock, MapPin, AlertCircle, Loader2, GraduationCap } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,18 +10,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getTimetable, getClasses } from "@/lib/api";
+import { getTimetable, getClasses, getExams } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import type { TimetableEntry, Class as ClassType } from "@/types";
+import type { TimetableEntry, Class as ClassType, Exam } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Settings2 } from "lucide-react";
 import { ManageTimetableDialog } from "@/components/timetable/ManageTimetableDialog";
 
-const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function Timetable() {
   const { isRole } = useAuth();
   const [entries, setEntries] = useState<TimetableEntry[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
   const [classes, setClasses] = useState<ClassType[]>([]);
   const [classFilter, setClassFilter] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -37,9 +38,10 @@ export default function Timetable() {
       const params: Record<string, string> = {};
       if (classFilter !== "all") params.class_id = classFilter;
 
-      const [ttRes, clsRes] = await Promise.all([
+      const [ttRes, clsRes, examRes] = await Promise.all([
         getTimetable(params),
         showClassFilter ? getClasses() : Promise.resolve(null),
+        getExams({ ...params, status: "scheduled" }), // Fetch upcoming/scheduled exams
       ]);
 
       if (ttRes.success && ttRes.data) {
@@ -47,6 +49,9 @@ export default function Timetable() {
       }
       if (clsRes?.success && clsRes.data) {
         setClasses((clsRes.data as { classes: ClassType[] }).classes || []);
+      }
+      if (examRes.success && examRes.data) {
+        setExams((examRes.data as { exams: Exam[] }).exams || []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load timetable");
@@ -58,15 +63,39 @@ export default function Timetable() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // Group entries by day
-  const dayMap = new Map<number, TimetableEntry[]>();
+  const dayMap = new Map<number, { periods: TimetableEntry[], exams: Exam[] }>();
+
+  // First initialize all 7 days for a complete week view if we have data
+  if (entries.length > 0 || exams.length > 0) {
+    for (let i = 1; i <= 6; i++) dayMap.set(i, { periods: [], exams: [] }); // Mon-Sat
+  }
+
   entries.forEach(e => {
-    const list = dayMap.get(e.day_of_week) || [];
-    list.push(e);
+    const list = dayMap.get(e.day_of_week) || { periods: [], exams: [] };
+    list.periods.push(e);
     dayMap.set(e.day_of_week, list);
   });
 
+  exams.forEach(e => {
+    if (e.exam_date) {
+      const date = new Date(e.exam_date);
+      const dayOfWeek = date.getDay(); // 0 is Sunday, 1 is Monday ...
+
+      // We map Sunday (0) to 7 or keep as 0 depending on convention. 
+      // The DB uses 0-6. Let's stick with JS Date getDay (0-6).
+      const list = dayMap.get(dayOfWeek) || { periods: [], exams: [] };
+      list.exams.push(e);
+      dayMap.set(dayOfWeek, list);
+    }
+  });
+
   // Sorted unique days
-  const days = Array.from(dayMap.keys()).sort((a, b) => a - b);
+  const days = Array.from(dayMap.keys()).sort((a, b) => {
+    // Sort Monday (1) to Sunday (0 -> 7)
+    const sortA = a === 0 ? 7 : a;
+    const sortB = b === 0 ? 7 : b;
+    return sortA - sortB;
+  });
 
   // All unique periods across all days for table header alignment
   const allPeriods = Array.from(new Set(entries.map(e => e.period_number))).sort((a, b) => a - b);
@@ -84,7 +113,7 @@ export default function Timetable() {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Weekly Timetable</h1>
-            <p className="text-muted-foreground text-sm">View class schedules and period timings.</p>
+            <p className="text-muted-foreground text-sm">View class schedules, period timings, and upcoming exams.</p>
           </div>
           <div className="flex gap-2 flex-wrap">
             {showClassFilter && (
@@ -106,18 +135,22 @@ export default function Timetable() {
         </div>
 
         {/* Legend */}
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-4 bg-card px-4 py-3 rounded-xl border border-border/50 shadow-sm">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded bg-primary/20 border border-primary/40" />
-            <span className="text-sm text-muted-foreground">Class</span>
+            <span className="text-sm font-medium">Standard Class</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded bg-accent/20 border border-accent/40" />
-            <span className="text-sm text-muted-foreground">Lab</span>
+            <span className="text-sm font-medium">Lab Session</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded bg-red-500/20 border border-red-500/40" />
+            <span className="text-sm font-medium">Examination</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded bg-muted border border-muted-foreground/20" />
-            <span className="text-sm text-muted-foreground">Free / No Class</span>
+            <span className="text-sm font-medium text-muted-foreground">Free Period</span>
           </div>
         </div>
 
@@ -138,42 +171,77 @@ export default function Timetable() {
         )}
 
         {/* Empty */}
-        {!loading && !error && entries.length === 0 && (
-          <div className="text-center py-16">
+        {!loading && !error && entries.length === 0 && exams.length === 0 && (
+          <div className="text-center py-16 bg-card rounded-2xl border border-dashed shadow-sm">
             <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
               <Clock className="h-8 w-8 text-muted-foreground/30" />
             </div>
             <h3 className="text-lg font-semibold">No Timetable Entries</h3>
-            <p className="text-muted-foreground text-sm mt-1">No schedule found for the selected class.</p>
+            <p className="text-muted-foreground text-sm mt-1">No schedule found for the selected view.</p>
           </div>
         )}
 
-        {!loading && !error && entries.length > 0 && (
+        {!loading && !error && (entries.length > 0 || exams.length > 0) && (
           <>
             {/* Mobile View — cards per day */}
             <div className="md:hidden space-y-4">
               {days.map(dayNum => {
-                const dayEntries = (dayMap.get(dayNum) || []).sort((a, b) => a.period_number - b.period_number);
+                const dayData = dayMap.get(dayNum) || { periods: [], exams: [] };
+                if (dayData.periods.length === 0 && dayData.exams.length === 0) return null;
+
+                const dayEntries = dayData.periods.sort((a, b) => a.period_number - b.period_number);
+
                 return (
-                  <Card key={dayNum} className="shadow-card">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">{DAY_NAMES[dayNum] || `Day ${dayNum}`}</CardTitle>
+                  <Card key={dayNum} className="shadow-sm border-border/50">
+                    <CardHeader className="pb-3 bg-muted/20 border-b border-border/50">
+                      <CardTitle className="text-lg flex justify-between items-center">
+                        {DAY_NAMES[dayNum]}
+                        {dayData.exams.length > 0 && (
+                          <Badge variant="destructive" className="bg-red-500 text-white">
+                            {dayData.exams.length} Exam{dayData.exams.length > 1 ? 's' : ''}
+                          </Badge>
+                        )}
+                      </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2">
+                    <CardContent className="space-y-3 pt-4">
+
+                      {/* Render Exams First */}
+                      {dayData.exams.map(exam => (
+                        <div key={`mob-exam-${exam.id}`} className="p-3 rounded-lg border bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-16 h-16 bg-red-500/10 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
+                          <div className="flex items-center justify-between mb-1 relative z-10">
+                            <span className="font-bold flex items-center gap-2">
+                              <GraduationCap className="h-4 w-4" />
+                              {exam.name}
+                            </span>
+                            <Badge variant="outline" className="text-[10px] border-red-500/30 font-bold uppercase tracking-wider">{exam.exam_type.replace('_', ' ')}</Badge>
+                          </div>
+                          <div className="flex flex-col gap-1 text-sm mt-2 relative z-10 opacity-90">
+                            {exam.subject_name && (
+                              <span className="font-medium">Subject: {exam.subject_name}</span>
+                            )}
+                            {exam.class_name && (
+                              <span className="opacity-80">Class: {exam.class_name}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Render Classes */}
                       {dayEntries.map(entry => (
                         <div key={entry.id} className={`p-3 rounded-lg border ${getPeriodColor(entry)}`}>
                           <div className="flex items-center justify-between mb-1">
                             <span className="font-medium">{entry.subject_name || "—"}</span>
-                            <Badge variant="outline" className="text-xs">P{entry.period_number}</Badge>
+                            <Badge variant="outline" className="text-xs bg-background/50">Period {entry.period_number}</Badge>
                           </div>
-                          <div className="flex items-center gap-4 text-sm opacity-80">
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
+                          <div className="flex items-center gap-4 text-sm opacity-80 mt-2">
+                            <span className="flex items-center gap-1.5 font-medium">
+                              <Clock className="h-3.5 w-3.5" />
                               {entry.start_time?.slice(0, 5)} – {entry.end_time?.slice(0, 5)}
                             </span>
                             {entry.room && (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
+                              <span className="flex items-center gap-1.5 font-medium">
+                                <MapPin className="h-3.5 w-3.5" />
                                 {entry.room}
                               </span>
                             )}
@@ -191,45 +259,89 @@ export default function Timetable() {
 
             {/* Desktop View — grid table */}
             <div className="hidden md:block">
-              <Card className="shadow-card overflow-hidden">
+              <Card className="shadow-sm border-border/50 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left p-4 font-semibold text-muted-foreground">Period</th>
+                      <tr className="bg-muted/40 border-b border-border/50">
+                        <th className="text-left p-4 font-semibold text-muted-foreground w-24 border-r border-border/50">Period</th>
                         {days.map(d => (
-                          <th key={d} className="text-left p-4 font-semibold text-muted-foreground min-w-[150px]">
-                            {DAY_NAMES[d] || `Day ${d}`}
+                          <th key={d} className="text-center p-4 font-bold text-foreground min-w-[180px]">
+                            <div className="flex flex-col items-center">
+                              {DAY_NAMES[d]}
+                              {(dayMap.get(d)?.exams?.length || 0) > 0 && (
+                                <Badge variant="destructive" className="mt-2 text-[10px] scale-90">EXAMS SCHEDULED</Badge>
+                              )}
+                            </div>
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {allPeriods.map(pNum => (
-                        <tr key={pNum} className="border-b last:border-0">
-                          <td className="p-4 text-sm font-medium text-muted-foreground whitespace-nowrap">
+                      {/* Top Row for ALL-DAY EXAMS on that day */}
+                      {days.some(d => (dayMap.get(d)?.exams?.length || 0) > 0) && (
+                        <tr className="border-b-2 border-dashed border-red-500/20 bg-red-500/5">
+                          <td className="p-4 font-semibold text-red-500/70 border-r border-border/50 uppercase tracking-widest text-xs text-center align-middle">
+                            <GraduationCap className="h-5 w-5 mx-auto mb-1 opacity-50" />
+                            Exams
+                          </td>
+                          {days.map(d => {
+                            const dailyExams = dayMap.get(d)?.exams || [];
+                            return (
+                              <td key={`exam-col-${d}`} className="p-3 align-top">
+                                <div className="space-y-2">
+                                  {dailyExams.map((exam, idx) => (
+                                    <div key={`desk-exam-${idx}`} className="p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400 shadow-sm relative overflow-hidden group">
+                                      <div className="absolute top-0 right-0 w-16 h-16 bg-red-500/20 rounded-full blur-xl -translate-y-1/2 translate-x-1/2 transition-transform group-hover:scale-150"></div>
+                                      <div className="font-bold mb-1 relative z-10">{exam.name}</div>
+                                      <div className="text-xs font-medium opacity-90 relative z-10">{exam.class_name} {exam.subject_name ? `• ${exam.subject_name}` : ''}</div>
+                                      <Badge variant="outline" className="mt-2 text-[9px] border-red-500/30 uppercase tracking-wider relative z-10 bg-background/50 backdrop-blur">
+                                        {exam.exam_type.replace('_', ' ')}
+                                      </Badge>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      )}
+
+                      {/* Standard Periods */}
+                      {allPeriods.map((pNum, index) => (
+                        <tr key={pNum} className="border-b border-border/50 last:border-0 hover:bg-muted/5 transition-colors">
+                          <td className="p-4 font-semibold text-muted-foreground border-r border-border/50 text-center">
                             Period {pNum}
                           </td>
                           {days.map(d => {
-                            const entry = (dayMap.get(d) || []).find(e => e.period_number === pNum);
+                            const entry = (dayMap.get(d)?.periods || []).find(e => e.period_number === pNum);
                             return (
-                              <td key={d} className="p-2">
-                                <div className={`p-3 rounded-lg border ${getPeriodColor(entry)} h-full`}>
+                              <td key={d} className="p-2 border-r border-border/10 last:border-0 align-top">
+                                <div className={`p-3 rounded-xl border ${getPeriodColor(entry)} h-full min-h-[100px] flex flex-col justify-between transition-colors`}>
                                   {entry ? (
                                     <>
-                                      <div className="font-medium text-sm">{entry.subject_name || "—"}</div>
-                                      {entry.teacher_name && (
-                                        <div className="text-xs opacity-70 mt-1">{entry.teacher_name}</div>
-                                      )}
-                                      <div className="flex items-center gap-2 mt-1 text-xs opacity-60">
-                                        <span>{entry.start_time?.slice(0, 5)} – {entry.end_time?.slice(0, 5)}</span>
+                                      <div>
+                                        <div className="font-bold mb-1 text-foreground/90">{entry.subject_name || "—"}</div>
+                                        {entry.teacher_name && (
+                                          <div className="text-xs font-medium opacity-70 mb-2">{entry.teacher_name}</div>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-black/5 dark:border-white/5">
+                                        <div className="flex items-center gap-1.5 text-xs font-semibold opacity-70">
+                                          <Clock className="h-3 w-3" />
+                                          <span>{entry.start_time?.slice(0, 5)}</span>
+                                        </div>
                                         {entry.room && (
-                                          <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{entry.room}</span>
+                                          <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-background/50 px-1.5 py-0.5 rounded">
+                                            {entry.room}
+                                          </div>
                                         )}
                                       </div>
                                     </>
                                   ) : (
-                                    <div className="text-xs text-muted-foreground">—</div>
+                                    <div className="flex items-center justify-center h-full">
+                                      <div className="w-8 h-1 rounded-full bg-border/50"></div>
+                                    </div>
                                   )}
                                 </div>
                               </td>

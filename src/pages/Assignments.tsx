@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, FileText, Calendar, Clock, CheckCircle2, AlertCircle, Loader2, Upload } from "lucide-react";
+import { Plus, Search, FileText, Calendar, Clock, CheckCircle2, AlertCircle, Loader2, Upload, ChevronRight, Award } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -86,131 +86,183 @@ function StudentAssignments() {
     return () => clearTimeout(debounce);
   }, [fetchData]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "published":
-        return <Badge className="bg-blue-500/10 text-blue-600">Published</Badge>;
-      case "draft":
-        return <Badge variant="outline">Draft</Badge>;
-      case "closed":
-        return <Badge variant="secondary">Closed</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+  const getStatusBadge = (status: string, dueDate: string) => {
+    const daysLeft = Math.ceil((new Date(dueDate).getTime() - Date.now()) / 86400000);
+    const isOverdue = daysLeft < 0;
+
+    if (status === "closed" || isOverdue) {
+      return <Badge variant="destructive" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 shadow-none hover:bg-red-500/20 px-2 py-0.5"><AlertCircle className="w-3 h-3 mr-1" /> Closed</Badge>;
     }
+    if (daysLeft <= 2 && daysLeft >= 0) {
+      return <Badge className="bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20 shadow-none hover:bg-orange-500/20 px-2 py-0.5"><Clock className="w-3 h-3 mr-1" /> Due Soon</Badge>;
+    }
+
+    return <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-none hover:bg-emerald-500/20 px-2 py-0.5"><CheckCircle2 className="w-3 h-3 mr-1" /> Active</Badge>;
   };
 
   const getDueColor = (dueDate: string) => {
     const days = Math.ceil((new Date(dueDate).getTime() - Date.now()) / 86400000);
-    if (days < 0) return "text-destructive";
-    if (days <= 2) return "text-warning";
+    if (days < 0) return "text-red-600 dark:text-red-400 font-bold";
+    if (days <= 2) return "text-orange-600 dark:text-orange-400 font-bold";
     return "text-muted-foreground";
   };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 page-enter">
-        {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Assignments</h1>
-            <p className="text-muted-foreground text-sm">View and track your assignments.</p>
+      <div className="space-y-6 sm:space-y-8 page-enter pb-12">
+        {/* PREMIUM HEADER */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600/10 via-blue-500/5 to-purple-500/10 border border-blue-500/20 p-6 sm:p-8">
+          <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl mix-blend-multiply" />
+          <div className="absolute -bottom-24 -left-24 w-64 h-64 rounded-full bg-purple-500/10 blur-3xl mix-blend-multiply" />
+
+          <div className="relative flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-400 text-xs font-bold tracking-wide uppercase mb-3">
+                <FileText className="w-4 h-4" /> Academic Tasks
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground mb-2">My Assignments</h1>
+              <p className="text-muted-foreground text-sm sm:text-base max-w-xl">
+                Track your coursework, manage upcoming deadlines, and submit your tasks all in one place.
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        {/* MODERN FILTERS */}
+        <div className="glass-panel p-4 rounded-xl flex flex-col md:flex-row gap-4 items-center justify-between border-border/50 sticky top-4 z-10 shadow-sm">
+          <div className="relative flex-1 w-full max-w-md group">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <Input
-              placeholder="Search assignments..."
+              placeholder="Search assignments by title..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 rounded-xl border-border/50"
+              className="pl-10 h-10 w-full bg-background/50 border-border/50 focus-visible:ring-primary/20 transition-all rounded-lg"
             />
           </div>
-          <Select value={classFilter} onValueChange={setClassFilter}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Classes</SelectItem>
-              {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="All Subjects" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Subjects</SelectItem>
-              {subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="flex w-full md:w-auto gap-3 items-center">
+            <Select value={classFilter} onValueChange={setClassFilter}>
+              <SelectTrigger className="w-full md:w-[160px] h-10 bg-background/50 border-border/50 rounded-lg">
+                <SelectValue placeholder="All Classes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Classes</SelectItem>
+                {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+              <SelectTrigger className="w-full md:w-[160px] h-10 bg-background/50 border-border/50 rounded-lg">
+                <SelectValue placeholder="All Subjects" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Subjects</SelectItem>
+                {subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        {/* Loading */}
+        {/* CONTENT LOADING/ERROR STATES */}
         {loading && (
-          <div className="flex items-center justify-center h-40 gap-3">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <p className="text-muted-foreground text-sm">Loading assignments...</p>
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <div className="relative">
+              <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+            </div>
+            <p className="text-muted-foreground font-medium animate-pulse">Loading assignments...</p>
           </div>
         )}
 
-        {/* Error */}
         {error && !loading && (
-          <div className="flex flex-col items-center justify-center h-40 text-center gap-3">
-            <AlertCircle className="h-8 w-8 text-destructive/60" />
-            <p className="text-muted-foreground text-sm">{error}</p>
+          <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+            <div className="h-16 w-16 rounded-2xl bg-destructive/10 flex items-center justify-center">
+              <AlertCircle className="h-8 w-8 text-destructive" />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-foreground">Failed to load</p>
+              <p className="text-muted-foreground text-sm max-w-sm mt-1">{error}</p>
+            </div>
+            <Button variant="outline" onClick={fetchData}>Try Again</Button>
           </div>
         )}
 
-        {/* Assignments Grid */}
+        {/* ASSIGNMENTS GRID */}
         {!loading && !error && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {assignments.map((assignment, idx) => (
-              <Card
-                key={assignment.id}
-                onClick={() => { setSelectedAssignment(assignment); setDetailsOpen(true); }}
-                className="hover:shadow-card-hover cursor-pointer transition-all duration-300 animate-scale-in"
-                style={{ animationDelay: `${idx * 50}ms` }}
-              >
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <FileText className="h-5 w-5 text-primary" />
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {assignments.map((assignment, idx) => {
+              const days = Math.ceil((new Date(assignment.due_date).getTime() - Date.now()) / 86400000);
+              const isOverdue = days < 0;
+              const isActive = days >= 0;
+
+              return (
+                <Card
+                  key={assignment.id}
+                  onClick={() => { setSelectedAssignment(assignment); setDetailsOpen(true); }}
+                  className="group cursor-pointer hover:shadow-xl transition-all duration-300 animate-slide-in-up border-border/40 hover:border-primary/30 overflow-hidden bg-card/60 backdrop-blur"
+                  style={{ animationDelay: `${idx * 50}ms` }}
+                >
+                  <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 to-purple-500 opacity-50 group-hover:opacity-100 transition-opacity" />
+                  <CardContent className="p-5 sm:p-6 flex flex-col h-full relative">
+                    {/* Status absolute right */}
+                    <div className="absolute top-5 right-5 z-10">
+                      {getStatusBadge(assignment.status, assignment.due_date)}
+                    </div>
+
+                    {/* Icon & Subject */}
+                    <div className="flex items-center gap-3 mb-4 mt-1">
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner",
+                        isOverdue ? "bg-red-500/10 text-red-600" : "bg-blue-500/10 text-blue-600"
+                      )}>
+                        <FileText className="w-5 h-5" />
                       </div>
-                      <div>
-                        <h3 className="font-semibold leading-tight">{assignment.title}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">{assignment.subject_id}</p>
+                      <div className="min-w-0 pr-20">
+                        <p className="text-xs font-bold text-muted-foreground tracking-wider uppercase truncate">{assignment.subject_name || assignment.class_name}</p>
                       </div>
                     </div>
-                    {getStatusBadge(assignment.status)}
-                  </div>
 
-                  {assignment.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">{assignment.description}</p>
-                  )}
-
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className={cn("text-xs", getDueColor(assignment.due_date))}>
-                        Due {new Date(assignment.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </span>
+                    {/* Title & Desc */}
+                    <div className="mb-4 flex-1">
+                      <h3 className="text-lg font-bold text-foreground leading-tight group-hover:text-primary transition-colors line-clamp-2">{assignment.title}</h3>
+                      {assignment.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-2 mt-2 leading-relaxed">{assignment.description}</p>
+                      )}
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {assignment.total_marks} marks
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+
+                    {/* Bottom Stats */}
+                    <div className="pt-4 border-t border-border/50 flex items-center justify-between gap-2 mt-auto">
+                      <div className="flex items-center gap-2">
+                        <div className={cn("p-1.5 rounded-md", isOverdue ? "bg-red-500/10" : "bg-muted")}>
+                          <Calendar className={cn("w-3.5 h-3.5", isOverdue ? "text-red-600" : "text-muted-foreground")} />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-muted-foreground uppercase font-bold leading-none">Deadline</span>
+                          <span className={cn("text-xs leading-tight mt-0.5", getDueColor(assignment.due_date))}>
+                            {new Date(assignment.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-right flex flex-col items-end">
+                        <span className="text-[10px] text-muted-foreground uppercase font-bold leading-none">Marks</span>
+                        <div className="flex items-center text-xs font-bold text-foreground mt-0.5">
+                          {assignment.total_marks} <Award className="w-3.5 h-3.5 ml-1 text-amber-500" />
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         )}
 
         {!loading && !error && assignments.length === 0 && (
-          <div className="text-center py-16">
-            <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
-              <FileText className="h-8 w-8 text-muted-foreground/30" />
+          <div className="text-center py-20 px-4 max-w-md mx-auto">
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-muted to-muted/30 flex items-center justify-center mx-auto mb-6 relative overflow-hidden">
+              <div className="absolute inset-0 bg-primary/5 blur-xl"></div>
+              <CheckCircle2 className="h-10 w-10 text-muted-foreground/40 relative z-10" />
             </div>
-            <p className="text-muted-foreground text-sm font-medium">No assignments found.</p>
+            <h3 className="text-xl font-bold text-foreground mb-2">You're all caught up!</h3>
+            <p className="text-muted-foreground text-sm">There are no assignments matching your current filters. Take a break or review your past work.</p>
           </div>
         )}
       </div>

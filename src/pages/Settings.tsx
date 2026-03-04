@@ -81,7 +81,7 @@ export default function Settings() {
                 setNewPassword("");
                 setConfirmPassword("");
             } else {
-                toast({ title: "Error", description: (res as any).error?.message || "Failed to change password.", variant: "destructive" });
+                toast({ title: "Error", description: (res as { error?: { message: string } }).error?.message || "Failed to change password.", variant: "destructive" });
             }
         } catch (err) {
             toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to change password.", variant: "destructive" });
