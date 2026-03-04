@@ -16,8 +16,7 @@ interface StaffLoginProps {
 const staffRoles = [
   { id: 'super_admin' as UserRole, label: 'Super Admin', icon: Crown, color: 'from-red-500 to-rose-600' },
   { id: 'institute_admin' as UserRole, label: 'Admin', icon: School, color: 'from-violet-500 to-purple-600' },
-  { id: 'faculty' as UserRole, label: 'Class Teacher', icon: BookOpen, color: 'from-blue-500 to-indigo-600' },
-  { id: 'faculty' as UserRole, label: 'Subject Teacher', icon: ShieldCheck, color: 'from-teal-500 to-cyan-600' },
+  { id: 'faculty' as UserRole, label: 'Faculty', icon: BookOpen, color: 'from-blue-500 to-indigo-600' },
 ];
 
 export default function StaffLogin({ onBack }: StaffLoginProps) {
