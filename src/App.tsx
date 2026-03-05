@@ -17,6 +17,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
 const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
 const ParentDashboard = lazy(() => import("./pages/ParentDashboard"));
+const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
 const Students = lazy(() => import("./pages/Students"));
 const Teachers = lazy(() => import("./pages/Teachers"));
 const Attendance = lazy(() => import("./pages/Attendance"));
@@ -71,6 +72,8 @@ function RoleBasedDashboard() {
       return <ParentDashboard />;
     case 'faculty':
       return <TeacherDashboard />;
+    case 'super_admin':
+      return <SuperAdminDashboard />;
     default:
       return <Dashboard />;
   }

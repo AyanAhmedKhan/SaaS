@@ -2,14 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CalendarDays, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface Notice {
-  id: string | number;
-  title: string;
-  content: string;
-  date: string;
-  priority: 'high' | 'medium' | 'low';
-}
+import type { Notice } from "@/types";
 
 interface NoticeBoardProps {
   notices?: Notice[];
@@ -17,14 +10,15 @@ interface NoticeBoardProps {
 
 export function NoticeBoard({ notices }: NoticeBoardProps) {
   const fallbackNotices: Notice[] = [
-    { id: 1, title: 'Annual Day Celebration', content: 'Annual day event scheduled for next month. All students to participate.', date: '2025-01-15', priority: 'high' },
-    { id: 2, title: 'Parent-Teacher Meeting', content: 'PTM scheduled for all classes this Saturday.', date: '2025-01-12', priority: 'medium' },
-    { id: 3, title: 'Library Week', content: 'Special library activities throughout the week.', date: '2025-01-10', priority: 'low' },
+    { id: '1', institute_id: '1', title: 'Annual Day Celebration', content: 'Annual day event scheduled for next month. All students to participate.', created_at: '2025-01-15T00:00:00Z', priority: 'high', is_published: true },
+    { id: '2', institute_id: '1', title: 'Parent-Teacher Meeting', content: 'PTM scheduled for all classes this Saturday.', created_at: '2025-01-12T00:00:00Z', priority: 'medium', is_published: true },
+    { id: '3', institute_id: '1', title: 'Library Week', content: 'Special library activities throughout the week.', created_at: '2025-01-10T00:00:00Z', priority: 'low', is_published: true },
   ];
 
   const displayNotices = notices || fallbackNotices;
 
   const priorityStyles = {
+    urgent: "bg-destructive/8 text-destructive border-destructive/15",
     high: "bg-destructive/8 text-destructive border-destructive/15",
     medium: "bg-amber-500/8 text-amber-600 dark:text-amber-400 border-amber-500/15",
     low: "bg-blue-500/8 text-blue-600 dark:text-blue-400 border-blue-500/15",
@@ -64,7 +58,7 @@ export function NoticeBoard({ notices }: NoticeBoardProps) {
               </p>
               <div className="flex items-center gap-1 text-xs text-muted-foreground/70">
                 <CalendarDays className="h-3 w-3" />
-                <span>{new Date(notice.date).toLocaleDateString('en-US', {
+                <span>{new Date((notice as any).date || notice.created_at).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric'

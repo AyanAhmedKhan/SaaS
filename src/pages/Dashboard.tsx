@@ -8,15 +8,7 @@ import { RecentStudents } from "@/components/dashboard/RecentStudents";
 import { NoticeBoard } from "@/components/dashboard/NoticeBoard";
 import { AIInsightCard } from "@/components/dashboard/AIInsightCard";
 import { getDashboardStats } from "@/lib/api";
-
-interface Notice {
-  id: string | number;
-  title: string;
-  content: string;
-  date?: string;
-  priority: 'high' | 'medium' | 'low';
-  created_at?: string;
-}
+import type { Notice } from "@/types";
 
 interface Student {
   id: string;
@@ -87,9 +79,11 @@ export default function Dashboard() {
             <AlertCircle className="h-8 w-8 text-destructive" />
           </div>
           <div>
-            <p className="text-foreground font-semibold mb-1">Connection Error</p>
+            <p className="text-foreground font-semibold mb-1">Dashboard Error</p>
             <p className="text-muted-foreground text-sm max-w-md">{error}</p>
-            <p className="text-muted-foreground/60 text-xs mt-2">Please ensure the backend server is running on port 3001.</p>
+            {error.includes('Unable to connect') && (
+              <p className="text-muted-foreground/60 text-xs mt-2">Please ensure the backend server is running and accessible.</p>
+            )}
           </div>
         </div>
       </DashboardLayout>
