@@ -13,11 +13,11 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Area, AreaChart
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Area, AreaChart, Cell
 } from "recharts";
 import {
   Download, FileText, TrendingUp, TrendingDown, Minus,
-  Trophy, Target, BarChart3, Filter, Loader2, AlertCircle, Sparkles, BookOpen, GraduationCap, LayoutDashboard, Building2, Brain, RefreshCw
+  Trophy, Target, BarChart3, Filter, Loader2, AlertCircle, Sparkles, BookOpen, GraduationCap, LayoutDashboard, Building2, Brain, RefreshCw, Search
 } from "lucide-react";
 import { getExamResults, getPerformanceTrend, getExams, getClasses, getAiInsights } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -133,6 +133,25 @@ export default function Reports() {
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  const runAiInsights = useCallback(async (reset = false) => {
+    if (reset) setAiAnalysis(null);
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await getAiInsights();
+      if (res.success && res.data) {
+        const d = res.data as { insights?: string; text?: string; analysis?: string };
+        setAiAnalysis(d.insights || d.analysis || d.text || "No analysis returned.");
+      } else {
+        setAiError("Failed to generate AI summary.");
+      }
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "AI service unavailable.");
+    } finally {
+      setAiLoading(false);
+    }
+  }, []);
 
   const isSuperAdmin = isRole('super_admin');
   const isStaff = isRole('super_admin', 'institute_admin', 'faculty');
@@ -282,25 +301,7 @@ export default function Reports() {
                 />
               )}
               {(!isSuperAdmin || selectedInstituteId) && (
-                <Button onClick={async () => {
-                  setActiveTab("ai-analysis");
-                  if (aiAnalysis) return;
-                  setAiLoading(true);
-                  setAiError(null);
-                  try {
-                    const res = await getAiInsights();
-                    if (res.success && res.data) {
-                      const d = res.data as { insights?: string; text?: string; analysis?: string };
-                      setAiAnalysis(d.insights || d.analysis || d.text || "No analysis returned.");
-                    } else {
-                      setAiError("Failed to generate AI summary.");
-                    }
-                  } catch (err) {
-                    setAiError(err instanceof Error ? err.message : "AI service unavailable.");
-                  } finally {
-                    setAiLoading(false);
-                  }
-                }} className={cn(
+                <Button onClick={() => { setActiveTab("ai-analysis"); if (!aiAnalysis) runAiInsights(); }} className={cn(
                   "shadow-lg pointer-events-auto transition-transform hover:scale-105 active:scale-95",
                   isStaff ? "shadow-violet-500/25 bg-violet-600 hover:bg-violet-700 text-white" : "shadow-primary/25 bg-primary hover:bg-primary/90 text-primary-foreground"
                 )}>
@@ -556,7 +557,7 @@ export default function Reports() {
                                 <ChartTooltip content={<ChartTooltipContent cursor={{ fill: 'hsl(var(--muted)/0.5)' }} className="rounded-xl shadow-xl" />} />
                                 <Bar dataKey="score" radius={[6, 6, 0, 0]}>
                                   {radarData.map((entry, index) => (
-                                    <cell key={`cell-${index}`} fill={SUBJECT_COLORS[index % SUBJECT_COLORS.length]} />
+                                    <Cell key={`cell-${index}`} fill={SUBJECT_COLORS[index % SUBJECT_COLORS.length]} />
                                   ))}
                                 </Bar>
                               </BarChart>
@@ -678,7 +679,7 @@ export default function Reports() {
                         <div>
                           <CardTitle className="text-xl font-bold flex items-center gap-2">
                             Gemini AI Analysis
-                            <Badge variant="outline" className="text-xs font-normal border-primary/30 text-primary">2.0 Flash</Badge>
+                            <Badge variant="outline" className="text-xs font-normal border-primary/30 text-primary">2.5 Flash</Badge>
                           </CardTitle>
                           <CardDescription className="mt-0.5">
                             AI-powered insights on attendance, performance trends, and recommendations
@@ -690,24 +691,8 @@ export default function Reports() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={async () => {
-                              setAiLoading(true);
-                              setAiError(null);
-                              setAiAnalysis(null);
-                              try {
-                                const res = await getAiInsights();
-                                if (res.success && res.data) {
-                                  const d = res.data as { insights?: string; text?: string; analysis?: string };
-                                  setAiAnalysis(d.insights || d.analysis || d.text || "No analysis returned.");
-                                } else {
-                                  setAiError("Failed to generate AI summary.");
-                                }
-                              } catch (err) {
-                                setAiError(err instanceof Error ? err.message : "AI service unavailable.");
-                              } finally {
-                                setAiLoading(false);
-                              }
-                            }}
+                            onClick={() => runAiInsights(true)}
+                            disabled={aiLoading}
                             className="gap-2"
                           >
                             <RefreshCw className="h-4 w-4" /> Regenerate
@@ -715,23 +700,7 @@ export default function Reports() {
                         )}
                         {!aiAnalysis && !aiLoading && (
                           <Button
-                            onClick={async () => {
-                              setAiLoading(true);
-                              setAiError(null);
-                              try {
-                                const res = await getAiInsights();
-                                if (res.success && res.data) {
-                                  const d = res.data as { insights?: string; text?: string; analysis?: string };
-                                  setAiAnalysis(d.insights || d.analysis || d.text || "No analysis returned.");
-                                } else {
-                                  setAiError("Failed to generate AI summary.");
-                                }
-                              } catch (err) {
-                                setAiError(err instanceof Error ? err.message : "AI service unavailable.");
-                              } finally {
-                                setAiLoading(false);
-                              }
-                            }}
+                            onClick={() => runAiInsights()}
                             className="gap-2 bg-gradient-to-r from-violet-600 to-primary hover:from-violet-700 hover:to-primary/90 text-white shadow-lg shadow-primary/25"
                           >
                             <Sparkles className="h-4 w-4" /> Generate AI Report
@@ -802,17 +771,7 @@ export default function Reports() {
                           <p className="font-semibold text-foreground mb-1">Analysis Failed</p>
                           <p className="text-sm text-muted-foreground">{aiError}</p>
                         </div>
-                        <Button variant="outline" onClick={async () => {
-                          setAiLoading(true); setAiError(null);
-                          try {
-                            const res = await getAiInsights();
-                            if (res.success && res.data) {
-                              const d = res.data as { insights?: string; text?: string; analysis?: string };
-                              setAiAnalysis(d.insights || d.analysis || d.text || "No analysis returned.");
-                            } else setAiError("Failed to generate AI summary.");
-                          } catch (err) { setAiError(err instanceof Error ? err.message : "AI service unavailable."); }
-                          finally { setAiLoading(false); }
-                        }}>Try Again</Button>
+                        <Button variant="outline" onClick={() => runAiInsights()}>Try Again</Button>
                       </div>
                     )}
 
@@ -828,6 +787,8 @@ export default function Reports() {
                 </Card>
               </TabsContent>
             </Tabs>
+          </>
+        )}
           </>
         )}
       </div>
