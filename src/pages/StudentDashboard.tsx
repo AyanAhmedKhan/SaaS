@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// StudentDashboard — premium redesign
+// StudentDashboard — premium redesign v2
 // ──────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -8,14 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  BookOpen, Calendar, Clock, GraduationCap, TrendingUp, TrendingDown,
-  FileText, Loader2, AlertCircle, ChevronRight, Target, Award,
-  Zap, User, CalendarDays, ArrowRight, CheckCircle2, XCircle,
-  RefreshCw, CheckCircle, HelpCircle
+  BookOpen, Calendar, Clock, GraduationCap, TrendingUp,
+  FileText, AlertCircle, ChevronRight, Target, Award,
+  Zap, User, CalendarDays, CheckCircle2,
+  RefreshCw, CheckCircle, HelpCircle, Flame, BarChart2, ArrowUpRight
 } from "lucide-react";
 import { SubjectPerformance } from "@/components/student/SubjectPerformance";
 import { AssignmentsPanel } from "@/components/student/AssignmentsPanel";
@@ -81,6 +80,34 @@ function CircularProgress({ value, size = 48, strokeWidth = 4.5, color }: { valu
         strokeLinecap="round"
         className={`${color} transition-all duration-1000 ease-out`}
       />
+    </svg>
+  );
+}
+
+/** Colored SVG donut ring (uses stroke color directly, not currentColor) */
+function DonutRing({ value, size = 56, sw = 5.5, color }: { value: number; size?: number; sw?: number; color: string }) {
+  const r = (size - sw) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (Math.min(value, 100) / 100) * circ;
+  return (
+    <svg width={size} height={size} className="-rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={sw} stroke="currentColor" className="text-muted/40" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={sw} stroke={color}
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+        style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(.47,1.64,.41,.8)" }} />
+    </svg>
+  );
+}
+
+/** Tiny sparkline bar chart */
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  const max = Math.max(...data, 1);
+  return (
+    <svg viewBox={`0 0 ${data.length * 8} 24`} className="w-16 h-5" preserveAspectRatio="none">
+      {data.map((v, i) => {
+        const h = Math.max(2, (v / max) * 22);
+        return <rect key={i} x={i * 8} y={24 - h} width={6} height={h} rx={2} fill={color} opacity={i === data.length - 1 ? 1 : 0.4} />;
+      })}
     </svg>
   );
 }
@@ -218,6 +245,7 @@ export default function StudentDashboard() {
 
   const currentClass = todayClasses.find(c => periodStatus(c) === "ongoing");
   const nextClass = todayClasses.find(c => periodStatus(c) === "upcoming");
+  const completedCount = todayClasses.filter(c => periodStatus(c) === "completed").length;
 
   /* ─── Loading state ─── */
   if (loading) {
@@ -258,54 +286,97 @@ export default function StudentDashboard() {
     ? `${student.class_name}${student.class_section ? ` - ${student.class_section}` : ""}`
     : null;
 
+  /* color helpers */
+  const attStroke = attendancePct >= 90 ? "#10b981" : attendancePct >= 75 ? "#f59e0b" : "#ef4444";
+  const attText  = attendancePct >= 90 ? "text-emerald-600" : attendancePct >= 75 ? "text-amber-500" : "text-rose-600";
+  const scoreStroke = avgScore >= 80 ? "#10b981" : avgScore >= 60 ? "#f59e0b" : "#ef4444";
+  const scoreText   = avgScore >= 80 ? "text-emerald-600" : avgScore >= 60 ? "text-amber-500" : "text-rose-600";
+  const scoreSpark  = recentExams.slice(-6).map(e => ((e.marks_obtained ?? 0) / (e.max_marks || 100)) * 100);
+
   return (
     <DashboardLayout>
       <TooltipProvider>
         <div className="space-y-4 sm:space-y-6 page-enter pb-8">
 
           {/* ═══════════ HERO / WELCOME ═══════════ */}
-          <div className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-accent/10 border border-primary/15 p-4 sm:p-6 md:p-8">
-            {/* Decorative circles */}
-            <div className="absolute -top-12 -right-12 w-28 sm:w-40 h-28 sm:h-40 rounded-full bg-primary/5 blur-2xl" />
-            <div className="absolute -bottom-8 -left-8 w-20 sm:w-32 h-20 sm:h-32 rounded-full bg-accent/10 blur-2xl" />
+          <div className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-accent/10 border border-primary/15 p-4 sm:p-6 md:p-7">
+            {/* Blobs */}
+            <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-10 -left-10 w-36 h-36 rounded-full bg-violet-500/10 blur-3xl pointer-events-none" />
 
-            <div className="relative flex flex-col gap-3 sm:gap-4">
-              <div className="space-y-1">
-                {/* Mobile: short date, Desktop: full date */}
+            <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              {/* Left: greeting + badges */}
+              <div className="space-y-1.5 flex-1 min-w-0">
                 <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                   <span className="sm:hidden">{todayLabelShort}</span>
                   <span className="hidden sm:inline">{todayLabel}</span>
                 </p>
                 <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-foreground">
-                  {getGreeting()}, {firstName}!
+                  {getGreeting()}, {firstName}! 👋
                 </h1>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {classLabel && (
                     <Badge variant="secondary" className="text-[10px] sm:text-xs font-medium bg-background/50 backdrop-blur">
-                      <GraduationCap className="h-3 w-3 mr-1" />
-                      {classLabel}
+                      <GraduationCap className="h-3 w-3 mr-1" />{classLabel}
                     </Badge>
                   )}
                   {student?.roll_number && (
                     <Badge variant="outline" className="text-[10px] sm:text-xs bg-background/50 backdrop-blur">Roll #{student.roll_number}</Badge>
                   )}
+                  {student?.academic_year_name && (
+                    <Badge variant="outline" className="text-[10px] sm:text-xs bg-background/50 backdrop-blur">{student.academic_year_name}</Badge>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline" size="sm"
-                  onClick={() => fetchData(true)}
-                  disabled={refreshing}
-                  className="h-8 sm:h-9 text-xs sm:text-sm bg-background/50 backdrop-blur border-border/50"
-                >
-                  <RefreshCw className={`h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 sm:mr-1.5 ${refreshing ? "animate-spin" : ""}`} />
-                  <span className="hidden xs:inline">Refresh</span>
-                </Button>
-                <Button size="sm" onClick={() => navigate("/profile")} className="h-8 sm:h-9 text-xs sm:text-sm shadow-md">
-                  <User className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 sm:mr-1.5" />
-                  <span className="hidden xs:inline">My Profile</span>
-                  <span className="xs:hidden">Profile</span>
-                </Button>
+
+              {/* Right: attendance + score rings + buttons */}
+              <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                {/* Attendance ring */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex flex-col items-center gap-0.5 cursor-pointer" onClick={() => navigate("/attendance")}>
+                      <div className="relative">
+                        <DonutRing value={attendancePct} size={58} sw={5.5} color={attStroke} />
+                        <span className={cn("absolute inset-0 flex items-center justify-center text-[11px] font-extrabold", attText)}>
+                          {attendancePct}%
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Attend.</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{presentDays} present / {absentDays} absent of {totalDays} days</TooltipContent>
+                </Tooltip>
+
+                {/* Score ring */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex flex-col items-center gap-0.5 cursor-pointer" onClick={() => navigate("/exams")}>
+                      <div className="relative">
+                        <DonutRing value={avgScore} size={58} sw={5.5} color={scoreStroke} />
+                        <span className={cn("absolute inset-0 flex items-center justify-center text-[11px] font-extrabold", scoreText)}>
+                          {avgScore}%
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Score</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Avg across {recentExams.length} exams</TooltipContent>
+                </Tooltip>
+
+                <div className="flex flex-col gap-2 ml-1">
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={() => fetchData(true)}
+                    disabled={refreshing}
+                    className="h-8 text-xs bg-background/50 backdrop-blur border-border/50"
+                  >
+                    <RefreshCw className={cn("h-3 w-3 mr-1.5", refreshing && "animate-spin")} />
+                    Refresh
+                  </Button>
+                  <Button size="sm" onClick={() => navigate("/reports")} className="h-8 text-xs shadow-md shadow-primary/20">
+                    <BarChart2 className="h-3 w-3 mr-1.5" /> Reports
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -390,12 +461,14 @@ export default function StudentDashboard() {
 
           {/* ═══════════ STATS GRID ═══════════ */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+
             {/* Attendance */}
-            <Card className="group hover:-translate-y-1 hover:shadow-lg transition-all duration-300 border-border/40 hover:border-primary/30 cursor-pointer bg-card/60 backdrop-blur" onClick={() => navigate("/attendance")}>
+            <Card className="group hover:-translate-y-1 hover:shadow-xl transition-all duration-300 border-border/40 hover:border-emerald-500/30 cursor-pointer overflow-hidden" onClick={() => navigate("/attendance")}>
+              <div className="h-0.5 w-full bg-gradient-to-r from-emerald-400 to-teal-400" />
               <CardContent className="p-4 sm:p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
-                    <GraduationCap className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                  <div className="p-2 bg-emerald-500/10 rounded-xl group-hover:scale-110 transition-transform">
+                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
                   </div>
                   <div className="relative flex items-center justify-center">
                     <CircularProgress value={attendancePct} size={42} strokeWidth={4.5} color={getAttendanceColor(attendancePct)} />
@@ -408,30 +481,43 @@ export default function StudentDashboard() {
                 <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 font-medium">
                   {presentDays}/{totalDays} days
                 </p>
+                <div className="mt-2 flex gap-2">
+                  <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />{presentDays}P
+                  </span>
+                  <span className="inline-flex items-center gap-0.5 text-[10px] text-rose-600 font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />{absentDays}A
+                  </span>
+                </div>
               </CardContent>
             </Card>
 
             {/* Classes Today */}
-            <Card className="group hover:-translate-y-1 hover:shadow-lg transition-all duration-300 border-border/40 hover:border-blue-400/30 cursor-pointer bg-card/60 backdrop-blur" onClick={() => navigate("/timetable")}>
+            <Card className="group hover:-translate-y-1 hover:shadow-xl transition-all duration-300 border-border/40 hover:border-blue-400/30 cursor-pointer overflow-hidden" onClick={() => navigate("/timetable")}>
+              <div className="h-0.5 w-full bg-gradient-to-r from-blue-400 to-cyan-400" />
               <CardContent className="p-4 sm:p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors">
+                  <div className="p-2 bg-blue-500/10 rounded-xl group-hover:scale-110 transition-transform">
                     <CalendarDays className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                   </div>
                   <span className="text-2xl sm:text-3xl font-black text-foreground">{todayClasses.length}</span>
                 </div>
                 <p className="text-xs sm:text-sm font-bold text-foreground">Classes</p>
                 <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 font-medium">
-                  {todayClasses.filter(c => periodStatus(c) === "completed").length} done today
+                  {completedCount} done · {todayClasses.length - completedCount} to go
                 </p>
+                {todayClasses.length > 0 && (
+                  <Progress value={(completedCount / todayClasses.length) * 100} className="mt-2.5 h-1 bg-blue-500/20" />
+                )}
               </CardContent>
             </Card>
 
             {/* Assignments */}
-            <Card className="group hover:-translate-y-1 hover:shadow-lg transition-all duration-300 border-border/40 hover:border-orange-400/30 cursor-pointer bg-card/60 backdrop-blur" onClick={() => navigate("/assignments")}>
+            <Card className="group hover:-translate-y-1 hover:shadow-xl transition-all duration-300 border-border/40 hover:border-orange-400/30 cursor-pointer overflow-hidden" onClick={() => navigate("/assignments")}>
+              <div className="h-0.5 w-full bg-gradient-to-r from-orange-400 to-amber-400" />
               <CardContent className="p-4 sm:p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 bg-orange-500/10 rounded-xl group-hover:bg-orange-500/20 transition-colors">
+                  <div className="p-2 bg-orange-500/10 rounded-xl group-hover:scale-110 transition-transform">
                     <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600" />
                   </div>
                   <div className="relative flex items-center justify-center">
@@ -441,31 +527,37 @@ export default function StudentDashboard() {
                     </span>
                   </div>
                 </div>
-                <p className="text-xs sm:text-sm font-bold text-foreground">Pending Tasks</p>
+                <p className="text-xs sm:text-sm font-bold text-foreground">Pending</p>
                 <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 font-medium">
-                  {completedAssignments}/{assignments.length} completed
+                  {completedAssignments}/{assignments.length} submitted
                 </p>
+                <Progress value={assignmentCompletionPct} className="mt-2.5 h-1 bg-orange-500/20" />
               </CardContent>
             </Card>
 
             {/* Avg Score */}
-            <Card className="group hover:-translate-y-1 hover:shadow-lg transition-all duration-300 border-border/40 hover:border-accent/30 cursor-pointer bg-card/60 backdrop-blur" onClick={() => navigate("/exams")}>
+            <Card className="group hover:-translate-y-1 hover:shadow-xl transition-all duration-300 border-border/40 hover:border-violet-400/30 cursor-pointer overflow-hidden" onClick={() => navigate("/exams")}>
+              <div className="h-0.5 w-full bg-gradient-to-r from-violet-400 to-purple-400" />
               <CardContent className="p-4 sm:p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 bg-accent/10 rounded-xl group-hover:bg-accent/20 transition-colors">
-                    <Award className="h-4 w-4 sm:h-5 sm:w-5 text-accent-foreground" />
+                  <div className="p-2 bg-violet-500/10 rounded-xl group-hover:scale-110 transition-transform">
+                    <Award className="h-4 w-4 sm:h-5 sm:w-5 text-violet-600" />
                   </div>
-                  <div className="relative flex items-center justify-center">
-                    <CircularProgress value={avgScore} size={42} strokeWidth={4.5} color={getScoreColor(avgScore)} />
-                    <span className={`absolute text-[10px] sm:text-[11px] font-extrabold ${getScoreColor(avgScore)}`}>
-                      {avgScore}%
-                    </span>
-                  </div>
+                  {scoreSpark.length > 0
+                    ? <Sparkline data={scoreSpark} color={scoreStroke} />
+                    : (
+                      <div className="relative flex items-center justify-center">
+                        <CircularProgress value={avgScore} size={42} strokeWidth={4.5} color={getScoreColor(avgScore)} />
+                        <span className={`absolute text-[10px] sm:text-[11px] font-extrabold ${getScoreColor(avgScore)}`}>
+                          {avgScore}%
+                        </span>
+                      </div>
+                    )
+                  }
                 </div>
-                <p className="text-xs sm:text-sm font-bold text-foreground">Avg. Score</p>
-                <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 font-medium">
-                  Across {recentExams.length} exams
-                </p>
+                <p className="text-xs sm:text-sm font-bold text-foreground">Avg Score</p>
+                <p className={cn("text-sm font-extrabold mt-0.5", scoreText)}>{avgScore}%</p>
+                <p className="text-[10px] text-muted-foreground">across {recentExams.length} exams</p>
               </CardContent>
             </Card>
 
@@ -474,21 +566,25 @@ export default function StudentDashboard() {
           {/* ═══════════ QUICK ACTIONS ═══════════ */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
             {[
-              { label: "Timetable", icon: Clock, path: "/timetable", color: "text-blue-600 bg-blue-500/10 hover:bg-blue-500/15" },
-              { label: "Attendance", icon: CheckCircle, path: "/attendance", color: "text-green-600 bg-green-500/10 hover:bg-green-500/15" },
-              { label: "Exams", icon: Award, path: "/exams", color: "text-purple-600 bg-purple-500/10 hover:bg-purple-500/15" },
-              { label: "Syllabus", icon: BookOpen, path: "/syllabus", color: "text-amber-600 bg-amber-500/10 hover:bg-amber-500/15" },
+              { label: "Timetable",  icon: Clock,       path: "/timetable",  accent: "hover:border-blue-400/40",   bg: "bg-blue-500/10",    text: "text-blue-600",    grad: "from-blue-500/10"    },
+              { label: "Attendance", icon: CheckCircle, path: "/attendance", accent: "hover:border-emerald-400/40",bg: "bg-emerald-500/10", text: "text-emerald-600", grad: "from-emerald-500/10" },
+              { label: "Exams",      icon: Award,       path: "/exams",      accent: "hover:border-violet-400/40", bg: "bg-violet-500/10",  text: "text-violet-600",  grad: "from-violet-500/10"  },
+              { label: "Syllabus",   icon: BookOpen,    path: "/syllabus",   accent: "hover:border-amber-400/40",  bg: "bg-amber-500/10",   text: "text-amber-600",   grad: "from-amber-500/10"   },
             ].map((action) => (
               <button
                 key={action.path}
                 onClick={() => navigate(action.path)}
-                className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl border border-border/50 bg-card hover:shadow-md active:scale-[0.97] transition-all duration-200 group text-left"
+                className={cn(
+                  "group relative flex items-center gap-2 sm:gap-3 p-3 sm:p-3.5 rounded-xl border border-border/50 bg-card hover:shadow-md active:scale-[0.97] transition-all duration-200 text-left overflow-hidden",
+                  action.accent
+                )}
               >
-                <div className={`p-1.5 sm:p-2 rounded-lg transition-colors shrink-0 ${action.color}`}>
-                  <action.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <div className={cn("absolute inset-0 bg-gradient-to-br to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300", action.grad)} />
+                <div className={cn("p-1.5 sm:p-2 rounded-lg shrink-0 group-hover:scale-110 transition-transform relative z-10", action.bg)}>
+                  <action.icon className={cn("h-3.5 w-3.5 sm:h-4 sm:w-4", action.text)} />
                 </div>
-                <span className="text-xs sm:text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">{action.label}</span>
-                <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block" />
+                <span className="text-xs sm:text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate relative z-10">{action.label}</span>
+                <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block relative z-10 shrink-0" />
               </button>
             ))}
           </div>
@@ -509,38 +605,40 @@ export default function StudentDashboard() {
           {/* ═══════════ ACADEMIC OVERVIEW ═══════════ */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
             {/* Best Subject */}
-            <Card className="border-border/40 shadow-sm bg-gradient-to-br from-green-500/5 to-emerald-500/5 relative overflow-hidden group">
+            <Card className="border-border/40 shadow-sm bg-gradient-to-br from-emerald-500/5 to-teal-500/5 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
+              <div className="h-0.5 w-full bg-gradient-to-r from-emerald-400 to-teal-400" />
               <div className="absolute -right-4 -top-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
                 <TrendingUp className="h-32 w-32" />
               </div>
               <CardContent className="p-5 flex flex-col justify-center h-full gap-2 relative z-10">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="p-2 rounded-lg bg-green-500/10">
-                    <TrendingUp className="h-5 w-5 text-green-600" />
+                  <div className="p-2 rounded-lg bg-emerald-500/10">
+                    <Award className="h-4 w-4 text-emerald-600" />
                   </div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-green-700/80">Strongest</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-emerald-700/80 dark:text-emerald-400/70">Strongest</p>
                 </div>
                 <p className="text-2xl font-black text-foreground">{topSubject}</p>
-                <div className="flex items-center gap-1.5 mt-auto text-xs text-green-700 font-medium">
+                <div className="flex items-center gap-1.5 mt-auto text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Excellent performance
                 </div>
               </CardContent>
             </Card>
 
             {/* Weak Subject */}
-            <Card className="border-border/40 shadow-sm bg-gradient-to-br from-amber-500/5 to-orange-500/5 relative overflow-hidden group">
+            <Card className="border-border/40 shadow-sm bg-gradient-to-br from-amber-500/5 to-orange-500/5 relative overflow-hidden group hover:border-amber-500/30 transition-all duration-300">
+              <div className="h-0.5 w-full bg-gradient-to-r from-amber-400 to-orange-400" />
               <div className="absolute -right-4 -top-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
-                <TrendingDown className="h-32 w-32" />
+                <Flame className="h-32 w-32" />
               </div>
               <CardContent className="p-5 flex flex-col justify-center h-full gap-2 relative z-10">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="p-2 rounded-lg bg-amber-500/10">
-                    <TrendingDown className="h-5 w-5 text-amber-600" />
+                    <Flame className="h-4 w-4 text-amber-600" />
                   </div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-amber-700/80">Focus Area</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-amber-700/80 dark:text-amber-400/70">Focus Area</p>
                 </div>
                 <p className="text-2xl font-black text-foreground">{weakSubject}</p>
-                <div className="flex items-center gap-1.5 mt-auto text-xs text-amber-700 font-medium">
+                <div className="flex items-center gap-1.5 mt-auto text-xs text-amber-700 dark:text-amber-400 font-semibold">
                   <HelpCircle className="h-3.5 w-3.5" /> Needs more attention
                 </div>
               </CardContent>
@@ -551,7 +649,7 @@ export default function StudentDashboard() {
               <CardHeader className="pb-1 px-4 pt-4">
                 <CardTitle className="text-sm font-bold flex items-center gap-2 justify-between">
                   <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 text-primary" />
+                    <BarChart2 className="h-4 w-4 text-primary" />
                     Attendance
                   </div>
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => navigate("/attendance")}>
@@ -580,8 +678,6 @@ export default function StudentDashboard() {
               </CardContent>
             </Card>
           </div>
-
-          <Separator className="opacity-50" />
 
           {/* ═══════════ DETAILED PANELS ═══════════ */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
@@ -640,44 +736,70 @@ export default function StudentDashboard() {
                     <Clock className="h-4 w-4 text-primary" />
                     Today's Schedule
                   </CardTitle>
+                  {todayClasses.length > 0 && (
+                    <span className="text-[10px] font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                      {completedCount}/{todayClasses.length} done
+                    </span>
+                  )}
                 </CardHeader>
                 <CardContent className="p-4 sm:p-5">
                   {todayClasses.length === 0 ? (
                     <div className="text-center py-6">
                       <Calendar className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
                       <p className="text-sm font-medium text-foreground">No classes today</p>
-                      <p className="text-xs text-muted-foreground mt-1">Enjoy your free time!</p>
+                      <p className="text-xs text-muted-foreground mt-1">Enjoy your free time! 🎉</p>
                     </div>
                   ) : (
                     <div className="relative border-l-2 border-muted pl-4 space-y-4 ml-2">
-                      {todayClasses.map((cls, idx) => {
+                      {todayClasses.map((cls) => {
                         const status = periodStatus(cls);
+
+                        /* elapsed % for ongoing class */
+                        let elapsed = 0;
+                        if (status === "ongoing" && cls.start_time && cls.end_time) {
+                          const [sh, sm2] = cls.start_time.split(":").map(Number);
+                          const [eh, em2] = cls.end_time.split(":").map(Number);
+                          const start = sh * 60 + sm2, end = eh * 60 + em2;
+                          elapsed = Math.round(((nowMinutes - start) / (end - start)) * 100);
+                        }
+
                         return (
                           <div key={cls.id} className="relative">
                             {/* Timeline Dot */}
                             <div className={cn(
-                              "absolute -left-[21px] top-1 h-3 w-3 rounded-full border-2 border-background",
-                              status === "ongoing" ? "bg-green-500 shadow-[0_0_0_2px_rgba(34,197,94,0.2)] animate-pulse" :
-                                status === "completed" ? "bg-muted-foreground/30" : "bg-primary"
+                              "absolute -left-[21px] top-1.5 h-3 w-3 rounded-full border-2 border-background",
+                              status === "ongoing"   ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)] animate-pulse" :
+                              status === "completed" ? "bg-muted-foreground/30" : "bg-primary"
                             )} />
 
                             <div className={cn(
                               "rounded-xl p-3 border transition-colors",
-                              status === "ongoing" ? "bg-green-500/5 border-green-500/20" :
-                                status === "completed" ? "bg-card/50 border-border/50 opacity-70" : "bg-card border-border/50 shadow-sm"
+                              status === "ongoing"   ? "bg-emerald-500/5 border-emerald-500/20" :
+                              status === "completed" ? "bg-card/50 border-border/50 opacity-70" : "bg-card border-border/50 shadow-sm"
                             )}>
-                              <div className="flex justify-between items-start mb-1">
+                              <div className="flex justify-between items-start mb-1 gap-2">
                                 <h4 className={cn("text-xs font-bold", status === "completed" ? "text-muted-foreground" : "text-foreground")}>
                                   P{cls.period_number} · {cls.subject_name || "Free Period"}
                                 </h4>
-                                <span className="text-[10px] font-bold text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
-                                  {cls.start_time?.slice(0, 5)} - {cls.end_time?.slice(0, 5)}
+                                <span className="text-[10px] font-bold text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded shrink-0">
+                                  {cls.start_time?.slice(0, 5)}–{cls.end_time?.slice(0, 5)}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-3 mt-2 text-[10px] font-medium text-muted-foreground">
+                              <div className="flex items-center gap-3 mt-1 text-[10px] font-medium text-muted-foreground">
                                 {cls.teacher_name && <span className="flex items-center gap-1"><User className="h-3 w-3" />{cls.teacher_name}</span>}
                                 {cls.room && <span className="flex items-center gap-1"><Target className="h-3 w-3" />{cls.room}</span>}
                               </div>
+                              {status === "ongoing" && (
+                                <div className="mt-2 space-y-1">
+                                  <div className="flex items-center justify-between text-[10px]">
+                                    <span className="flex items-center gap-1 font-bold text-emerald-600">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" /> In session
+                                    </span>
+                                    <span className="text-muted-foreground font-semibold">{elapsed}% elapsed</span>
+                                  </div>
+                                  <Progress value={elapsed} className="h-1 bg-emerald-500/20" />
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
