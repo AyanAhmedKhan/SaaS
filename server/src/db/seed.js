@@ -424,8 +424,8 @@ export async function seed() {
           { p: 7, start: '13:50', end: '14:35' },
         ];
         for (const cls of classConfigs) {
-          for (let dow = 1; dow <= 6; dow++) {
-            const count = dow === 6 ? 4 : periodSlots.length;
+          for (let dow = 0; dow <= 5; dow++) {
+            const count = dow === 5 ? 4 : periodSlots.length;
             for (let pi = 0; pi < count; pi++) {
               ttIdx++;
               const pr = periodSlots[pi];

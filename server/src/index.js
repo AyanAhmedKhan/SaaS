@@ -57,6 +57,8 @@ app.use(cors({
         // Allow requests with no origin (server-to-server, curl, mobile apps)
         if (!origin) return callback(null, true);
         if (allowedOrigins.includes(origin)) return callback(null, true);
+        // Log rejected origin for debugging
+        console.warn(`[CORS] Blocked origin: ${origin}. Allowed: ${allowedOrigins.join(', ')}`);
         callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
