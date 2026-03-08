@@ -118,8 +118,10 @@ export default function Settings() {
             <div className="space-y-4 sm:space-y-6 page-enter max-w-2xl mx-auto">
                 {/* Header */}
                 <div>
-                    <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight">Settings</h1>
-                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Manage your account and preferences.</p>
+                    <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight">Account Settings</h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                      Manage your profile, security, and notification preferences.
+                    </p>
                 </div>
 
                 <Tabs defaultValue="account" className="w-full space-y-4">

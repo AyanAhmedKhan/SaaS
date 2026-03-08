@@ -35,6 +35,8 @@ type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | null;
    Student / Parent view — shows their own attendance
    ══════════════════════════════════════════════ */
 function StudentAttendanceView() {
+  const { isRole } = useAuth();
+  const isParent = isRole('parent');
   const [summary, setSummary] = useState<{ total: number; present: number; absent: number; late: number; percentage: number } | null>(null);
   const [subjectStats, setSubjectStats] = useState<{ name: string; percentage: number; total: number; present: number }[]>([]);
   const [studentId, setStudentId] = useState<string | undefined>(undefined);
@@ -107,8 +109,12 @@ function StudentAttendanceView() {
       <div className="space-y-6 page-enter">
         {/* Page Header */}
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">My Attendance</h1>
-          <p className="text-muted-foreground text-sm">View your attendance records and calendar.</p>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+            {isParent ? "Child's Attendance" : 'My Attendance'}
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            {isParent ? "View your child's attendance records and calendar." : 'View your attendance records and calendar.'}
+          </p>
         </div>
 
         {/* Loading */}
@@ -532,8 +538,8 @@ function AdminAttendanceView() {
         {/* Page Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Daily Schedule & Attendance</h1>
-            <p className="text-muted-foreground text-sm mt-1">Select a date to view your classes and mark attendance</p>
+            <h1 className="text-3xl font-bold tracking-tight">Attendance Management</h1>
+            <p className="text-muted-foreground text-sm mt-1">Select a date to view classes and mark student attendance</p>
           </div>
           <div className="flex items-center">
             <Button variant="outline" size="sm" onClick={() => setShowCalendar(!showCalendar)} className="gap-2">

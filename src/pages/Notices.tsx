@@ -37,6 +37,9 @@ export default function Notices() {
   const [selectedInstitute, setSelectedInstitute] = useState<Institute | null>(null);
 
   const canCreate = isRole('super_admin', 'institute_admin', 'faculty');
+  const isStudent = isRole('student');
+  const isParent = isRole('parent');
+  const isViewOnly = isStudent || isParent;
 
   const handleInstituteSelect = (instituteId: string | null, institute: Institute | null) => {
     setSelectedInstituteId(instituteId);
@@ -116,9 +119,13 @@ export default function Notices() {
         {/* Page Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Notices</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+              {isViewOnly ? 'Notices & Announcements' : 'Manage Notices'}
+            </h1>
             <p className="text-muted-foreground text-sm">
-              Announcements and important updates for the institution.
+              {isViewOnly
+                ? 'Stay updated with the latest announcements and important updates.'
+                : 'Create, manage, and broadcast announcements to the institution.'}
             </p>
           </div>
           <div className="flex items-center gap-3">

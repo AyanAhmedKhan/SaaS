@@ -69,6 +69,8 @@ interface Remark {
 
 export default function StudentProfilePage() {
   const { user } = useAuth();
+  const isParent = user?.role === 'parent';
+  const isStaff = user?.role === 'super_admin' || user?.role === 'institute_admin' || user?.role === 'faculty';
   const [student, setStudent] = useState<StudentData | null>(null);
   const [attendance, setAttendance] = useState<AttendanceData | null>(null);
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
@@ -145,8 +147,12 @@ export default function StudentProfilePage() {
       <div className="space-y-6 page-enter max-w-5xl mx-auto">
         {/* Page title */}
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground">My Profile</h1>
-          <p className="text-muted-foreground mt-1">Your personal and academic information</p>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground">
+            {isParent ? "Child's Profile" : isStaff ? 'Student Profile' : 'My Profile'}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {isParent ? "Your child's personal and academic information" : isStaff ? 'Student personal and academic information' : 'Your personal and academic information'}
+          </p>
         </div>
 
         {/* Profile Header Card */}

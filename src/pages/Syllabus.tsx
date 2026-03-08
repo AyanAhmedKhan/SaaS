@@ -72,6 +72,9 @@ export default function Syllabus() {
   const isSuperAdmin = isRole('super_admin');
   const showClassFilter = isRole('super_admin', 'institute_admin', 'faculty');
   const canManageSyllabus = isRole('super_admin', 'institute_admin', 'faculty');
+  const isStudent = isRole('student');
+  const isParent = isRole('parent');
+  const isViewOnly = isStudent || isParent;
 
   const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
     if (isSuperAdmin) {
@@ -171,8 +174,14 @@ export default function Syllabus() {
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Syllabus</h1>
-            <p className="text-muted-foreground text-sm">Track syllabus coverage and topic completion.</p>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+              {isViewOnly ? 'Syllabus Progress' : 'Manage Syllabus'}
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              {isViewOnly
+                ? 'View your syllabus coverage and track topic completion across subjects.'
+                : 'Plan, track, and update syllabus coverage and topic completion across classes.'}
+            </p>
           </div>
           <div className="flex gap-2 flex-wrap items-center">
             {isSuperAdmin && (

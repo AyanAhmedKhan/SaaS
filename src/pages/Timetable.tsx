@@ -33,6 +33,9 @@ export default function Timetable() {
 
   const isSuperAdmin = isRole('super_admin');
   const showClassFilter = isRole('super_admin', 'institute_admin', 'faculty');
+  const isStudent = isRole('student');
+  const isParent = isRole('parent');
+  const isViewOnly = isStudent || isParent;
 
   const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
     if (isSuperAdmin) {
@@ -139,8 +142,14 @@ export default function Timetable() {
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Weekly Timetable</h1>
-            <p className="text-muted-foreground text-sm">View class schedules, period timings, and upcoming exams.</p>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+              {isParent ? "Child's Weekly Timetable" : isStudent ? 'My Weekly Timetable' : 'Weekly Timetable'}
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              {isViewOnly
+                ? 'View your class schedule, period timings, and upcoming exams.'
+                : 'Manage class schedules, period timings, and upcoming exams across classes.'}
+            </p>
           </div>
           <div className="flex gap-2 flex-wrap items-center">
             {isSuperAdmin && (

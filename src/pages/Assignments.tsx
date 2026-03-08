@@ -23,6 +23,7 @@ import { StudentAssignmentDetailsDialog } from "@/components/student/StudentAssi
 export default function Assignments() {
   const { isRole } = useAuth();
   const isStaff = isRole('super_admin', 'institute_admin', 'faculty');
+  const isParent = isRole('parent');
 
   if (isStaff) {
     return (
@@ -38,6 +39,8 @@ export default function Assignments() {
 }
 
 function StudentAssignments() {
+  const { isRole } = useAuth();
+  const isParent = isRole('parent');
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [classes, setClasses] = useState<ClassType[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -120,9 +123,13 @@ function StudentAssignments() {
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-400 text-xs font-bold tracking-wide uppercase mb-3">
                 <FileText className="w-4 h-4" /> Academic Tasks
               </div>
-              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground mb-2">My Assignments</h1>
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground mb-2">
+                {isParent ? "Child's Assignments" : 'My Assignments'}
+              </h1>
               <p className="text-muted-foreground text-sm sm:text-base max-w-xl">
-                Track your coursework, manage upcoming deadlines, and submit your tasks all in one place.
+                {isParent
+                  ? "View your child's coursework, upcoming deadlines, and submission status."
+                  : 'Track your coursework, manage upcoming deadlines, and submit your tasks all in one place.'}
               </p>
             </div>
           </div>
