@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { Users } from "lucide-react";
 
@@ -40,7 +39,10 @@ export function RecentStudents({ students }: RecentStudentsProps) {
     <Card className="shadow-card border-border/50 hover:shadow-card-hover transition-shadow duration-300">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold tracking-tight">Recent Students</CardTitle>
+          <div>
+            <CardTitle className="text-lg font-semibold tracking-tight">Recent Students</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Latest enrollments</p>
+          </div>
           <Users className="h-4 w-4 text-muted-foreground/50" />
         </div>
       </CardHeader>

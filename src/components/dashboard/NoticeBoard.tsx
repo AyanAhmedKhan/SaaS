@@ -28,7 +28,10 @@ export function NoticeBoard({ notices }: NoticeBoardProps) {
     <Card className="shadow-card border-border/50 hover:shadow-card-hover transition-shadow duration-300">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold tracking-tight">Notice Board</CardTitle>
+          <div>
+            <CardTitle className="text-lg font-semibold tracking-tight">Notice Board</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Recent announcements</p>
+          </div>
           <Bell className="h-4 w-4 text-muted-foreground/50" />
         </div>
       </CardHeader>
