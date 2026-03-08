@@ -303,14 +303,15 @@ export async function getDashboardStats() {
     stats: {
       totalStudents: number;
       totalTeachers: number;
-      totalClasses: number;
+      totalParents: number;
       averageAttendance: number;
-      totalFeeCollected: number;
-      totalFeePending: number;
+      pendingFees: number;
+      upcomingEvents: number;
     };
     attendanceData: { month: string; attendance: number }[];
-    performanceData: { subject: string; average: number }[];
-    classOverview: { class_name: string; section: string; student_count: number; avg_attendance: number }[];
+    performanceData: { subject: string; score: number }[];
+    classOverview: { id: string; name: string; section: string; student_count: number; class_teacher_name: string | null }[];
+    recentStudents: { id: string; name: string; class_name?: string; section?: string; roll_number?: string; attendance?: number }[];
     recentNotices: Notice[];
   }>('/dashboard/stats');
 }
