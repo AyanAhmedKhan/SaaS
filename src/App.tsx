@@ -39,6 +39,13 @@ const AcademicYears = lazy(() => import("./pages/AcademicYears"));
 const Classes = lazy(() => import("./pages/Classes"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const ManagePlans = lazy(() => import("./pages/ManagePlans"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const AboutUs = lazy(() => import("./pages/AboutUs"));
+const Contact = lazy(() => import("./pages/Contact"));
+const Careers = lazy(() => import("./pages/Careers"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const DataSecurity = lazy(() => import("./pages/DataSecurity"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,7 +63,7 @@ function PageLoader() {
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?: UserRole[] }) {
   const { isAuthenticated, user } = useAuth();
-  if (!isAuthenticated) return <Navigate to="/" replace />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (roles && user && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
   return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
 }
@@ -87,10 +94,18 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public */}
-      <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
+      <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/signup" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Signup />} />
       <Route path="/forgot-password" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Suspense fallback={<PageLoader />}><ForgotPassword /></Suspense>} />
       <Route path="/reset-password" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Suspense fallback={<PageLoader />}><ResetPassword /></Suspense>} />
+      <Route path="/pricing" element={<Suspense fallback={<PageLoader />}><Pricing /></Suspense>} />
+      <Route path="/about" element={<Suspense fallback={<PageLoader />}><AboutUs /></Suspense>} />
+      <Route path="/contact" element={<Suspense fallback={<PageLoader />}><Contact /></Suspense>} />
+      <Route path="/careers" element={<Suspense fallback={<PageLoader />}><Careers /></Suspense>} />
+      <Route path="/privacy-policy" element={<Suspense fallback={<PageLoader />}><PrivacyPolicy /></Suspense>} />
+      <Route path="/terms-of-service" element={<Suspense fallback={<PageLoader />}><TermsOfService /></Suspense>} />
+      <Route path="/data-security" element={<Suspense fallback={<PageLoader />}><DataSecurity /></Suspense>} />
 
       {/* Dashboard */}
       <Route path="/dashboard" element={<ProtectedRoute><RoleBasedDashboard /></ProtectedRoute>} />
@@ -117,7 +132,6 @@ function AppRoutes() {
 
       {/* Super admin only */}
       <Route path="/institutes" element={<ProtectedRoute roles={['super_admin']}><Institutes /></ProtectedRoute>} />
-      <Route path="/pricing" element={<ProtectedRoute roles={ADMIN_ROLES}><Pricing /></ProtectedRoute>} />
       <Route path="/manage-plans" element={<ProtectedRoute roles={['super_admin']}><ManagePlans /></ProtectedRoute>} />
 
       {/* Placeholder routes */}

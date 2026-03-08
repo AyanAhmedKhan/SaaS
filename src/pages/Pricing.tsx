@@ -1,18 +1,109 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
     Check, X, Sparkles, Shield, Users, GraduationCap,
     ArrowRight, Star, TrendingUp, Brain,
-    Target, Flame, Activity, ChevronRight, Rocket, Crown,
+    Target, Flame, Activity, ChevronRight, Rocket, Crown, Menu,
 } from "lucide-react";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { getPlans, updateInstitute } from "@/lib/api";
+import { updateInstitute } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import type { SubscriptionPlan } from "@/types";
+
+const SEEDED_PLANS: SubscriptionPlan[] = [
+    {
+        id: "plan_starter",
+        slug: "starter",
+        name: "Starter",
+        tagline: "Best for small coaching centers",
+        monthly_price: 2999,
+        annual_price: 29990,
+        max_students: 300,
+        max_teachers: 25,
+        max_admins: 3,
+        max_classes: 20,
+        features: [
+            { text: "Student management", included: true },
+            { text: "Attendance & notices", included: true },
+            { text: "Basic fee tracking", included: true },
+            { text: "Parent portal", included: true },
+            { text: "AI analytics", included: false },
+        ],
+        is_default: true,
+        is_active: true,
+        sort_order: 1,
+    },
+    {
+        id: "plan_professional",
+        slug: "professional",
+        name: "Professional",
+        tagline: "Ideal for growing schools",
+        monthly_price: 6999,
+        annual_price: 69990,
+        max_students: 1500,
+        max_teachers: 120,
+        max_admins: 12,
+        max_classes: 80,
+        features: [
+            { text: "Everything in Starter", included: true, highlight: true },
+            { text: "Advanced reports", included: true },
+            { text: "Exam & grading workflows", included: true },
+            { text: "Role-based permissions", included: true },
+            { text: "Priority support", included: true },
+        ],
+        is_default: false,
+        is_active: true,
+        sort_order: 2,
+    },
+    {
+        id: "plan_ai_pro",
+        slug: "ai_pro",
+        name: "AI Pro",
+        tagline: "Smart automation for outcomes",
+        monthly_price: 11999,
+        annual_price: 119990,
+        max_students: 5000,
+        max_teachers: 350,
+        max_admins: 40,
+        max_classes: 250,
+        features: [
+            { text: "Everything in Professional", included: true, highlight: true },
+            { text: "At-risk student prediction", included: true, highlight: true },
+            { text: "Attendance anomaly alerts", included: true },
+            { text: "Performance forecasting", included: true },
+            { text: "Workload optimization", included: true },
+        ],
+        is_default: false,
+        is_active: true,
+        sort_order: 3,
+    },
+    {
+        id: "plan_enterprise",
+        slug: "enterprise",
+        name: "Enterprise",
+        tagline: "Custom scale for institutions",
+        monthly_price: 24999,
+        annual_price: 249990,
+        max_students: 99999,
+        max_teachers: 99999,
+        max_admins: 99999,
+        max_classes: 99999,
+        features: [
+            { text: "Everything in AI Pro", included: true, highlight: true },
+            { text: "Dedicated account manager", included: true },
+            { text: "Custom integrations", included: true },
+            { text: "On-prem / private cloud options", included: true },
+            { text: "SLA + 24x7 support", included: true },
+        ],
+        is_default: false,
+        is_active: true,
+        sort_order: 4,
+    },
+];
 
 interface PlanFeature {
     text: string;
@@ -261,41 +352,28 @@ function PlanCard({
 }
 
 export default function Pricing() {
+    const navigate = useNavigate();
     const [isAnnual, setIsAnnual] = useState(false);
-    const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [plans] = useState<SubscriptionPlan[]>(SEEDED_PLANS);
+    const [loading] = useState(false);
+    const [error] = useState<string | null>(null);
     const [updatingSlug, setUpdatingSlug] = useState<string | null>(null);
     const [currentPlan, setCurrentPlan] = useState<string | undefined>(undefined);
     const { user } = useAuth();
     const { toast } = useToast();
 
     useEffect(() => {
-        setCurrentPlan(user?.institute?.subscription_plan || "starter");
+        setCurrentPlan(user?.institute?.subscription_plan);
     }, [user]);
-
-    useEffect(() => {
-        const fetchPlans = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const res = await getPlans();
-                if (res.success && res.data?.plans) {
-                    setPlans(res.data.plans);
-                }
-            } catch (err) {
-                const message = err instanceof Error ? err.message : "Failed to load plans";
-                setError(message);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchPlans();
-    }, []);
 
     const uiPlans = useMemo(() => plans.map(mapPlanToUI), [plans]);
 
     const handlePlanChange = async (slug: string) => {
+        if (!user) {
+            navigate('/signup');
+            return;
+        }
+
         if (!user?.institute?.id || currentPlan === slug) return;
 
         try {
@@ -312,8 +390,58 @@ export default function Pricing() {
     };
 
     return (
-        <DashboardLayout>
-            <div className="space-y-12 page-enter pb-16">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-emerald-50/20 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
+            {/* Animated background blobs */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl animate-pulse" />
+                <div className="absolute top-1/2 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+                <div className="absolute -bottom-40 right-1/3 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+            </div>
+
+            {/* Navigation */}
+            <nav className="relative z-50 border-b border-border/40 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center justify-between h-16">
+                        <Link to="/" className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shadow-lg shadow-primary/25">
+                                <GraduationCap className="h-6 w-6 text-white" />
+                            </div>
+                            <span className="text-xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+                                EduYantra
+                            </span>
+                        </Link>
+
+                        <div className="hidden md:flex items-center gap-8">
+                            <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                                Home
+                            </Link>
+                            <Link to="/pricing" className="text-sm font-medium text-foreground">
+                                Pricing
+                            </Link>
+                            {user ? (
+                                <Button asChild className="rounded-xl bg-gradient-to-r from-primary to-blue-600 text-white font-semibold shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all">
+                                    <Link to="/dashboard">Dashboard</Link>
+                                </Button>
+                            ) : (
+                                <div className="flex items-center gap-3">
+                                    <Button variant="ghost" asChild className="rounded-xl font-medium">
+                                        <Link to="/login">Sign In</Link>
+                                    </Button>
+                                    <Button asChild className="rounded-xl bg-gradient-to-r from-primary to-blue-600 text-white font-semibold shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all">
+                                        <Link to="/signup">Get Started</Link>
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+
+                        <Button variant="ghost" size="icon" className="md:hidden rounded-xl">
+                            <Menu className="h-5 w-5" />
+                        </Button>
+                    </div>
+                </div>
+            </nav>
+
+            <div className="relative z-10 space-y-12 py-16 pb-24 px-4 sm:px-6 lg:px-8">
                 <div className="text-center space-y-5 max-w-3xl mx-auto">
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-bold border border-primary/20">
                         <Sparkles className="h-4 w-4" />
@@ -416,6 +544,58 @@ export default function Pricing() {
                     </div>
                 </div>
             </div>
-        </DashboardLayout>
+
+            {/* Footer */}
+            <footer className="relative z-10 border-t border-border/40 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                        <div className="col-span-2 md:col-span-1">
+                            <Link to="/" className="flex items-center gap-3 mb-4">
+                                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shadow-lg shadow-primary/25">
+                                    <GraduationCap className="h-6 w-6 text-white" />
+                                </div>
+                                <span className="text-xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+                                    EduYantra
+                                </span>
+                            </Link>
+                            <p className="text-sm text-muted-foreground">
+                                Modern school management for the digital age.
+                            </p>
+                        </div>
+
+                        <div>
+                            <h4 className="font-semibold text-foreground mb-4">Product</h4>
+                            <ul className="space-y-2 text-sm text-muted-foreground">
+                                <li><Link to="/" className="hover:text-foreground transition-colors">Features</Link></li>
+                                <li><Link to="/pricing" className="hover:text-foreground transition-colors">Pricing</Link></li>
+                                <li><Link to="/login" className="hover:text-foreground transition-colors">Sign In</Link></li>
+                            </ul>
+                        </div>
+
+                        <div>
+                            <h4 className="font-semibold text-foreground mb-4">Company</h4>
+                            <ul className="space-y-2 text-sm text-muted-foreground">
+                                <li><Link to="/about" className="hover:text-foreground transition-colors">About Us</Link></li>
+                                <li><Link to="/contact" className="hover:text-foreground transition-colors">Contact</Link></li>
+                                <li><Link to="/careers" className="hover:text-foreground transition-colors">Careers</Link></li>
+                            </ul>
+                        </div>
+
+                        <div>
+                            <h4 className="font-semibold text-foreground mb-4">Legal</h4>
+                            <ul className="space-y-2 text-sm text-muted-foreground">
+                                <li><Link to="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link></li>
+                                <li><Link to="/terms-of-service" className="hover:text-foreground transition-colors">Terms of Service</Link></li>
+                                <li><Link to="/data-security" className="hover:text-foreground transition-colors">Data Security</Link></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div className="mt-12 pt-8 border-t border-border/40 text-center text-sm text-muted-foreground">
+                        <p>&copy; 2026 EduYantra. All rights reserved.</p>
+                    </div>
+                </div>
+            </footer>
+        </div>
     );
 }

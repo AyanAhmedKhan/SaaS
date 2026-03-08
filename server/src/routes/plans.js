@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { query } from '../db/connection.js';
-import { authenticate, authorize, logAudit } from '../middleware/auth.js';
+import { authenticate, authenticateOptional, authorize, logAudit } from '../middleware/auth.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 
 const router = Router();
@@ -9,8 +9,8 @@ const router = Router();
 const slugRegex = /^[a-z0-9_\-]+$/;
 
 // GET /api/plans - list plans (active only for regular users)
-router.get('/', authenticate, asyncHandler(async (req, res) => {
-  const includeInactive = req.query.include_inactive === 'true' && req.user.role === 'super_admin';
+router.get('/', authenticateOptional, asyncHandler(async (req, res) => {
+  const includeInactive = req.query.include_inactive === 'true' && req.user?.role === 'super_admin';
 
   const params = [];
   let sql = `

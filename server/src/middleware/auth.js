@@ -71,6 +71,27 @@ export function authenticate(req, res, next) {
     }
 }
 
+// Optional JWT auth middleware — does not fail when token is missing/invalid
+export function authenticateOptional(req, res, next) {
+    try {
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return next();
+        }
+
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, JWT_SECRET);
+
+        req.user = decoded;
+        req.instituteId = decoded.institute_id || null;
+        next();
+    } catch (error) {
+        // Ignore invalid/expired token in optional mode and continue as guest
+        next();
+    }
+}
+
 // Role-based access control middleware
 export function authorize(...allowedRoles) {
     return (req, res, next) => {
