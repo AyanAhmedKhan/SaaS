@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,10 +51,10 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
   >({});
   const [serverMetrics, setServerMetrics] = useState<ExamMetrics | null>(null);
 
-  /* role-based edit access â€” admins always, teachers always (server rejects if unassigned) */
+  /* role-based edit access — admins always, teachers always (server rejects if unassigned) */
   const canEnterMarks = isRole("super_admin", "institute_admin", "faculty");
 
-  /* â”€â”€â”€ Load â”€â”€â”€ */
+  /* ─── Load ─── */
   useEffect(() => {
     if (examId) loadAll(examId);
     else { setExam(null); setResults([]); setRoster([]); setEditedResults({}); setServerMetrics(null); }
@@ -112,7 +112,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
     }
   };
 
-  /* â”€â”€â”€ Save marks â”€â”€â”€ */
+  /* ─── Save marks ─── */
   const handleSave = async () => {
     if (!exam) return;
     setSaving(true);
@@ -145,7 +145,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
   const updateField = (studentId: string, field: string, value: string | boolean) =>
     setEditedResults(prev => ({ ...prev, [studentId]: { ...prev[studentId], [field]: value } }));
 
-  /* â”€â”€â”€ Derived display data â”€â”€â”€ */
+  /* ─── Derived display data ─── */
   const displayRoster = useMemo(() => {
     if (roster.length > 0) return roster;
     return results.map(r => ({ student_id: r.student_id, student_name: r.student_name ?? "", roll_number: r.roll_number ?? "" }));
@@ -157,76 +157,14 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
     return m;
   }, [results]);
 
-  /* â”€â”€â”€ All analytics computed client-side from already-loaded results â€” zero extra API call â”€â”€â”€ */
-  const clientMetrics = useMemo(() => {
-    if (!exam || results.length === 0) return null;
-    const totalMarks = exam.total_marks || 100;
-    const passingMarks = exam.passing_marks ?? 33;
-    const present = results.filter(r => !r.is_absent && r.marks_obtained != null);
-    const marks = present.map(r => Number(r.marks_obtained));
-    if (marks.length === 0) return null;
 
-    const avg = marks.reduce((a, b) => a + b, 0) / marks.length;
-    const sorted = [...marks].sort((a, b) => a - b);
-    const median = sorted.length % 2 === 0
-      ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
-      : sorted[Math.floor(sorted.length / 2)];
-    const stdDev = Math.sqrt(marks.reduce((a, m) => a + (m - avg) ** 2, 0) / marks.length);
-    const highest = Math.max(...marks);
-    const lowest = Math.min(...marks);
-
-    /* PERCENT_RANK: fraction of present students scoring strictly below this score */
-    const percentileFor = (m: number) =>
-      marks.length <= 1 ? 100
-        : Math.round((marks.filter(x => x < m).length / (marks.length - 1)) * 100);
-
-    const passed = present.filter(r => Number(r.marks_obtained) >= passingMarks).length;
-
-    const gradeDist: Record<string, number> = {};
-    const scoreBands = [
-      { label: "0â€“39%", count: 0 }, { label: "40â€“59%", count: 0 },
-      { label: "60â€“74%", count: 0 }, { label: "75â€“89%", count: 0 }, { label: "90â€“100%", count: 0 },
-    ];
-    present.forEach(r => {
-      if (r.grade) gradeDist[r.grade] = (gradeDist[r.grade] || 0) + 1;
-      const pct = (Number(r.marks_obtained) / totalMarks) * 100;
-      if (pct < 40) scoreBands[0].count++;
-      else if (pct < 60) scoreBands[1].count++;
-      else if (pct < 75) scoreBands[2].count++;
-      else if (pct < 90) scoreBands[3].count++;
-      else scoreBands[4].count++;
-    });
-
-    const rankList = [...present]
-      .sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999))
-      .map(r => ({
-        student_id: r.student_id,
-        student_name: r.student_name ?? "",
-        roll_number: r.roll_number ?? "",
-        marks_obtained: Number(r.marks_obtained),
-        grade: r.grade ?? "",
-        rank: r.rank ?? 0,
-        percentile: percentileFor(Number(r.marks_obtained)),
-        percentage: parseFloat(((Number(r.marks_obtained) / totalMarks) * 100).toFixed(1)),
-      }));
-
-    return {
-      totalStudents: results.length, absent: results.length - present.length,
-      present: present.length, passed, failed: present.length - passed,
-      passPercentage: present.length ? Math.round((passed / present.length) * 100) : 0,
-      avg: parseFloat(avg.toFixed(2)), median: parseFloat(median.toFixed(2)),
-      stdDev: parseFloat(stdDev.toFixed(2)), highest, lowest,
-      gradeDist, scoreBands, rankList,
-    };
-  }, [results, exam]);
-
-  /* grade distribution for charts â€” derived from clientMetrics */
+  /* Grade chart data - derived from server metrics */
   const gradeData = useMemo(() => {
-    if (!clientMetrics) return [];
-    return Object.entries(clientMetrics.gradeDist)
+    if (!serverMetrics) return [];
+    return Object.entries(serverMetrics.gradeDist)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([grade, count]) => ({ grade, count, fill: GRADE_COLORS[grade] ?? "#6366f1" }));
-  }, [clientMetrics]);
+  }, [serverMetrics]);
 
   if (!exam && !loading) return null;
 
@@ -237,11 +175,11 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
         {loading ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-muted-foreground animate-pulse text-sm">Loading examâ€¦</p>
+            <p className="text-muted-foreground animate-pulse text-sm">Loading exam…</p>
           </div>
         ) : exam && (
           <>
-            {/* â”€â”€ Header â”€â”€ */}
+            {/* ── Header ── */}
             <div className="bg-gradient-to-r from-primary/10 to-blue-500/10 p-6 pb-4 border-b border-border/40 shrink-0">
               <DialogHeader>
                 <DialogTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -253,10 +191,10 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                       <div className="text-lg font-extrabold">{exam.name}</div>
                       <div className="text-sm font-medium text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
                         <Badge variant="outline" className="bg-background/50 capitalize">{exam.exam_type?.replace("_", " ")}</Badge>
-                        <span>Â·</span><span>{exam.class_name}</span>
-                        {exam.subject_name && <><span>Â·</span><span>{exam.subject_name}</span></>}
+                        <span>·</span><span>{exam.class_name}</span>
+                        {exam.subject_name && <><span>·</span><span>{exam.subject_name}</span></>}
                         {exam.exam_date && (
-                          <><span>Â·</span><span>{new Date(exam.exam_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span></>
+                          <><span>·</span><span>{new Date(exam.exam_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span></>
                         )}
                       </div>
                     </div>
@@ -309,7 +247,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                 </TabsList>
               </div>
 
-              {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• RESULT ENTRY TAB â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+              {/* ══════════════ RESULT ENTRY TAB ══════════════ */}
               {canEnterMarks && (
                 <TabsContent value="entry" className="flex-1 data-[state=active]:flex data-[state=active]:flex-col overflow-hidden m-0 border-none outline-none">
                   <div className="px-6 py-3 bg-muted/20 border-b border-border/40 flex items-center justify-between shrink-0 gap-3">
@@ -352,7 +290,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                                 const pct = ed.marks_obtained && !ed.is_absent ? (marksNum / (exam.total_marks || 100)) * 100 : null;
                                 return (
                                   <TableRow key={s.student_id} className={cn("hover:bg-muted/20", ed.is_absent && "opacity-50 bg-muted/10")}>
-                                    <TableCell className="font-mono text-xs text-muted-foreground">{s.roll_number || "â€”"}</TableCell>
+                                    <TableCell className="font-mono text-xs text-muted-foreground">{s.roll_number || "—"}</TableCell>
                                     <TableCell>
                                       <div className="font-semibold text-sm">{s.student_name}</div>
                                     </TableCell>
@@ -366,7 +304,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                                           value={ed.is_absent ? "" : ed.marks_obtained}
                                           disabled={ed.is_absent} max={exam.total_marks} min={0}
                                           onChange={(e) => updateField(s.student_id, "marks_obtained", e.target.value)}
-                                          placeholder="â€”" />
+                                          placeholder="—" />
                                         {pct !== null && (
                                           <Progress value={pct} className={cn("h-1",
                                             pct >= 75 ? "bg-emerald-500/20" : pct >= 50 ? "bg-amber-500/20" : "bg-rose-500/20"
@@ -377,12 +315,12 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                                     <TableCell>
                                       {saved?.grade
                                         ? <Badge variant="secondary" className="font-extrabold text-xs" style={{ background: `${GRADE_COLORS[saved.grade]}20`, color: GRADE_COLORS[saved.grade] ?? undefined }}>{saved.grade}</Badge>
-                                        : <span className="text-muted-foreground text-xs block text-center">â€”</span>}
+                                        : <span className="text-muted-foreground text-xs block text-center">—</span>}
                                     </TableCell>
                                     <TableCell>
                                       {saved?.rank
                                         ? <Badge variant="outline" className="text-xs font-bold">#{saved.rank}</Badge>
-                                        : <span className="text-muted-foreground text-xs block text-center">â€”</span>}
+                                        : <span className="text-muted-foreground text-xs block text-center">—</span>}
                                     </TableCell>
                                     <TableCell>
                                       <Input className="h-8 w-full rounded-lg border-border/50 text-xs"
@@ -402,19 +340,19 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                 </TabsContent>
               )}
 
-              {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• RANK LIST TAB â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+              {/* ══════════════ RANK LIST TAB ══════════════ */}
               <TabsContent value="ranks" className="flex-1 data-[state=active]:flex data-[state=active]:flex-col overflow-hidden m-0 border-none outline-none">
                 <div className="px-6 py-3 bg-muted/20 border-b border-border/40 shrink-0 flex items-center justify-between">
                   <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <ArrowDownUp className="h-3.5 w-3.5" /> Students sorted by rank · percentile computed from class results
                   </span>
                   <Badge variant="outline" className="text-xs">
-                    {clientMetrics?.present ?? 0} ranked
+                    {serverMetrics?.present ?? 0} ranked
                   </Badge>
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="p-5">
-                    {!clientMetrics || clientMetrics.rankList.length === 0 ? (
+                    {!serverMetrics || serverMetrics.rankList.length === 0 ? (
                       <div className="text-center py-16 flex flex-col items-center gap-3 text-muted-foreground">
                         <Trophy className="h-12 w-12 text-muted-foreground/25" />
                         <p className="text-sm">No results entered yet{canEnterMarks ? " — go to Result Entry to add marks." : "."}</p>
@@ -434,7 +372,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {clientMetrics.rankList.map((r) => {
+                            {serverMetrics.rankList.map((r) => {
                               const topThree = r.rank <= 3;
                               return (
                                 <TableRow key={r.student_id} className={cn("hover:bg-muted/20", topThree && "bg-amber-500/5")}>
@@ -479,10 +417,10 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                 </ScrollArea>
               </TabsContent>
 
-              {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• ANALYTICS TAB â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+              {/* ══════════════ ANALYTICS TAB ══════════════ */}
               <TabsContent value="analysis" className="flex-1 data-[state=active]:block overflow-auto m-0 border-none outline-none">
                 <div className="p-5 space-y-6">
-                  {!clientMetrics ? (
+                  {!serverMetrics ? (
                     <div className="p-10 text-center rounded-xl border border-dashed border-border flex flex-col items-center gap-3">
                       <BarChart3 className="h-10 w-10 text-muted-foreground/30" />
                       <p className="text-sm text-muted-foreground">Enter marks first to unlock analytics.</p>
@@ -492,12 +430,12 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                       {/* Metric cards row */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                         {[
-                          { label: "Average",  value: `${clientMetrics.avg}`,            sub: `/ ${exam.total_marks}`,                       icon: Sigma,        color: "text-blue-600",   bg: "bg-blue-500/10" },
-                          { label: "Median",   value: `${clientMetrics.median}`,          sub: null,                                          icon: TrendingUp,   color: "text-indigo-600", bg: "bg-indigo-500/10" },
-                          { label: "Highest",  value: `${clientMetrics.highest}`,         sub: null,                                          icon: Award,        color: "text-emerald-600",bg: "bg-emerald-500/10" },
-                          { label: "Lowest",   value: `${clientMetrics.lowest}`,          sub: null,                                          icon: TrendingDown, color: "text-rose-600",   bg: "bg-rose-500/10" },
-                          { label: "Pass %",   value: `${clientMetrics.passPercentage}%`, sub: `${clientMetrics.passed}/${clientMetrics.present}`, icon: GraduationCap, color: "text-green-600",  bg: "bg-green-500/10" },
-                          { label: "Std Dev",  value: `${clientMetrics.stdDev}`,          sub: "marks",                                       icon: BarChart3,    color: "text-violet-600", bg: "bg-violet-500/10" },
+                          { label: "Average",  value: `${serverMetrics.avg}`,            sub: `/ ${exam.total_marks}`,                       icon: Sigma,        color: "text-blue-600",   bg: "bg-blue-500/10" },
+                          { label: "Median",   value: `${serverMetrics.median}`,          sub: null,                                          icon: TrendingUp,   color: "text-indigo-600", bg: "bg-indigo-500/10" },
+                          { label: "Highest",  value: `${serverMetrics.highest}`,         sub: null,                                          icon: Award,        color: "text-emerald-600",bg: "bg-emerald-500/10" },
+                          { label: "Lowest",   value: `${serverMetrics.lowest}`,          sub: null,                                          icon: TrendingDown, color: "text-rose-600",   bg: "bg-rose-500/10" },
+                          { label: "Pass %",   value: `${serverMetrics.passPercentage}%`, sub: `${serverMetrics.passed}/${serverMetrics.present}`, icon: GraduationCap, color: "text-green-600",  bg: "bg-green-500/10" },
+                          { label: "Std Dev",  value: `${serverMetrics.stdDev}`,          sub: "marks",                                       icon: BarChart3,    color: "text-violet-600", bg: "bg-violet-500/10" },
                         ].map(({ label, value, sub, icon: Icon, color, bg }) => (
                           <div key={label} className="p-3 rounded-xl border border-border/50 bg-card shadow-sm">
                             <div className={cn("p-1.5 rounded-lg w-fit mb-2", bg)}>
@@ -519,8 +457,8 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                             <ResponsiveContainer width="100%" height="100%">
                               <PieChart>
                                 <Pie data={[
-                                    { name: `Pass (${clientMetrics.passed})`, value: clientMetrics.passed },
-                                    { name: `Fail (${clientMetrics.failed})`, value: clientMetrics.failed },
+                                    { name: `Pass (${serverMetrics.passed})`, value: serverMetrics.passed },
+                                    { name: `Fail (${serverMetrics.failed})`, value: serverMetrics.failed },
                                   ]}
                                   cx="50%" cy="50%" innerRadius={44} outerRadius={70}
                                   dataKey="value" stroke="none">
@@ -559,12 +497,12 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                           <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Score Bands</h4>
                           <div className="h-[180px]">
                             <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={clientMetrics.scoreBands} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                              <BarChart data={serverMetrics.scoreBands} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
                                 <XAxis dataKey="label" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
                                 <YAxis allowDecimals={false} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
                                 <RTooltip contentStyle={{ borderRadius: "8px", fontSize: "12px", border: "1px solid hsl(var(--border))" }} formatter={(v) => [v, "Students"]} />
                                 <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={36}>
-                                  {clientMetrics.scoreBands.map((_, i) => <Cell key={i} fill={BAND_COLORS[i]} />)}
+                                  {serverMetrics.scoreBands.map((_, i) => <Cell key={i} fill={BAND_COLORS[i]} />)}
                                 </Bar>
                               </BarChart>
                             </ResponsiveContainer>
@@ -573,7 +511,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                       </div>
 
                       {/* Rank list with percentile (client-computed) */}
-                      {clientMetrics.rankList.length > 0 && (
+                      {serverMetrics.rankList.length > 0 && (
                         <div className="border border-border/50 rounded-xl overflow-hidden shadow-sm">
                           <div className="px-4 py-3 bg-muted/30 border-b border-border/40 flex items-center gap-2">
                             <Trophy className="h-4 w-4 text-amber-500" />
@@ -592,10 +530,10 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {clientMetrics.rankList.map((r) => (
+                              {serverMetrics.rankList.map((r) => (
                                 <TableRow key={r.student_id} className="hover:bg-muted/10">
                                   <TableCell className="text-center font-bold">
-                                    {r.rank === 1 ? "ðŸ¥‡" : r.rank === 2 ? "ðŸ¥ˆ" : r.rank === 3 ? "ðŸ¥‰" : `#${r.rank}`}
+                                    {r.rank === 1 ? "🥇" : r.rank === 2 ? "🥈" : r.rank === 3 ? "🥉" : `#${r.rank}`}
                                   </TableCell>
                                   <TableCell>
                                     <div className="font-semibold text-sm">{r.student_name}</div>
@@ -611,12 +549,12 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                                   <TableCell className="text-center">
                                     {r.grade
                                       ? <Badge className="text-xs font-bold" style={{ background: `${GRADE_COLORS[r.grade] ?? "#6366f1"}20`, color: GRADE_COLORS[r.grade] ?? "#6366f1" }}>{r.grade}</Badge>
-                                      : "â€”"}
+                                      : "—"}
                                   </TableCell>
                                   <TableCell className="text-center">
                                     <div className={cn("text-sm font-extrabold",
                                       r.percentile >= 75 ? "text-emerald-600" : r.percentile >= 50 ? "text-primary" : "text-rose-600")}>
-                                      {r.percentile}áµ–
+                                      {r.percentile}ᵖ
                                     </div>
                                     <div className="text-[10px] text-muted-foreground">top {100 - r.percentile}%</div>
                                   </TableCell>
