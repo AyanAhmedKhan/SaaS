@@ -218,32 +218,84 @@ router.get('/parent', asyncHandler(async (req, res) => {
 
   const childData = [];
   for (const child of children.rows) {
-    const [att, exams, remarks] = await Promise.all([
+    const [att, exams, remarks, assignments, fees, upcomingExams] = await Promise.all([
+      // Attendance summary
       query(
         `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='present') AS present,
            ROUND(COUNT(*) FILTER (WHERE status='present')::NUMERIC/NULLIF(COUNT(*),0)*100,1) AS pct
          FROM attendance_records WHERE student_id=$1`, [child.id]),
+      // Recent exam results
       query(
-        `SELECT er.marks_obtained, e.total_marks, e.name AS exam_name, sub.name AS subject_name
+        `SELECT er.marks_obtained, e.total_marks AS max_marks, e.name AS exam_name, sub.name AS subject_name, e.exam_date
          FROM exam_results er JOIN exams e ON er.exam_id=e.id LEFT JOIN subjects sub ON e.subject_id=sub.id
          WHERE er.student_id=$1 ORDER BY e.exam_date DESC LIMIT 5`, [child.id]),
+      // Recent teacher remarks
       query(
-        'SELECT * FROM teacher_remarks WHERE student_id=$1 ORDER BY created_at DESC LIMIT 3', [child.id]),
+        `SELECT tr.*, u.name AS teacher_name FROM teacher_remarks tr 
+         LEFT JOIN teachers t ON tr.teacher_id=t.id 
+         LEFT JOIN users u ON t.user_id=u.id
+         WHERE tr.student_id=$1 ORDER BY tr.created_at DESC LIMIT 3`, [child.id]),
+      // Assignments with submission status
+      query(
+        `SELECT a.id, a.title, a.due_date, sub.name AS subject_name,
+           CASE WHEN asub.id IS NOT NULL THEN 'submitted' ELSE 'pending' END AS status,
+           asub.submitted_at, asub.marks_obtained, a.max_marks
+         FROM assignments a
+         LEFT JOIN subjects sub ON a.subject_id=sub.id
+         LEFT JOIN assignment_submissions asub ON asub.assignment_id=a.id AND asub.student_id=$1
+         WHERE a.class_id=$2 AND a.institute_id=$3 AND a.due_date >= CURRENT_DATE - INTERVAL '30 days'
+         ORDER BY a.due_date DESC LIMIT 8`,
+        [child.id, child.class_id, instId]),
+      // Fee payment summary
+      query(
+        `SELECT 
+           COUNT(*) AS total_fees,
+           COUNT(*) FILTER (WHERE status='paid') AS paid_count,
+           COALESCE(SUM(paid_amount) FILTER (WHERE status='paid'), 0) AS total_paid,
+           COALESCE(SUM(amount - COALESCE(paid_amount,0)) FILTER (WHERE status IN ('pending','partial')), 0) AS pending_amount
+         FROM fee_payments WHERE student_id=$1 AND institute_id=$2`,
+        [child.id, instId]),
+      // Upcoming exams
+      query(
+        `SELECT e.id, e.name, e.exam_date, sub.name AS subject_name, e.syllabus_topics
+         FROM exams e
+         LEFT JOIN subjects sub ON e.subject_id=sub.id
+         WHERE e.class_id=$1 AND e.institute_id=$2 AND e.exam_date >= CURRENT_DATE
+         ORDER BY e.exam_date LIMIT 5`,
+        [child.class_id, instId])
     ]);
+    
     childData.push({
       student: child,
       attendance: att.rows[0],
       recentExams: exams.rows,
       recentRemarks: remarks.rows,
+      assignments: assignments.rows,
+      feeSummary: fees.rows[0] || { total_fees: 0, paid_count: 0, total_paid: 0, pending_amount: 0 },
+      upcomingExams: upcomingExams.rows,
     });
   }
 
+  // Notices for parents
   const notices = await query(
     "SELECT * FROM notices WHERE institute_id=$1 AND (target_roles IS NULL OR 'parent' = ANY(target_roles)) ORDER BY created_at DESC LIMIT 5",
     [instId]
   );
 
-  res.json({ success: true, data: { children: childData, notices: notices.rows } });
+  // Upcoming school events/holidays
+  const events = await query(
+    `SELECT * FROM holidays WHERE institute_id=$1 AND holiday_date >= CURRENT_DATE ORDER BY holiday_date LIMIT 5`,
+    [instId]
+  );
+
+  res.json({ 
+    success: true, 
+    data: { 
+      children: childData, 
+      notices: notices.rows,
+      upcomingEvents: events.rows
+    } 
+  });
 }));
 
 // ── Super Admin overview ──
