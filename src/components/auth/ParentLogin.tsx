@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Users, ArrowLeft, Mail, Lock, Eye, EyeOff, Loader2, ShieldCheck, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -160,9 +160,9 @@ export default function ParentLogin({ onBack }: ParentLoginProps) {
 
               {/* Forgot Password */}
               <div className="text-right">
-                <a href="/forgot-password" className="text-sm text-emerald-600 hover:text-emerald-700 font-medium">
+                <Link to="/forgot-password" className="text-sm text-emerald-600 hover:text-emerald-700 font-medium">
                   Forgot Password?
-                </a>
+                </Link>
               </div>
 
               {/* Login Button */}
@@ -192,10 +192,12 @@ export default function ParentLogin({ onBack }: ParentLoginProps) {
             </div>
           </div>
 
-          {/* Demo hint */}
-          <p className="text-center text-xs text-muted-foreground">
-            Demo: ramesh.sharma@gmail.com / demo123 / SPRING01
-          </p>
+          {/* Demo hint - only visible in development */}
+          {import.meta.env.DEV && (
+            <p className="text-center text-xs text-muted-foreground">
+              Demo: ramesh.sharma@gmail.com / demo123 / SPRING01
+            </p>
+          )}
         </div>
       </div>
     </div>

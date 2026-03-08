@@ -182,7 +182,7 @@ export default function StaffLogin({ onBack }: StaffLoginProps) {
               </div>
 
               <div className="flex justify-end">
-                <button type="button" className="text-sm text-violet-600 hover:text-violet-700 font-medium transition-colors">
+                <button type="button" onClick={() => navigate('/forgot-password')} className="text-sm text-violet-600 hover:text-violet-700 font-medium transition-colors">
                   Forgot Password?
                 </button>
               </div>
@@ -201,12 +201,14 @@ export default function StaffLogin({ onBack }: StaffLoginProps) {
             </form>
           </div>
 
-          {/* Demo hint */}
-          <div className="text-center animate-fade-in" style={{ animationDelay: '300ms', opacity: 0 }}>
-            <p className="text-xs text-muted-foreground/70">
-              Demo: admin@springfield.edu + <code className="bg-muted/80 px-1.5 py-0.5 rounded text-xs font-mono">demo123</code> • Code: <code className="bg-muted/80 px-1.5 py-0.5 rounded text-xs font-mono">SPRING01</code>
-            </p>
-          </div>
+          {/* Demo hint - only visible in development */}
+          {import.meta.env.DEV && (
+            <div className="text-center animate-fade-in" style={{ animationDelay: '300ms', opacity: 0 }}>
+              <p className="text-xs text-muted-foreground/70">
+                Demo: admin@springfield.edu + <code className="bg-muted/80 px-1.5 py-0.5 rounded text-xs font-mono">demo123</code> • Code: <code className="bg-muted/80 px-1.5 py-0.5 rounded text-xs font-mono">SPRING01</code>
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

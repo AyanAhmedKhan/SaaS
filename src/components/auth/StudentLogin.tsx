@@ -51,39 +51,12 @@ export default function StudentLogin({ onBack }: StudentLoginProps) {
   };
 
   const handleSendOtp = async () => {
-    if (!mobileNumber || mobileNumber.length < 10) {
-      toast.error('Please enter a valid mobile number');
-      return;
-    }
-    setIsLoading(true);
-    // Simulate OTP send
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setOtpSent(true);
-    setIsLoading(false);
-    toast.success('OTP sent!', { description: `OTP sent to +91 ${mobileNumber}` });
+    toast.info('OTP login is coming soon!', { description: 'Please use password login for now.' });
   };
 
   const handleOtpLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otp || otp.length < 4) {
-      toast.error('Please enter a valid OTP');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const success = await login(mobileNumber, 'demo123', instituteCode || undefined);
-      if (success) {
-        toast.success('Welcome back!', { description: 'Logged in as Student' });
-        navigate('/dashboard');
-      } else {
-        toast.error('Verification failed');
-      }
-    } catch {
-      toast.error('An error occurred');
-    } finally {
-      setIsLoading(false);
-    }
+    toast.info('OTP login is coming soon!', { description: 'Please use password login for now.' });
   };
 
   return (
@@ -210,7 +183,7 @@ export default function StudentLogin({ onBack }: StudentLoginProps) {
                 </div>
 
                 <div className="flex justify-end">
-                  <button type="button" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                  <button type="button" onClick={() => navigate('/forgot-password')} className="text-sm text-blue-600 hover:text-blue-700 font-medium">
                     Forgot Password?
                   </button>
                 </div>
@@ -301,10 +274,12 @@ export default function StudentLogin({ onBack }: StudentLoginProps) {
             )}
           </div>
 
-          {/* Demo hint */}
-          <p className="text-center text-xs text-muted-foreground">
-            Demo: arjun@springfield.edu + <code className="bg-muted px-1.5 py-0.5 rounded">demo123</code> • Code: <code className="bg-muted px-1.5 py-0.5 rounded">SPRING01</code>
-          </p>
+          {/* Demo hint - only visible in development */}
+          {import.meta.env.DEV && (
+            <p className="text-center text-xs text-muted-foreground">
+              Demo: arjun@springfield.edu + <code className="bg-muted px-1.5 py-0.5 rounded">demo123</code> • Code: <code className="bg-muted px-1.5 py-0.5 rounded">SPRING01</code>
+            </p>
+          )}
         </div>
       </div>
     </div>

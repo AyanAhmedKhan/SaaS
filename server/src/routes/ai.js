@@ -343,7 +343,7 @@ Be empathetic, specific, and actionable. Do not include the student's name in re
 // POST /api/ai/generate-remark  —  Generate a report-card remark
 // Body: { student_name, class_name, attendance_rate, avg_score, subjects_struggling, behavior_notes }
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/generate-remark', requireInstitute, authorize('institute_admin', 'teacher'), asyncHandler(async (req, res) => {
+router.post('/generate-remark', requireInstitute, authorize('institute_admin', 'faculty'), asyncHandler(async (req, res) => {
   const {
     student_name,
     class_name,

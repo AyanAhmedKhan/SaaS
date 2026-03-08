@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
-import { query } from '../db/connection.js';
+import { query, getClient } from '../db/connection.js';
 import { authenticate, authorize, requireInstitute, logAudit } from '../middleware/auth.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
@@ -83,15 +83,25 @@ router.post('/bulk', authorize('institute_admin', 'super_admin'), asyncHandler(a
   const { class_id, entries } = req.body;
   if (!class_id || !Array.isArray(entries)) throw new AppError('class_id and entries[] required', 400);
 
-  // Delete existing entries for that class and re-insert
-  await query('DELETE FROM timetable WHERE class_id=$1 AND institute_id=$2', [class_id, instId]);
-  for (const e of entries) {
-    const id = `tt_${randomUUID().replace(/-/g, '').substring(0, 12)}`;
-    await query(
-      `INSERT INTO timetable (id, institute_id, class_id, subject_id, teacher_id, day_of_week, period_number, start_time, end_time, room, academic_year_id)
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    // Delete existing entries for that class and re-insert
+    await client.query('DELETE FROM timetable WHERE class_id=$1 AND institute_id=$2', [class_id, instId]);
+    for (const e of entries) {
+      const id = `tt_${randomUUID().replace(/-/g, '').substring(0, 12)}`;
+      await client.query(
+        `INSERT INTO timetable (id, institute_id, class_id, subject_id, teacher_id, day_of_week, period_number, start_time, end_time, room, academic_year_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [id, instId, class_id, e.subject_id||null, e.teacher_id||null, e.day_of_week, e.period_number, e.start_time||null, e.end_time||null, e.room||null, e.academic_year_id||null]
-    );
+        [id, instId, class_id, e.subject_id||null, e.teacher_id||null, e.day_of_week, e.period_number, e.start_time||null, e.end_time||null, e.room||null, e.academic_year_id||null]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
 
   await logAudit({ instituteId: instId, userId: req.user.id, action: 'bulk_update_timetable', entityType: 'timetable', newValues: { class_id, count: entries.length }, req });

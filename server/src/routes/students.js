@@ -481,6 +481,9 @@ router.put('/:id', authorize('institute_admin', 'faculty', 'super_admin'), async
 router.delete('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
     const { rows } = await query('SELECT * FROM students WHERE id = $1', [req.params.id]);
     if (!rows[0]) throw new AppError('Student not found', 404);
+    if (req.user.role !== 'super_admin' && rows[0].institute_id !== req.instituteId) {
+        throw new AppError('Access denied', 403);
+    }
 
     await query('UPDATE students SET status = $1, updated_at = NOW() WHERE id = $2', ['inactive', req.params.id]);
     // Also deactivate the user login

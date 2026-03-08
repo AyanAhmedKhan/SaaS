@@ -126,27 +126,40 @@ class ApiClient {
     }
   }
 
+  private refreshPromise: Promise<boolean> | null = null;
+
   private async tryRefreshToken(): Promise<boolean> {
-    try {
-      const refreshToken = localStorage.getItem('eduyantra_refresh_token');
-      if (!refreshToken) return false;
-      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
-      if (!response.ok) return false;
-      const data = await response.json();
-      if (data.data?.token) {
-        this.setToken(data.data.token);
-        if (data.data.refreshToken) {
-          this.setRefreshToken(data.data.refreshToken);
+    // Deduplicate concurrent refresh attempts
+    if (this.refreshPromise) return this.refreshPromise;
+
+    this.refreshPromise = (async () => {
+      try {
+        const refreshToken = localStorage.getItem('eduyantra_refresh_token');
+        if (!refreshToken) return false;
+        const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        if (!response.ok) return false;
+        const data = await response.json();
+        if (data.data?.token) {
+          this.setToken(data.data.token);
+          if (data.data.refreshToken) {
+            this.setRefreshToken(data.data.refreshToken);
+          }
+          return true;
         }
-        return true;
+        return false;
+      } catch {
+        return false;
       }
-      return false;
-    } catch {
-      return false;
+    })();
+
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.refreshPromise = null;
     }
   }
 

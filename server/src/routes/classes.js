@@ -93,6 +93,9 @@ router.put('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(asy
 router.delete('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
     const existing = await query('SELECT * FROM classes WHERE id = $1', [req.params.id]);
     if (!existing.rows[0]) throw new AppError('Class not found', 404);
+    if (req.user.role !== 'super_admin' && existing.rows[0].institute_id !== req.instituteId) {
+        throw new AppError('Access denied', 403);
+    }
 
     const studentCount = await query('SELECT COUNT(*) FROM students WHERE class_id = $1', [req.params.id]);
     if (parseInt(studentCount.rows[0].count) > 0) {

@@ -69,6 +69,9 @@ router.put('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(asy
     const { name, code, description, is_active } = req.body;
     const existing = await query('SELECT * FROM subjects WHERE id = $1', [req.params.id]);
     if (!existing.rows[0]) throw new AppError('Subject not found', 404);
+    if (req.user.role !== 'super_admin' && existing.rows[0].institute_id !== req.instituteId) {
+        throw new AppError('Access denied', 403);
+    }
 
     await query(
         `UPDATE subjects SET name = COALESCE($1, name), code = COALESCE($2, code), 
@@ -100,6 +103,11 @@ router.post('/assign', authorize('institute_admin', 'super_admin'), asyncHandler
 
 // ── DELETE /api/subjects/:id ──
 router.delete('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
+    const existing = await query('SELECT * FROM subjects WHERE id = $1', [req.params.id]);
+    if (!existing.rows[0]) throw new AppError('Subject not found', 404);
+    if (req.user.role !== 'super_admin' && existing.rows[0].institute_id !== req.instituteId) {
+        throw new AppError('Access denied', 403);
+    }
     await query('UPDATE subjects SET is_active = false WHERE id = $1', [req.params.id]);
     res.json({ success: true, message: 'Subject deactivated' });
 }));

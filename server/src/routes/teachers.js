@@ -119,6 +119,9 @@ router.post('/', authorize('institute_admin', 'super_admin'), asyncHandler(async
 router.put('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
     const existing = await query('SELECT * FROM teachers WHERE id = $1', [req.params.id]);
     if (!existing.rows[0]) throw new AppError('Teacher not found', 404);
+    if (req.user.role !== 'super_admin' && existing.rows[0].institute_id !== req.instituteId) {
+        throw new AppError('Access denied', 403);
+    }
 
     const e = existing.rows[0];
     const { name, email, phone, subject_specialization, qualification, experience_years, status } = req.body;
@@ -143,6 +146,9 @@ router.post('/:id/assign', authorize('institute_admin', 'super_admin'), asyncHan
 
     const teacher = await query('SELECT * FROM teachers WHERE id = $1', [req.params.id]);
     if (!teacher.rows[0]) throw new AppError('Teacher not found', 404);
+    if (req.user.role !== 'super_admin' && teacher.rows[0].institute_id !== req.instituteId) {
+        throw new AppError('Access denied', 403);
+    }
 
     const ayResult = await query('SELECT id FROM academic_years WHERE institute_id = $1 AND is_current = true', [teacher.rows[0].institute_id]);
     const ayId = ayResult.rows[0]?.id;
@@ -169,6 +175,9 @@ router.post('/:id/assign', authorize('institute_admin', 'super_admin'), asyncHan
 router.delete('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
     const { rows } = await query('SELECT * FROM teachers WHERE id = $1', [req.params.id]);
     if (!rows[0]) throw new AppError('Teacher not found', 404);
+    if (req.user.role !== 'super_admin' && rows[0].institute_id !== req.instituteId) {
+        throw new AppError('Access denied', 403);
+    }
 
     await query('UPDATE teachers SET status = $1, updated_at = NOW() WHERE id = $2', ['inactive', req.params.id]);
     if (rows[0].user_id) {

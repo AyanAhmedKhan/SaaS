@@ -239,7 +239,7 @@ router.get('/parent', authorize('parent', 'super_admin'), asyncHandler(async (re
       query(
         `SELECT a.id, a.title, a.due_date, sub.name AS subject_name,
            CASE WHEN asub.id IS NOT NULL THEN 'submitted' ELSE 'pending' END AS status,
-           asub.submitted_at, asub.marks_obtained, a.max_marks
+           asub.submitted_at, asub.marks_obtained, a.total_marks
          FROM assignments a
          LEFT JOIN subjects sub ON a.subject_id=sub.id
          LEFT JOIN assignment_submissions asub ON asub.assignment_id=a.id AND asub.student_id=$1

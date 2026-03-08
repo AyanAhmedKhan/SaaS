@@ -75,7 +75,8 @@ router.post('/login', asyncHandler(async (req, res) => {
         });
     } catch (error) {
         if (error instanceof AppError) throw error;
-        throw new AppError('Login failed: ' + error.message, 500);
+        console.error('[AUTH] Login error:', error);
+        throw new AppError('Login failed. Please try again later.', 500);
     }
 }));
 
@@ -90,7 +91,7 @@ router.post('/register', asyncHandler(async (req, res) => {
     email = email.trim().toLowerCase();
     role = role.trim().toLowerCase();
 
-    const allowedRoles = ['super_admin', 'institute_admin', 'faculty', 'student', 'parent'];
+    const allowedRoles = ['institute_admin', 'faculty', 'student', 'parent'];
     if (!allowedRoles.includes(role)) {
         throw new AppError('Invalid role specified', 400);
     }
@@ -147,7 +148,7 @@ router.post('/register', asyncHandler(async (req, res) => {
             throw new AppError('Email is already registered in this institute', 409);
         }
 
-        const passwordHash = bcrypt.hashSync(password, 12);
+        const passwordHash = await bcrypt.hash(password, 12);
         const userId = `u_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
 
         await client.query(
@@ -227,7 +228,8 @@ router.post('/register', asyncHandler(async (req, res) => {
     } catch (error) {
         await client.query('ROLLBACK');
         if (error instanceof AppError) throw error;
-        throw new AppError('Registration failed: ' + error.message, 500);
+        console.error('[AUTH] Registration error:', error);
+        throw new AppError('Registration failed. Please try again later.', 500);
     } finally {
         client.release();
     }
@@ -257,7 +259,8 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
         });
     } catch (error) {
         if (error instanceof AppError) throw error;
-        throw new AppError('Failed to fetch user profile: ' + error.message, 500);
+        console.error('[AUTH] Profile fetch error:', error);
+        throw new AppError('Failed to fetch user profile', 500);
     }
 }));
 
@@ -312,7 +315,7 @@ router.post('/change-password', authenticate, asyncHandler(async (req, res) => {
         throw new AppError('Current password is incorrect', 401);
     }
 
-    const newHash = bcrypt.hashSync(newPassword, 12);
+    const newHash = await bcrypt.hash(newPassword, 12);
     await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, req.user.id]);
 
     await logAudit({
@@ -424,7 +427,7 @@ router.post('/reset-password', asyncHandler(async (req, res) => {
     }
 
     const resetRecord = rows[0];
-    const newHash = bcrypt.hashSync(newPassword, 12);
+    const newHash = await bcrypt.hash(newPassword, 12);
 
     // Update password
     await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, resetRecord.user_id]);

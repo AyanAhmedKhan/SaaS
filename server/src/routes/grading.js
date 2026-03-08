@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
-import { query } from '../db/connection.js';
+import { query, getClient } from '../db/connection.js';
 import { authenticate, authorize, requireInstitute, logAudit } from '../middleware/auth.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
@@ -43,15 +43,25 @@ router.post('/bulk', authorize('institute_admin', 'super_admin'), asyncHandler(a
   const { grades } = req.body;
   if (!Array.isArray(grades)) throw new AppError('grades[] required', 400);
 
-  // replace entire grading system
-  await query('DELETE FROM grading_systems WHERE institute_id=$1', [instId]);
-  for (const g of grades) {
-    const id = `grd_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
-    await query(
-      `INSERT INTO grading_systems (id, institute_id, grade, min_percentage, max_percentage, grade_point, description)
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    // replace entire grading system
+    await client.query('DELETE FROM grading_systems WHERE institute_id=$1', [instId]);
+    for (const g of grades) {
+      const id = `grd_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
+      await client.query(
+        `INSERT INTO grading_systems (id, institute_id, grade, min_percentage, max_percentage, grade_point, description)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [id, instId, g.grade, g.min_percentage, g.max_percentage, g.grade_point||null, g.description||null]
-    );
+        [id, instId, g.grade, g.min_percentage, g.max_percentage, g.grade_point||null, g.description||null]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
 
   await logAudit({ instituteId: instId, userId: req.user.id, action: 'bulk_update_grading', entityType: 'grading_system', req });

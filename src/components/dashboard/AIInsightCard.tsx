@@ -69,6 +69,12 @@ function generateSummary(data: AIInsightData, role: string): string {
   return `${rolePrefix}${attendanceNote} ${scoreNote} ${trendNote}${subjectNote ? " " + subjectNote : ""}${assignmentNote}`;
 }
 
+function SafeBoldText({ text }: { text: string }) {
+  const sanitized = text.replace(/<[^>]*>/g, "");
+  const parts = sanitized.split(/\*\*(.*?)\*\*/g);
+  return <>{parts.map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part))}</>;
+}
+
 function SimpleMarkdown({ text }: { text: string }) {
   const lines = text.split("\n");
   return (
@@ -82,7 +88,7 @@ function SimpleMarkdown({ text }: { text: string }) {
           return (
             <div key={i} className="flex items-start gap-2 pl-2">
               <span className="text-primary mt-1.5 text-xs shrink-0">●</span>
-              <span dangerouslySetInnerHTML={{ __html: line.slice(2).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />
+              <span><SafeBoldText text={line.slice(2)} /></span>
             </div>
           );
         }
@@ -91,14 +97,14 @@ function SimpleMarkdown({ text }: { text: string }) {
           if (match) return (
             <div key={i} className="flex items-start gap-2 pl-2">
               <span className="text-primary font-bold shrink-0 text-xs mt-0.5">{match[1]}.</span>
-              <span dangerouslySetInnerHTML={{ __html: match[2].replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />
+              <span><SafeBoldText text={match[2]} /></span>
             </div>
           );
         }
         if (line.startsWith("**") && line.endsWith("**")) {
-          return <p key={i} className="font-semibold text-foreground" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />;
+          return <p key={i} className="font-semibold text-foreground"><SafeBoldText text={line} /></p>;
         }
-        return <p key={i} dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />;
+        return <p key={i}><SafeBoldText text={line} /></p>;
       })}
     </div>
   );

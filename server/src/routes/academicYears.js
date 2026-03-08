@@ -125,6 +125,9 @@ router.post('/:id/archive', authorize('institute_admin', 'super_admin'), asyncHa
     const { id } = req.params;
     const existing = await query('SELECT * FROM academic_years WHERE id = $1', [id]);
     if (!existing.rows[0]) throw new AppError('Academic year not found', 404);
+    if (req.user.role !== 'super_admin' && existing.rows[0].institute_id !== req.instituteId) {
+        throw new AppError('Access denied', 403);
+    }
 
     await query('UPDATE academic_years SET is_archived = true, is_current = false, updated_at = NOW() WHERE id = $1', [id]);
     await logAudit({ instituteId: existing.rows[0].institute_id, userId: req.user.id, action: 'archive', entityType: 'academic_year', entityId: id, req });
