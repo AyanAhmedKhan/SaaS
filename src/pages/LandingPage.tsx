@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import {
-  GraduationCap, Users, BookOpen, Calendar, BarChart3, Bell,
+  Users, BookOpen, Calendar, BarChart3, Bell,
   CheckCircle2, ArrowRight, Star, Shield, Zap, Globe,
   ChevronRight, Play, Award, Clock, TrendingUp, Brain,
   Smartphone, Lock, HeartHandshake, School
@@ -103,9 +103,7 @@ export default function LandingPage() {
           <div className="flex items-center justify-between h-16 md:h-20">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-blue-600 shadow-lg shadow-primary/25 transition-transform group-hover:scale-105">
-                <GraduationCap className="h-5 w-5 text-white" />
-              </div>
+              <img src="/logo.jpeg" alt="EduYantra logo" className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-primary/25 transition-transform group-hover:scale-105" />
               <span className="text-xl font-bold text-foreground">EduYantra</span>
             </Link>
 
@@ -429,9 +427,7 @@ export default function LandingPage() {
             {/* Brand */}
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2.5 mb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-blue-600 shadow-lg shadow-primary/25">
-                  <GraduationCap className="h-5 w-5 text-white" />
-                </div>
+                <img src="/logo.jpeg" alt="EduYantra logo" className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-primary/25" />
                 <span className="text-xl font-bold text-foreground">EduYantra</span>
               </Link>
               <p className="text-sm text-muted-foreground">

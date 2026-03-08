@@ -97,9 +97,7 @@ export function AppSidebar() {
         {/* Subtle glow effect in header */}
         <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
         <div className="relative flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent shadow-lg shadow-accent/30 transition-transform duration-200 hover:scale-105">
-            <GraduationCap className="h-6 w-6 text-accent-foreground" />
-          </div>
+          <img src="/logo.jpeg" alt="EduYantra logo" className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-accent/30 transition-transform duration-200 hover:scale-105" />
           {!collapsed && (
             <div className="flex flex-col animate-fade-in">
               <span className="text-lg font-bold text-sidebar-foreground tracking-tight">EduYantra</span>
