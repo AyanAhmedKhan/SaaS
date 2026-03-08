@@ -405,6 +405,8 @@ export default function Timetable() {
             </div>
           </>
         )}
+          </>
+        )}
       </div>
 
       {showManage && classFilter !== "all" && (

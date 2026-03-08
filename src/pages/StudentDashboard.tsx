@@ -431,12 +431,12 @@ export default function StudentDashboard() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2">
-                        <p className="font-semibold text-red-700 dark:text-red-400 text-sm sm:text-base truncate flex items-center gap-2">
+                        <div className="font-semibold text-red-700 dark:text-red-400 text-sm sm:text-base truncate flex items-center gap-2">
                           Upcoming Exam
                           <Badge variant="outline" className="border-red-500/30 text-red-600 dark:text-red-400 text-[9px] uppercase tracking-wider scale-90 origin-left">
                             {upcomingExams[0].exam_type.replace('_', ' ')}
                           </Badge>
-                        </p>
+                        </div>
                       </div>
                       <p className="text-xs sm:text-sm text-red-600/80 dark:text-red-400/80 truncate">
                         <span className="font-medium">{upcomingExams[0].name}</span>

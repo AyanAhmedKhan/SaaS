@@ -345,6 +345,8 @@ export default function Syllabus() {
             </div>
           </>
         )}
+          </>
+        )}
       </div>
 
       {editTopic && (
