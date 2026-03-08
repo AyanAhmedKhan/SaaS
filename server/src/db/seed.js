@@ -1,8 +1,9 @@
 import { query, getClient, closePool } from './connection.js';
 import { createSchema } from './schema.js';
 import bcrypt from 'bcryptjs';
-import { faker } from '@faker-js/faker';
-import { v4 as uuidv4 } from 'uuid';
+
+// faker and uuid are loaded dynamically inside seed() to avoid crashing
+// the server at startup when @faker-js/faker isn't installed in production.
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -49,14 +50,19 @@ function weekdaysBack(n) {
   return dates;
 }
 
-function shortId() {
-  return uuidv4().replace(/-/g, '').slice(0, 16);
-}
-
 // ─── Seed ──────────────────────────────────────────────────────────────────────
 
 export async function seed() {
   console.log('[SEED] Starting comprehensive multi-tenant database seed…');
+
+  // Dynamic imports — only loaded when seed() is actually called
+  const { faker } = await import('@faker-js/faker');
+  const { v4: uuidv4 } = await import('uuid');
+
+  function shortId() {
+    return uuidv4().replace(/-/g, '').slice(0, 16);
+  }
+
   faker.seed(12345);
 
   try {
