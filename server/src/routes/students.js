@@ -316,7 +316,7 @@ router.post('/bulk', authorize('institute_admin', 'super_admin'), asyncHandler(a
                 );
                 successCount++;
             } catch (err) {
-                errors.push({ row: index + 1, error: err.message });
+                errors.push({ row: index + 1, error: 'Failed to import student' });
             }
         }
 
@@ -425,7 +425,7 @@ router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHa
         if (error.message?.includes('unique') || error.message?.includes('duplicate')) {
             throw new AppError('A student with this roll number already exists in this class', 409);
         }
-        throw new AppError('Failed to create student: ' + error.message, 500);
+        throw new AppError('Failed to create student', 500);
     } finally {
         client.release();
     }

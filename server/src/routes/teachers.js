@@ -109,7 +109,7 @@ router.post('/', authorize('institute_admin', 'super_admin'), asyncHandler(async
         if (error.message?.includes('unique') || error.message?.includes('duplicate')) {
             throw new AppError('A teacher with this email already exists', 409);
         }
-        throw new AppError('Failed to create teacher: ' + error.message, 500);
+        throw new AppError('Failed to create teacher', 500);
     } finally {
         client.release();
     }
