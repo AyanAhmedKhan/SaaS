@@ -1,0 +1,366 @@
+import { query, getClient, closePool } from './connection.js';
+import { createSchema } from './schema.js';
+import bcrypt from 'bcryptjs';
+import { faker } from '@faker-js/faker';
+
+async function seed() {
+    console.log('[SEED] Starting comprehensive multi-tenant database seed...');
+
+    // Make random data reproducible
+    faker.seed(12345);
+
+    try {
+        await createSchema();
+
+        const client = await getClient();
+        const passwordHash = bcrypt.hashSync('demo123', 12);
+
+        try {
+            await client.query('BEGIN');
+
+            console.log('[SEED] 0. SUBSCRIPTION PLANS');
+            const defaultPlans = [
+                {
+                    id: 'plan_starter', slug: 'starter', name: 'Starter', tagline: 'Everything a small school needs',
+                    monthly_price: 2999, annual_price: 29990, max_students: 200, max_teachers: 15, max_admins: 1, max_classes: 10,
+                    features: JSON.stringify([{ text: 'Admin Dashboard', included: true }, { text: 'Student Management', included: true }, { text: 'Teacher Management', included: true }, { text: 'Attendance Tracking', included: true }, { text: 'Timetable', included: true }, { text: 'Fee Management', included: true }, { text: 'Notices & Announcements', included: true }, { text: 'Up to 10 Classes', included: true }, { text: 'AI Insights', included: false }, { text: 'Exams & Grading', included: false }, { text: 'Syllabus Tracking', included: false }, { text: 'Reports & Analytics', included: false }, { text: 'Assignments', included: false }, { text: 'Multi-Admin Support', included: false }]),
+                    is_default: true, sort_order: 1,
+                },
+                {
+                    id: 'plan_professional', slug: 'professional', name: 'Professional', tagline: 'Complete school OS for academics',
+                    monthly_price: 7999, annual_price: 79990, max_students: 1000, max_teachers: 75, max_admins: 5, max_classes: 40,
+                    features: JSON.stringify([{ text: 'Everything in Starter', included: true, highlight: true }, { text: 'Basic AI Insights', included: true }, { text: 'Exams & Grading System', included: true }, { text: 'Syllabus Tracking', included: true }, { text: 'Performance Reports', included: true }, { text: 'Assignments Module', included: true }, { text: 'Fee Analytics & Overdue', included: true }, { text: 'Up to 5 Admin Accounts', included: true }, { text: 'Up to 40 Classes', included: true }, { text: 'Student & Parent Dashboards', included: true }, { text: 'At-Risk Student Detection', included: false }, { text: 'Predictive Analytics', included: false }, { text: 'AI Report Generation', included: false }, { text: 'Multi-Branch Management', included: false }]),
+                    is_default: true, sort_order: 2,
+                },
+                {
+                    id: 'plan_ai_pro', slug: 'ai_pro', name: 'AI Pro', tagline: "Your school's AI co-pilot",
+                    monthly_price: 12999, annual_price: 129990, max_students: 2000, max_teachers: 150, max_admins: 10, max_classes: 80,
+                    features: JSON.stringify([{ text: 'Everything in Professional', included: true, highlight: true }, { text: 'At-Risk Student Detection', included: true }, { text: 'Predictive Performance', included: true }, { text: 'Attendance Heatmaps', included: true }, { text: 'Score Distribution Analysis', included: true }, { text: 'Fee Defaulter Intelligence', included: true }, { text: 'Teacher Workload Optimizer', included: true }, { text: 'AI Report Generation', included: true }, { text: 'Smart Alerts & Notifications', included: true }, { text: 'Syllabus Pace Insights', included: true }, { text: 'AI Parent Summaries', included: true }, { text: 'Up to 80 Classes', included: true }, { text: 'Multi-Branch Management', included: false }, { text: 'REST API Access', included: false }]),
+                    is_default: true, sort_order: 3,
+                },
+                {
+                    id: 'plan_enterprise', slug: 'enterprise', name: 'Enterprise', tagline: 'Scale without limits',
+                    monthly_price: 19999, annual_price: 199990, max_students: 99999, max_teachers: 99999, max_admins: 99999, max_classes: 99999,
+                    features: JSON.stringify([{ text: 'Everything in AI Pro', included: true, highlight: true }, { text: 'Unlimited Students & Staff', included: true }, { text: 'Multi-Branch Management', included: true }, { text: 'Super Admin Dashboard', included: true }, { text: 'Custom Branding & White-Label', included: true }, { text: 'REST API Access', included: true }, { text: 'Custom Report Builder', included: true }, { text: 'Bulk Import/Export', included: true }, { text: 'Audit Logs & Compliance', included: true }, { text: 'Custom Staff Roles', included: true }, { text: 'Dedicated Account Manager', included: true }, { text: 'Priority Support (4hr SLA)', included: true }, { text: 'Free Data Migration', included: true }, { text: 'On-Premise Deployment Option', included: true }]),
+                    is_default: true, sort_order: 4,
+                },
+            ];
+
+            for (const p of defaultPlans) {
+                await client.query(`
+                    INSERT INTO subscription_plans (id, slug, name, tagline, monthly_price, annual_price, max_students, max_teachers, max_admins, max_classes, features, is_default, sort_order)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+                    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, features=EXCLUDED.features`,
+                    [p.id, p.slug, p.name, p.tagline, p.monthly_price, p.annual_price, p.max_students, p.max_teachers, p.max_admins, p.max_classes, p.features, p.is_default, p.sort_order]
+                );
+            }
+
+            console.log('[SEED] 1. SUPER ADMIN');
+            await client.query(`
+                INSERT INTO users (id, institute_id, name, email, password_hash, role, phone)
+                VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING`,
+                ['user_super_01', null, 'Platform Admin', 'super@eduyantra.com', passwordHash, 'super_admin', '+91 9000000001']
+            );
+
+            console.log('[SEED] 2. INSTITUTES');
+            const NUM_EXTRA_INSTITUTES = 4;
+            const institutes = [];
+            institutes.push({
+                id: 'inst_01', name: 'Springfield Academy', code: 'SPRING01', address: '123 Education Lane', city: 'Springfield', state: 'Maharashtra', phone: '+91 9876543210', email: 'admin@springfield.edu', subscription_plan: 'enterprise', max_students: 5000
+            });
+            for (let i = 2; i <= NUM_EXTRA_INSTITUTES + 1; i++) {
+                institutes.push({
+                    id: \`inst_0\${i}\`, name: faker.company.name() + ' School', code: faker.string.alphanumeric(8).toUpperCase(),
+                    address: faker.location.streetAddress(), city: faker.location.city(), state: faker.location.state(),
+                    phone: faker.phone.number(), email: faker.internet.email().toLowerCase(),
+                    subscription_plan: faker.helpers.arrayElement(['starter', 'professional', 'ai_pro', 'enterprise']),
+                    max_students: faker.helpers.arrayElement([200, 1000, 2000, 5000])
+                });
+            }
+
+            for (const inst of institutes) {
+                await client.query(`
+                    INSERT INTO institutes(id, name, code, address, city, state, phone, email, subscription_plan, max_students)
+                    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT(id) DO NOTHING`,
+                    [inst.id, inst.name, inst.code, inst.address, inst.city, inst.state, inst.phone, inst.email, inst.subscription_plan, inst.max_students]
+                );
+            }
+
+            // Global counters for unique ID generation
+            let teacherCounter = 0;
+            let studentCounter = 0;
+            let parentCounter = 0;
+            let csIdx = 0;
+            let taIdx = 0;
+            let attIdx = 0;
+            let ttIdx = 0;
+            let sylIdx = 0;
+            let examIdx = 0;
+            let erIdx = 0;
+            let payIdx = 0;
+
+            console.log('[SEED] Preparing core data per institute...');
+            for (const inst of institutes) {
+                const isSpringfield = inst.id === 'inst_01';
+
+                // Admin
+                const adminId = \`user_admin_\${inst.id}\`;
+                const adminEmail = isSpringfield ? 'admin@springfield.edu' : faker.internet.email().toLowerCase();
+                const adminName = isSpringfield ? 'Rajesh Kumar' : faker.person.fullName();
+                await client.query(\`INSERT INTO users (id, institute_id, name, email, password_hash, role, phone) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING\`,
+                    [adminId, inst.id, adminName, adminEmail, passwordHash, 'institute_admin', faker.phone.number()]);
+
+                // Academic Year
+                const ayId = \`ay_2024_\${inst.id}\`;
+                await client.query(\`INSERT INTO academic_years (id, institute_id, name, start_date, end_date, is_current) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING\`,
+                    [ayId, inst.id, '2024-2025', '2024-04-01', '2025-03-31', true]);
+
+                // Subjects
+                const subjects = [
+                    { id: \`sub_math_\${inst.id}\`, name: 'Mathematics', code: 'MATH' },
+                    { id: \`sub_phy_\${inst.id}\`, name: 'Physics', code: 'PHY' },
+                    { id: \`sub_chem_\${inst.id}\`, name: 'Chemistry', code: 'CHEM' },
+                    { id: \`sub_eng_\${inst.id}\`, name: 'English', code: 'ENG' },
+                    { id: \`sub_bio_\${inst.id}\`, name: 'Biology', code: 'BIO' },
+                ];
+                for (const sub of subjects) {
+                    await client.query(\`INSERT INTO subjects (id, institute_id, name, code) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING\`,
+                        [sub.id, inst.id, sub.name, sub.code]);
+                }
+
+                // Classes
+                const classConfigs = [
+                    { id: \`cls_9a_\${inst.id}\`, name: '9th', section: 'A' }, { id: \`cls_9b_\${inst.id}\`, name: '9th', section: 'B' },
+                    { id: \`cls_10a_\${inst.id}\`, name: '10th', section: 'A' }, { id: \`cls_10b_\${inst.id}\`, name: '10th', section: 'B' },
+                    { id: \`cls_11a_\${inst.id}\`, name: '11th', section: 'A' }, { id: \`cls_11b_\${inst.id}\`, name: '11th', section: 'B' },
+                ];
+                for (const cls of classConfigs) {
+                    await client.query(\`INSERT INTO classes (id, institute_id, academic_year_id, name, section) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING\`,
+                        [cls.id, inst.id, ayId, cls.name, cls.section]);
+                }
+
+                // Teachers
+                const numTeachers = isSpringfield ? 20 : 10;
+                const teachers = [];
+                for (let i = 0; i < numTeachers; i++) {
+                    teacherCounter++;
+                    const isHardcodedCT1 = isSpringfield && i === 0;
+                    const isHardcodedST1 = isSpringfield && i === 1;
+                    
+                    const tName = isHardcodedCT1 ? 'Priya Sharma' : (isHardcodedST1 ? 'Sunita Verma' : faker.person.fullName());
+                    const tEmail = isHardcodedCT1 ? 'priya.sharma@springfield.edu' : (isHardcodedST1 ? 'sunita.verma@springfield.edu' : faker.internet.email().toLowerCase());
+                    const uId = \`user_tch_\${teacherCounter}\`;
+                    const tId = \`tch_\${teacherCounter}\`;
+                    const spec = faker.helpers.arrayElement(subjects).id;
+
+                    await client.query(\`INSERT INTO users (id, institute_id, name, email, password_hash, role, phone) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING\`,
+                        [uId, inst.id, tName, tEmail, passwordHash, 'faculty', faker.phone.number()]);
+                    await client.query(\`INSERT INTO teachers (id, user_id, institute_id, name, email, phone, subject_specialization, experience_years) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING\`,
+                        [tId, uId, inst.id, tName, tEmail, faker.phone.number(), spec, faker.number.int({ min: 1, max: 20 })]);
+                    
+                    teachers.push({ id: tId, spec });
+                }
+
+                // Set Class Teachers & Class Subject Mappings
+                for (let i = 0; i < classConfigs.length; i++) {
+                    const cls = classConfigs[i];
+                    const clsTeacher = teachers[i % teachers.length].id;
+                    await client.query(\`UPDATE classes SET class_teacher_id = $1 WHERE id = $2\`, [clsTeacher, cls.id]);
+
+                    for (const sub of subjects) {
+                        csIdx++;
+                        const sTeacher = faker.helpers.arrayElement(teachers).id;
+                        await client.query(\`INSERT INTO class_subjects (id, class_id, subject_id, teacher_id, periods_per_week) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (class_id, subject_id) DO NOTHING\`,
+                            [\`cs_\${csIdx}\`, cls.id, sub.id, sTeacher, 5]);
+
+                        taIdx++;
+                        await client.query(\`INSERT INTO teacher_assignments (id, teacher_id, class_id, subject_id, academic_year_id, institute_id, is_class_teacher) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (teacher_id, class_id, subject_id, academic_year_id) DO NOTHING\`,
+                            [\`ta_\${taIdx}\`, sTeacher, cls.id, sub.id, ayId, inst.id, sTeacher === clsTeacher]);
+                    }
+                }
+
+                // Role Permissions
+                await client.query(\`INSERT INTO institute_role_permissions (id, institute_id, role, permissions) VALUES ($1,$2,$3,$4) ON CONFLICT (institute_id, role) DO NOTHING\`,
+                    [\`irp_ct_\${inst.id}\`, inst.id, 'class_teacher', JSON.stringify({ manage_students: true, manage_attendance: true, manage_remarks: true, manage_exams: false })]);
+                await client.query(\`INSERT INTO institute_role_permissions (id, institute_id, role, permissions) VALUES ($1,$2,$3,$4) ON CONFLICT (institute_id, role) DO NOTHING\`,
+                    [\`irp_st_\${inst.id}\`, inst.id, 'subject_teacher', JSON.stringify({ manage_students: false, manage_attendance: false, manage_remarks: false, manage_exams: false })]);
+
+                // Students
+                const studentsToGenerate = isSpringfield ? 40 : 10; // per class
+                const currentInstStudents = [];
+                for (const cls of classConfigs) {
+                    for (let n = 0; n < studentsToGenerate; n++) {
+                        studentCounter++;
+                        parentCounter++;
+
+                        const isHardcodedStu1 = isSpringfield && cls.id === \`cls_10a_\${inst.id}\` && n === 0;
+                        const isHardcodedPar1 = isSpringfield && cls.id === \`cls_10a_\${inst.id}\` && n === 0;
+
+                        const sName = isHardcodedStu1 ? 'Arjun Sharma' : faker.person.fullName();
+                        const sEmail = isHardcodedStu1 ? 'arjun@springfield.edu' : faker.internet.email().toLowerCase();
+                        
+                        const pName = isHardcodedPar1 ? 'Ramesh Sharma' : faker.person.fullName();
+                        const pEmail = isHardcodedPar1 ? 'ramesh.sharma@gmail.com' : faker.internet.email().toLowerCase();
+                        const pId = \`user_par_\${parentCounter}\`;
+
+                        await client.query(\`INSERT INTO users (id, institute_id, name, email, password_hash, role, phone) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING\`,
+                            [pId, inst.id, pName, pEmail, passwordHash, 'parent', faker.phone.number()]);
+
+                        const stuUID = \`user_stu_\${studentCounter}\`;
+                        const stuId = \`stu_\${studentCounter}\`;
+                        
+                        await client.query(\`INSERT INTO users (id, institute_id, name, email, password_hash, role, phone) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING\`,
+                            [stuUID, inst.id, sName, sEmail, passwordHash, 'student', null]);
+
+                        await client.query(\`INSERT INTO students (id, user_id, institute_id, academic_year_id, class_id, name, email, roll_number, date_of_birth, gender, parent_id, parent_name, parent_email, parent_phone, admission_date) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT (id) DO NOTHING\`,
+                            [stuId, stuUID, inst.id, ayId, cls.id, sName, sEmail, \`R\${n+1}\`, faker.date.birthdate({min:12,max:18}).toISOString().split('T')[0], faker.helpers.arrayElement(['Male', 'Female']), pId, pName, pEmail, faker.phone.number(), '2024-04-01']);
+                        
+                        currentInstStudents.push({ id: stuId, cls: cls.id });
+                    }
+                }
+
+                // Grading Systems
+                const grades = [
+                    { name: 'A+', min: 90, max: 100, grade: 'A+', gp: 10 },
+                    { name: 'A', min: 80, max: 89.99, grade: 'A', gp: 9 },
+                    { name: 'B', min: 60, max: 79.99, grade: 'B', gp: 7 },
+                    { name: 'C', min: 33, max: 59.99, grade: 'C', gp: 5 },
+                    { name: 'F', min: 0, max: 32.99, grade: 'F', gp: 0 },
+                ];
+                for (let i = 0; i < grades.length; i++) {
+                    const g = grades[i];
+                    await client.query(\`INSERT INTO grading_systems (id, institute_id, name, min_percentage, max_percentage, grade, grade_point, is_default) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING\`,
+                        [\`grd_\${i}_\${inst.id}\`, inst.id, g.name, g.min, g.max, g.grade, g.gp, true]);
+                }
+
+                // Generative Records - Only huge batches for inst_01 to save time. Others small.
+                const attDays = isSpringfield ? 90 : 5;
+                const attStatuses = ['present', 'present', 'present', 'absent', 'late'];
+                
+                // Attendance Batch
+                const today = new Date();
+                const attValues = [];
+                for (const s of currentInstStudents) {
+                    for (let d = attDays; d >= 1; d--) {
+                        const date = new Date(today);
+                        date.setDate(date.getDate() - d);
+                        if (date.getDay() === 0 || date.getDay() === 6) continue;
+                        attIdx++;
+                        const status = attStatuses[Math.floor(Math.random() * attStatuses.length)];
+                        
+                        // Executing queries immediately in loop is safe but slightly slow. For hundreds it's fine.
+                        await client.query(\`INSERT INTO attendance_records (id, institute_id, student_id, class_id, date, status) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING\`,
+                            [\`att_\${attIdx}\`, inst.id, s.id, s.cls, date.toISOString().split('T')[0], status]);
+                    }
+                }
+
+                // Timetable
+                const periods = [{ p: 1, start: '08:00', end: '08:45' }, { p: 2, start: '08:50', end: '09:35' }, { p: 3, start: '09:40', end: '10:25' }];
+                for (const cls of classConfigs) {
+                    for (let dow = 1; dow <= 5; dow++) {
+                        for (const pr of periods) {
+                            ttIdx++;
+                            const subId = faker.helpers.arrayElement(subjects).id;
+                            const tId = faker.helpers.arrayElement(teachers).id;
+                            await client.query(\`INSERT INTO timetable (id, institute_id, class_id, subject_id, teacher_id, day_of_week, period_number, start_time, end_time, room, academic_year_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (class_id, day_of_week, period_number, academic_year_id) DO NOTHING\`,
+                                [\`tt_\${ttIdx}\`, inst.id, cls.id, subId, tId, dow, pr.p, pr.start, pr.end, \`Room \${ttIdx%20}\`, ayId]);
+                        }
+                    }
+                }
+
+                // Syllabus
+                for (const cls of classConfigs) {
+                    for (const sub of subjects) {
+                        for (let unit=1; unit<=3; unit++) {
+                            sylIdx++;
+                            const st = faker.helpers.arrayElement(['not_started', 'in_progress', 'completed']);
+                            const comp = st === 'completed' ? 100 : (st === 'in_progress' ? 50 : 0);
+                            await client.query(\`INSERT INTO syllabus (id, institute_id, class_id, subject_id, academic_year_id, unit_name, topic_name, description, status, completion_percentage) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (id) DO NOTHING\`,
+                                [\`syl_\${sylIdx}\`, inst.id, cls.id, sub.id, ayId, \`Unit \${unit}\`, faker.lorem.words(2), faker.lorem.sentence(), st, comp]);
+                        }
+                    }
+                }
+
+                // Exams
+                for (const cls of classConfigs) {
+                    for (const sub of subjects) {
+                        examIdx++;
+                        const examId = \`exam_\${examIdx}\`;
+                        await client.query(\`INSERT INTO exams (id, institute_id, academic_year_id, name, exam_type, class_id, subject_id, total_marks, passing_marks, exam_date, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (id) DO NOTHING\`,
+                            [examId, inst.id, ayId, 'Mid Term', 'mid_term', cls.id, sub.id, 100, 33, '2024-09-20', 'completed']);
+                        
+                        const gradeCalc = (pct) => {
+                            if (pct >= 90) return 'A+'; if (pct >= 80) return 'A'; if (pct >= 60) return 'B'; if (pct >= 33) return 'C'; return 'F';
+                        };
+
+                        const classStuds = currentInstStudents.filter(s => s.cls === cls.id);
+                        for(const std of classStuds) {
+                            erIdx++;
+                            const marks = faker.number.int({min: 20, max: 100});
+                            await client.query(\`INSERT INTO exam_results (id, institute_id, exam_id, student_id, marks_obtained, grade) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (exam_id, student_id) DO NOTHING\`,
+                                [\`er_\${erIdx}\`, inst.id, examId, std.id, marks, gradeCalc(marks)]);
+                        }
+                    }
+                }
+
+                // Fee Structures & Payments
+                const feeStructures = ['Monthly Tuition Fee', 'Library Fee'];
+                for (const fname of feeStructures) {
+                    const fsId = \`fs_\${inst.id}_\${fname.replace(/\\s+/g, '')}\`;
+                    const amount = faker.number.int({min:1000, max:5000});
+                    await client.query(\`INSERT INTO fee_structures (id, institute_id, academic_year_id, name, amount, fee_type, frequency) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING\`,
+                        [fsId, inst.id, ayId, fname, amount, fname === 'Library Fee' ? 'library' : 'tuition', fname === 'Library Fee' ? 'yearly' : 'monthly']);
+                    
+                    for (const std of currentInstStudents) {
+                        payIdx++;
+                        const isPaid = faker.datatype.boolean();
+                        await client.query(\`INSERT INTO fee_payments (id, institute_id, student_id, fee_structure_id, academic_year_id, amount, paid_amount, due_date, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO NOTHING\`,
+                            [\`pay_\${payIdx}\`, inst.id, std.id, fsId, ayId, amount, isPaid ? amount : 0, '2024-05-10', isPaid ? 'paid' : 'pending']);
+                    }
+                }
+
+                // Notices
+                for(let n=1; n<=3; n++) {
+                    await client.query(\`INSERT INTO notices (id, institute_id, title, content, priority, target_roles) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING\`,
+                        [\`ntc_\${inst.id}_\${n}\`, inst.id, faker.lorem.sentence(), faker.lorem.paragraph(), faker.helpers.arrayElement(['low','medium','high']), '{student,parent,faculty,institute_admin}']);
+                }
+
+            } // end per-institute loop
+
+            await client.query('COMMIT');
+            console.log('\n[SEED] ======================================');
+            console.log('[SEED] Comprehensive Database seeded successfully with Faker!');
+            console.log('[SEED] Institutes:', institutes.length);
+            console.log('[SEED] Total Students:', studentCounter);
+            console.log('[SEED] Total Teachers:', teacherCounter);
+            console.log('[SEED] Total Attendance:', attIdx);
+            console.log('[SEED] Total Exams Results:', erIdx);
+            console.log('[SEED] Total Fee Payments:', payIdx);
+            console.log('[SEED] ======================================');
+            console.log('[SEED] Demo login credentials (password: demo123):');
+            console.log('[SEED]   Super Admin  : super@eduyantra.com');
+            console.log('[SEED]   Inst. Admin  : admin@springfield.edu       (code: SPRING01)');
+            console.log('[SEED]   Class Teacher: priya.sharma@springfield.edu (code: SPRING01)');
+            console.log('[SEED]   Subj. Teacher: sunita.verma@springfield.edu (code: SPRING01)');
+            console.log('[SEED]   Student      : arjun@springfield.edu       (code: SPRING01)');
+            console.log('[SEED]   Parent       : ramesh.sharma@gmail.com     (code: SPRING01)');
+            console.log('[SEED] ======================================\n');
+
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('[SEED] Error seeding database:', error.message);
+        throw error;
+    } finally {
+        await closePool();
+    }
+}
+
+seed().catch((err) => {
+    console.error('[SEED] Fatal error:', err);
+    process.exit(1);
+});

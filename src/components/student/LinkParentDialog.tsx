@@ -124,7 +124,7 @@ export function LinkParentDialog({ student, open, onOpenChange, onSuccess }: Lin
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <LinkIcon className="h-5 w-5 text-primary" />
