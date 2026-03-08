@@ -1,9 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, X, Send, Loader2, Sparkles, Trash2, ChevronDown, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { aiChat, type AiMessage } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import type { UserRole } from '@/types';
 
 // Simple markdown-to-JSX renderer (headers, bullets, bold only)
 function SimpleMarkdown({ text }: { text: string }) {
@@ -47,28 +49,103 @@ function SimpleMarkdown({ text }: { text: string }) {
   );
 }
 
-const WELCOME_MESSAGE: AiMessage & { id: string } = {
-  id: 'welcome',
-  role: 'assistant',
-  content:
-    'Hi! I\'m **EduYantra AI**, your school management assistant.\n\nI can help you with:\n- Student performance & attendance analysis\n- Fee management queries\n- Academic planning & exam insights\n- Parent communication tips\n- General school administration\n\nHow can I help you today?',
+// ── Role-specific chat configuration ──
+interface RoleChatConfig {
+  welcomeContent: string;
+  quickPrompts: string[];
+  headerSubtitle: string;
+  placeholder: string;
+}
+
+const ROLE_CHAT_CONFIG: Record<string, RoleChatConfig> = {
+  student: {
+    welcomeContent:
+      "Hi! I'm **EduYantra AI**, your personal study assistant.\n\nI can help you with:\n- Your attendance & performance overview\n- Assignment help & study tips\n- Upcoming exams & timetable\n- Fee payment queries\n\nWhat would you like to know?",
+    quickPrompts: [
+      'How is my attendance this month?',
+      'Tips to prepare for exams',
+      'What assignments are pending?',
+      'How can I improve my grades?',
+    ],
+    headerSubtitle: 'Your Study Assistant',
+    placeholder: 'Ask about your studies...',
+  },
+  parent: {
+    welcomeContent:
+      "Hi! I'm **EduYantra AI**, your school communication assistant.\n\nI can help you with:\n- Your child's attendance & grades\n- Fee payment status & dues\n- School events & notices\n- Tips to support your child's learning\n\nHow can I help you today?",
+    quickPrompts: [
+      "How is my child's attendance?",
+      'Any pending fee payments?',
+      'Tips to help with homework',
+      'Upcoming school events?',
+    ],
+    headerSubtitle: 'Parent Assistant',
+    placeholder: "Ask about your child's progress...",
+  },
+  faculty: {
+    welcomeContent:
+      "Hi! I'm **EduYantra AI**, your teaching assistant.\n\nI can help you with:\n- Class performance analysis\n- Student attendance tracking\n- Grading & exam tips\n- Parent communication advice\n\nWhat do you need help with?",
+    quickPrompts: [
+      'Which students have low attendance?',
+      'Tips for effective grading',
+      'How to handle parent meetings?',
+      'Best practices for exams',
+    ],
+    headerSubtitle: 'Teaching Assistant',
+    placeholder: 'Ask about your classes...',
+  },
+  institute_admin: {
+    welcomeContent:
+      "Hi! I'm **EduYantra AI**, your school management assistant.\n\nI can help you with:\n- Institute analytics & reports\n- Fee collection tracking\n- Attendance patterns across classes\n- Staff & academic planning\n\nHow can I help you today?",
+    quickPrompts: [
+      'How can I improve attendance?',
+      'Fee collection summary',
+      'How to identify at-risk students?',
+      'Best practices for exam scheduling',
+    ],
+    headerSubtitle: 'Management Assistant',
+    placeholder: 'Ask about your institute...',
+  },
+  super_admin: {
+    welcomeContent:
+      "Hi! I'm **EduYantra AI**, your platform management assistant.\n\nI can help you with:\n- Multi-institute oversight\n- Platform analytics & trends\n- Plan & billing management\n- Onboarding new institutes\n\nWhat do you need?",
+    quickPrompts: [
+      'Platform-wide analytics overview',
+      'Institute onboarding checklist',
+      'Plan management best practices',
+      'How to scale operations?',
+    ],
+    headerSubtitle: 'Platform Assistant',
+    placeholder: 'Ask about the platform...',
+  },
 };
 
-const QUICK_PROMPTS = [
-  'How can I improve attendance?',
-  'Tips for parent-teacher meetings',
-  'How to identify at-risk students?',
-  'Best practices for exam scheduling',
-];
+const DEFAULT_CONFIG = ROLE_CHAT_CONFIG.institute_admin;
 
 export function AiChatWidget() {
+  const { user } = useAuth();
+  const role = (user?.role || 'institute_admin') as string;
+  const config = ROLE_CHAT_CONFIG[role] || DEFAULT_CONFIG;
+
+  const welcomeMessage = useMemo<AiMessage & { id: string }>(() => ({
+    id: 'welcome',
+    role: 'assistant',
+    content: config.welcomeContent,
+  }), [config.welcomeContent]);
+
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<(AiMessage & { id: string })[]>([WELCOME_MESSAGE]);
+  const [messages, setMessages] = useState<(AiMessage & { id: string })[]>([welcomeMessage]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Reset chat when role changes (e.g., switching accounts)
+  useEffect(() => {
+    setMessages([welcomeMessage]);
+    setError(null);
+  }, [welcomeMessage]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -130,7 +207,7 @@ export function AiChatWidget() {
   };
 
   const clearChat = () => {
-    setMessages([WELCOME_MESSAGE]);
+    setMessages([welcomeMessage]);
     setError(null);
   };
 
@@ -161,7 +238,7 @@ export function AiChatWidget() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold leading-none">EduYantra AI</p>
-                  <p className="text-xs opacity-75 mt-0.5">Powered by Gemini</p>
+                  <p className="text-xs opacity-75 mt-0.5">{config.headerSubtitle}</p>
                 </div>
               </div>
               <div className="ml-auto flex items-center gap-1">
@@ -261,7 +338,7 @@ export function AiChatWidget() {
             {/* Quick prompts (only when no user messages yet) */}
             {!hasUserMessages && (
               <div className="px-4 pb-2 flex flex-wrap gap-2 flex-shrink-0">
-                {QUICK_PROMPTS.map((p) => (
+                {config.quickPrompts.map((p) => (
                   <button
                     key={p}
                     onClick={() => sendMessage(p)}
@@ -280,7 +357,7 @@ export function AiChatWidget() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask EduYantra AI..."
+                placeholder={config.placeholder}
                 disabled={loading}
                 className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground disabled:opacity-50"
               />

@@ -7,18 +7,121 @@ import rateLimit from 'express-rate-limit';
 
 const router = Router();
 
-// Stricter rate limit for AI endpoints (cost protection)
-const aiLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 20,
-  message: { success: false, error: { message: 'AI rate limit exceeded. Please wait a moment.', code: 'AI_RATE_LIMITED' } },
+// Role-based rate limits for AI endpoints (cost protection + fair usage)
+const createRoleLimiter = (maxReqs, label) => rateLimit({
+  windowMs: 60 * 1000,
+  max: maxReqs,
+  keyGenerator: (req) => `${req.ip}_${req.user?.id || 'anon'}`,
+  message: { success: false, error: { message: `AI rate limit exceeded (${label}). Please wait a moment.`, code: 'AI_RATE_LIMITED' } },
 });
 
+const roleLimiters = {
+  student: createRoleLimiter(8, 'student: 8/min'),
+  parent: createRoleLimiter(8, 'parent: 8/min'),
+  faculty: createRoleLimiter(15, 'faculty: 15/min'),
+  teacher: createRoleLimiter(15, 'teacher: 15/min'),
+  institute_admin: createRoleLimiter(25, 'admin: 25/min'),
+  super_admin: createRoleLimiter(30, 'super_admin: 30/min'),
+};
+
+const dynamicRateLimiter = (req, res, next) => {
+  const role = req.user?.role || 'student';
+  const limiter = roleLimiters[role] || roleLimiters.student;
+  return limiter(req, res, next);
+};
+
 router.use(authenticate);
-router.use(aiLimiter);
+router.use(dynamicRateLimiter);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/ai/chat  —  Multi-turn chat assistant
+// Role-specific system prompt builders (concise to save tokens)
+// ─────────────────────────────────────────────────────────────────────────────
+const ROLE_PROMPTS = {
+  student: (date) => `You are EduYantra AI, a helpful school assistant for a STUDENT in an Indian school.
+Date: ${date}. Role: Student.
+
+SCOPE — Only answer about:
+- Their own attendance, grades, exam scores
+- Assignment help & study tips
+- Timetable & upcoming exams
+- Fee payment status queries
+
+RULES:
+- Be encouraging and age-appropriate
+- Use simple language, markdown, bullet points
+- Keep answers under 200 words
+- If asked about other students or admin tasks, politely decline
+- Never reveal internal system details`,
+
+  parent: (date) => `You are EduYantra AI, a helpful school assistant for a PARENT in an Indian school.
+Date: ${date}. Role: Parent.
+
+SCOPE — Only answer about:
+- Their child's attendance, performance, grades
+- Fee payment status & dues
+- School events, notices, timetable
+- Tips for supporting child's education
+
+RULES:
+- Be respectful, reassuring, professional
+- Use simple language, markdown, bullet points
+- Keep answers under 200 words
+- If asked about admin or teacher tasks, politely redirect
+- Never reveal other students' data`,
+
+  faculty: (date) => `You are EduYantra AI, a helpful school assistant for a TEACHER/FACULTY in an Indian school.
+Date: ${date}. Role: Faculty.
+
+SCOPE — Answer about:
+- Class management & student performance tracking
+- Attendance marking patterns & at-risk students
+- Assignment & exam creation tips
+- Grading best practices
+- Parent-teacher communication advice
+
+RULES:
+- Be professional and practical
+- Use markdown formatting, bullet points
+- Keep answers under 250 words
+- Help with pedagogy and classroom strategies
+- Never reveal salary/admin-only data`,
+
+  institute_admin: (date) => `You are EduYantra AI, a smart school management assistant for an INSTITUTE ADMIN in an Indian school.
+Date: ${date}. Role: Institute Admin.
+
+SCOPE — Answer about:
+- Institute-wide analytics, student/teacher stats
+- Fee management & collection tracking
+- Attendance patterns across classes
+- Exam scheduling & academic planning
+- Staff management & operational queries
+- Parent communication strategies
+
+RULES:
+- Be data-driven, strategic, concise
+- Use markdown formatting, bullet points
+- Keep answers under 300 words
+- Provide actionable recommendations
+- Reference dashboard features when relevant`,
+
+  super_admin: (date) => `You are EduYantra AI, a platform management assistant for a SUPER ADMIN of the EduYantra platform.
+Date: ${date}. Role: Super Admin.
+
+SCOPE — Answer about:
+- Multi-institute management & oversight
+- Platform-wide analytics
+- Plan management & billing
+- Institute onboarding & support
+- System-wide configurations
+
+RULES:
+- Be strategic, data-driven, concise
+- Use markdown, bullet points
+- Keep answers under 300 words`,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/ai/chat  —  Role-specialized multi-turn chat assistant
 // Body: { messages: [{ role: 'user'|'assistant', content: string }] }
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/chat', asyncHandler(async (req, res) => {
@@ -32,23 +135,9 @@ router.post('/chat', asyncHandler(async (req, res) => {
   }
 
   const todayIST = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full' });
-
-  const systemInstruction = `You are EduYantra AI, an intelligent school management assistant for Indian schools.
-You help administrators, teachers, and parents with:
-- Student performance analysis and tracking
-- Attendance patterns and concerns
-- Academic planning and curriculum
-- Fee management queries
-- Exam schedules and results
-- Parent-teacher communication
-- General school administration
-
-Current date (IST): ${todayIST}
-User role: ${req.user?.role || 'user'}
-
-Be concise, professional, and helpful. Use markdown formatting. 
-When listing items, use bullet points. Keep answers under 300 words unless the user asks for detail.
-If asked for specific student data, remind the user to use the dedicated analysis features in the dashboard.`;
+  const role = req.user?.role || 'student';
+  const promptBuilder = ROLE_PROMPTS[role] || ROLE_PROMPTS.student;
+  const systemInstruction = promptBuilder(todayIST);
 
   const reply = await chatWithHistory(messages, systemInstruction);
 
@@ -83,9 +172,9 @@ router.post('/insights', requireInstitute, authorize('institute_admin', 'super_a
     ),
     query(
       `SELECT
-        COALESCE(SUM(total_amount), 0) AS total_fees,
+        COALESCE(SUM(amount), 0) AS total_fees,
         COALESCE(SUM(paid_amount), 0) AS collected,
-        COALESCE(SUM(total_amount - paid_amount), 0) AS pending
+        COALESCE(SUM(amount - paid_amount), 0) AS pending
        FROM fee_payments WHERE institute_id=$1`,
       [instId]
     ),
@@ -99,10 +188,10 @@ router.post('/insights', requireInstitute, authorize('institute_admin', 'super_a
       [instId]
     ),
     query(
-      `SELECT s.full_name, COUNT(*) FILTER (WHERE ar.status='absent') AS absences
+      `SELECT s.name, COUNT(*) FILTER (WHERE ar.status='absent') AS absences
        FROM students s JOIN attendance_records ar ON s.id=ar.student_id
        WHERE s.institute_id=$1 AND ar.date >= CURRENT_DATE - INTERVAL '30 days'
-       GROUP BY s.id, s.full_name
+       GROUP BY s.id, s.name
        HAVING COUNT(*) FILTER (WHERE ar.status='absent') >= 5
        ORDER BY absences DESC LIMIT 5`,
       [instId]
@@ -117,7 +206,7 @@ router.post('/insights', requireInstitute, authorize('institute_admin', 'super_a
   };
 
   const fmtINR = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
-  const absenteeList = topAbsentees.rows.map((r) => `  - ${r.full_name}: ${r.absences} absences`).join('\n') || '  None identified';
+  const absenteeList = topAbsentees.rows.map((r) => `  - ${r.name}: ${r.absences} absences`).join('\n') || '  None identified';
 
   const prompt = `You are a school analytics expert. Analyze the following school data and provide actionable insights for the administrator.
 
@@ -165,7 +254,7 @@ router.post('/analyze-student/:id', requireInstitute, asyncHandler(async (req, r
 
   const [student, attendance, exams, assignments] = await Promise.all([
     query(
-      `SELECT s.full_name, s.roll_number, c.name AS class_name, c.section
+      `SELECT s.name, s.roll_number, c.name AS class_name, c.section
        FROM students s LEFT JOIN classes c ON s.class_id=c.id
        WHERE s.id=$1 AND s.institute_id=$2`,
       [id, instId]
@@ -207,7 +296,7 @@ router.post('/analyze-student/:id', requireInstitute, asyncHandler(async (req, r
 
   const prompt = `Analyze this student's academic performance and provide targeted insights.
 
-STUDENT: ${s.full_name} | Class: ${s.class_name || 'N/A'} ${s.section || ''}
+STUDENT: ${s.name} | Class: ${s.class_name || 'N/A'} ${s.section || ''}
 
 ATTENDANCE (last 60 days): ${att.rate || 0}% (${att.present} present | ${att.absent} absent of ${att.total} school days)
 

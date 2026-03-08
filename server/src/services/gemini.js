@@ -7,13 +7,15 @@ if (!process.env.geminiapi) {
 const genAI = new GoogleGenerativeAI(process.env.geminiapi || '');
 
 const DEFAULT_SYSTEM = `You are EduYantra AI, an intelligent school management assistant for Indian schools.
-You help administrators, teachers, and parents with academics, attendance, fees, exams, and school administration.
-Be concise, professional, and helpful. Use bullet points when listing. Respond in the same language as the user.`;
+Be concise, use bullet points. Respond in the user's language.`;
 
 /**
  * One-shot text generation
  */
 export async function generateText(prompt, systemInstruction = DEFAULT_SYSTEM) {
+  if (!process.env.geminiapi) {
+    throw new Error('Gemini API key is not configured. Please set the geminiapi environment variable.');
+  }
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.5-flash',
     systemInstruction,
@@ -21,7 +23,7 @@ export async function generateText(prompt, systemInstruction = DEFAULT_SYSTEM) {
 
   const result = await model.generateContent({
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+    generationConfig: { temperature: 0.5, maxOutputTokens: 800 },
   });
 
   return result.response.text();
@@ -32,6 +34,9 @@ export async function generateText(prompt, systemInstruction = DEFAULT_SYSTEM) {
  * messages: [{ role: 'user' | 'model', content: string }]
  */
 export async function chatWithHistory(messages, systemInstruction = DEFAULT_SYSTEM) {
+  if (!process.env.geminiapi) {
+    throw new Error('Gemini API key is not configured. Please set the geminiapi environment variable.');
+  }
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.5-flash',
     systemInstruction,
@@ -45,7 +50,7 @@ export async function chatWithHistory(messages, systemInstruction = DEFAULT_SYST
 
   const chat = model.startChat({
     history,
-    generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+    generationConfig: { temperature: 0.5, maxOutputTokens: 600 },
   });
 
   const lastMessage = messages[messages.length - 1];
