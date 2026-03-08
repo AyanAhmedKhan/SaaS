@@ -23,7 +23,7 @@ router.post('/login', asyncHandler(async (req, res) => {
     try {
         let result;
         const params = [email];
-        let sql = 'SELECT u.*, i.name as institute_name, i.code as institute_code, i.logo_url as institute_logo FROM users u LEFT JOIN institutes i ON u.institute_id = i.id WHERE LOWER(u.email) = $1';
+        let sql = 'SELECT u.*, i.name as institute_name, i.code as institute_code, i.logo_url as institute_logo, i.subscription_plan, i.max_students, i.modules_enabled, i.ai_insight_enabled FROM users u LEFT JOIN institutes i ON u.institute_id = i.id WHERE LOWER(u.email) = $1';
 
         if (role) {
             sql += ' AND u.role = $2';
@@ -195,7 +195,7 @@ router.post('/register', asyncHandler(async (req, res) => {
         await client.query('COMMIT');
 
         const newUserResult = await query(
-            `SELECT u.*, i.name as institute_name, i.code as institute_code, i.logo_url as institute_logo 
+            `SELECT u.*, i.name as institute_name, i.code as institute_code, i.logo_url as institute_logo, i.subscription_plan, i.max_students, i.modules_enabled, i.ai_insight_enabled 
              FROM users u LEFT JOIN institutes i ON u.institute_id = i.id WHERE u.id = $1`,
             [userId]
         );
@@ -238,7 +238,8 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
     try {
         const { rows } = await query(
             `SELECT u.id, u.name, u.email, u.role, u.avatar, u.phone, u.institute_id, u.is_active, u.last_login, u.created_at,
-                    i.name as institute_name, i.code as institute_code, i.logo_url as institute_logo,
+                          i.name as institute_name, i.code as institute_code, i.logo_url as institute_logo,
+                          i.subscription_plan, i.max_students,
                     i.modules_enabled, i.ai_insight_enabled
              FROM users u
              LEFT JOIN institutes i ON u.institute_id = i.id

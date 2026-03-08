@@ -14,6 +14,8 @@ import {
   Award,
   DollarSign,
   Building2,
+  CreditCard,
+  Layers,
   MessageCircle,
   BarChart3,
   Library,
@@ -67,6 +69,8 @@ const menuItems: MenuItem[] = [
   { title: "Fees", url: "/fees", icon: DollarSign, roles: [...ADMIN, 'student', 'parent'] },
   { title: "My Profile", url: "/profile", icon: User, roles: ['student'] },
   { title: "Institutes", url: "/institutes", icon: Building2, roles: ['super_admin'] },
+  { title: "Pricing Plans", url: "/pricing", icon: CreditCard, roles: ADMIN },
+  { title: "Manage Plans", url: "/manage-plans", icon: Layers, roles: ['super_admin'] },
 ];
 
 export function AppSidebar() {

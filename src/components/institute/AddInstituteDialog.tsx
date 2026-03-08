@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Building2,
     Mail,
@@ -31,8 +31,9 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { createInstitute } from "@/lib/api";
+import { createInstitute, getPlans } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import type { SubscriptionPlan } from "@/types";
 
 interface AddInstituteDialogProps {
     onSuccess: () => void;
@@ -65,22 +66,35 @@ const INITIAL_FORM: FormData = {
     email: "",
     website: "",
     max_students: "500",
-    subscription_plan: "basic",
+    subscription_plan: "starter",
 };
-
-const PLANS = [
-    { value: "basic", label: "Basic" },
-    { value: "standard", label: "Standard" },
-    { value: "premium", label: "Premium" },
-    { value: "enterprise", label: "Enterprise" },
-];
 
 export function AddInstituteDialog({ onSuccess }: AddInstituteDialogProps) {
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState<FormData>({ ...INITIAL_FORM });
     const [errors, setErrors] = useState<FormErrors>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+    const [plansLoading, setPlansLoading] = useState(false);
     const { toast } = useToast();
+
+    useEffect(() => {
+        const fetchPlans = async () => {
+            try {
+                setPlansLoading(true);
+                const res = await getPlans();
+                if (res.success && res.data?.plans) {
+                    setPlans(res.data.plans);
+                }
+            } catch (err) {
+                const message = err instanceof Error ? err.message : "Failed to load plans";
+                toast({ title: "Unable to load plans", description: message, variant: "destructive" });
+            } finally {
+                setPlansLoading(false);
+            }
+        };
+        fetchPlans();
+    }, [toast]);
 
     const updateField = (field: keyof FormData, value: string) => {
         setForm((prev) => ({ ...prev, [field]: value }));
@@ -238,11 +252,12 @@ export function AddInstituteDialog({ onSuccess }: AddInstituteDialogProps) {
                                     <Select value={form.subscription_plan} onValueChange={(v) => updateField("subscription_plan", v)}>
                                         <SelectTrigger className="mt-1.5 rounded-lg"><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            {PLANS.map((p) => (
-                                                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                                            {(plans.length ? plans : [{ id: 'plan_starter', slug: 'starter', name: 'Starter' } as SubscriptionPlan]).map((p) => (
+                                                <SelectItem key={p.id} value={p.slug}>{p.name}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                    {plansLoading && <p className="text-xs text-muted-foreground mt-1">Loading plans...</p>}
                                 </div>
                                 <div>
                                     <Label className="text-sm font-medium flex items-center gap-1">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Calendar, AlertCircle, Loader2, CheckCircle2, Archive, CalendarDays, KeyRound, Check } from "lucide-react";
+import { Plus, Calendar, AlertCircle, Loader2, CheckCircle2, Archive, CalendarDays, KeyRound, Check, Building2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -18,7 +18,8 @@ import { Label } from "@/components/ui/label";
 import { getAcademicYears, createAcademicYear, updateAcademicYear, archiveAcademicYear } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import type { AcademicYear } from "@/types";
+import { InstituteSelector } from "@/components/InstituteSelector";
+import type { AcademicYear, Institute } from "@/types";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -39,8 +40,18 @@ export default function AcademicYears() {
     const [error, setError] = useState<string | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    
+    // Super admin institute selection
+    const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
+        if (isRole('super_admin')) {
+            return localStorage.getItem('super_admin_selected_institute');
+        }
+        return null;
+    });
+    const [selectedInstitute, setSelectedInstitute] = useState<Institute | null>(null);
 
     const canManage = isRole('super_admin') || isRole('institute_admin');
+    const isSuperAdmin = isRole('super_admin');
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -52,11 +63,32 @@ export default function AcademicYears() {
         },
     });
 
+    const handleInstituteSelect = (instituteId: string | null, institute: Institute | null) => {
+        setSelectedInstituteId(instituteId);
+        setSelectedInstitute(institute);
+        if (instituteId) {
+            localStorage.setItem('super_admin_selected_institute', instituteId);
+        } else {
+            localStorage.removeItem('super_admin_selected_institute');
+        }
+    };
+
     const fetchData = useCallback(async () => {
+        // For super admins, don't fetch if no institute is selected
+        if (isSuperAdmin && !selectedInstituteId) {
+            setLoading(false);
+            setAcademicYears([]);
+            return;
+        }
+        
         try {
             setLoading(true);
             setError(null);
-            const res = await getAcademicYears();
+            const res = await getAcademicYears(
+                isSuperAdmin && selectedInstituteId 
+                    ? { institute_id: selectedInstituteId } 
+                    : undefined
+            );
             if (res.success && res.data) {
                 setAcademicYears(res.data.academicYears || []);
             }
@@ -66,7 +98,7 @@ export default function AcademicYears() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [isSuperAdmin, selectedInstituteId]);
 
     useEffect(() => {
         fetchData();
@@ -78,6 +110,7 @@ export default function AcademicYears() {
             setSubmitting(true);
             const formattedData = {
                 ...values,
+                ...(isSuperAdmin && selectedInstituteId ? { institute_id: selectedInstituteId } : {}),
             };
             const res = await createAcademicYear(formattedData);
 
@@ -132,14 +165,21 @@ export default function AcademicYears() {
                         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Academic Sessions</h1>
                         <p className="text-muted-foreground text-sm">Manage academic years and session transitions.</p>
                     </div>
-                    {canManage && (
-                        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                            <DialogTrigger asChild>
-                                <Button className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md">
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    New Academic Year
-                                </Button>
-                            </DialogTrigger>
+                    <div className="flex items-center gap-3">
+                        {isSuperAdmin && (
+                            <InstituteSelector
+                                selectedInstituteId={selectedInstituteId}
+                                onSelectInstitute={handleInstituteSelect}
+                            />
+                        )}
+                        {canManage && (!isSuperAdmin || selectedInstituteId) && (
+                            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                                <DialogTrigger asChild>
+                                    <Button className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md">
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        New Academic Year
+                                    </Button>
+                                </DialogTrigger>
                             <DialogContent className="sm:max-w-[425px]">
                                 <DialogHeader>
                                     <DialogTitle>Create Academic Year</DialogTitle>
@@ -198,7 +238,21 @@ export default function AcademicYears() {
                             </DialogContent>
                         </Dialog>
                     )}
+                    </div>
                 </div>
+
+                {/* Super Admin: No Institute Selected */}
+                {isSuperAdmin && !selectedInstituteId && !loading && (
+                    <div className="text-center py-20 border rounded-xl bg-gradient-to-br from-primary/5 to-blue-500/5 shadow-sm">
+                        <div className="h-20 w-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
+                            <Building2 className="h-10 w-10 text-primary/60" />
+                        </div>
+                        <h3 className="text-xl font-semibold mb-2">Select an Institute</h3>
+                        <p className="text-muted-foreground text-sm font-medium mb-6 max-w-md mx-auto">
+                            Please select an institute from the dropdown above to view and manage its academic years.
+                        </p>
+                    </div>
+                )}
 
                 {/* Loading */}
                 {loading && (

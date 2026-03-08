@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getNotices } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Notice } from "@/types";
 
 const pageNames: Record<string, string> = {
@@ -53,6 +54,7 @@ const searchablePages = [
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isRole } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [notices, setNotices] = useState<Notice[]>([]);
   const [noticeCount, setNoticeCount] = useState(0);
@@ -66,8 +68,13 @@ export function Header() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch recent notices for bell icon
+  // Fetch recent notices for bell icon (skip for super admins as they don't have institute context)
   const fetchNotices = useCallback(async () => {
+    // Super admins don't have institute context, so skip fetching notices
+    if (isRole('super_admin')) {
+      return;
+    }
+    
     try {
       const res = await getNotices({ limit: '5', page: '1' });
       if (res.success && res.data) {
@@ -78,7 +85,7 @@ export function Header() {
     } catch {
       // Silently fail — notifications are non-critical
     }
-  }, []);
+  }, [isRole]);
 
   useEffect(() => {
     fetchNotices();

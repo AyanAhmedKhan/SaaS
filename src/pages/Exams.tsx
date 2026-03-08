@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, GraduationCap, Calendar, Clock, AlertCircle, Loader2, BarChart2 } from "lucide-react";
+import { Plus, Search, GraduationCap, Calendar, Clock, AlertCircle, Loader2, BarChart2, Building2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { Exam, Class as ClassType, Subject } from "@/types";
 import { CreateExamDialog } from "@/components/institute/CreateExamDialog";
 import { ExamDetailsDialog } from "@/components/institute/ExamDetailsDialog";
+import { InstituteSelector } from "@/components/InstituteSelector";
+import type { Institute } from "@/types";
 
 export default function Exams() {
   const { isRole } = useAuth();
@@ -31,9 +33,32 @@ export default function Exams() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
 
-  const canCreate = isRole('super_admin', 'institute_admin', 'faculty'); // Faculty can often schedule too
+  const isSuperAdmin = isRole('super_admin');
+  const canCreate = isRole('super_admin', 'institute_admin', 'faculty');
+
+  const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
+    if (isSuperAdmin) {
+      return localStorage.getItem('super_admin_selected_institute');
+    }
+    return null;
+  });
+
+  const handleInstituteSelect = (instituteId: string | null, _institute: Institute | null) => {
+    setSelectedInstituteId(instituteId);
+    if (instituteId) {
+      localStorage.setItem('super_admin_selected_institute', instituteId);
+    } else {
+      localStorage.removeItem('super_admin_selected_institute');
+    }
+  };
 
   const fetchData = useCallback(async () => {
+    if (isSuperAdmin && !selectedInstituteId) {
+      setExams([]);
+      setClasses([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -41,10 +66,12 @@ export default function Exams() {
       if (classFilter !== "all") params.class_id = classFilter;
       if (statusFilter !== "all") params.status = statusFilter;
       if (searchQuery) params.search = searchQuery;
+      if (isSuperAdmin && selectedInstituteId) params.institute_id = selectedInstituteId;
 
+      const classParams = isSuperAdmin && selectedInstituteId ? { institute_id: selectedInstituteId } : {};
       const [examRes, classRes] = await Promise.all([
         getExams(params),
-        getClasses(),
+        getClasses(classParams),
       ]);
 
       if (examRes.success && examRes.data) {
@@ -59,7 +86,7 @@ export default function Exams() {
     } finally {
       setLoading(false);
     }
-  }, [classFilter, statusFilter, searchQuery]);
+  }, [classFilter, statusFilter, searchQuery, isSuperAdmin, selectedInstituteId]);
 
   useEffect(() => {
     const debounce = setTimeout(fetchData, 300);
@@ -104,42 +131,66 @@ export default function Exams() {
             </p>
           </div>
 
-          {canCreate && (
-            <Button
-              onClick={() => setIsCreateOpen(true)}
-              size="lg"
-              className="relative z-10 shrink-0 rounded-2xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5"
-            >
-              <Plus className="h-5 w-5 mr-2" />
-              Schedule Exam
-            </Button>
-          )}
+          <div className="relative z-10 flex items-center gap-3">
+            {isSuperAdmin && (
+              <InstituteSelector
+                selectedInstituteId={selectedInstituteId}
+                onSelectInstitute={handleInstituteSelect}
+              />
+            )}
+            {canCreate && (!isSuperAdmin || selectedInstituteId) && (
+              <Button
+                onClick={() => setIsCreateOpen(true)}
+                size="lg"
+                className="shrink-0 rounded-2xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Schedule Exam
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Filters Bar */}
-        <div className="flex flex-col gap-4 sm:flex-row p-4 bg-card rounded-2xl border border-border/50 shadow-sm">
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search by exam name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-11 rounded-xl h-11 bg-muted/30 border-transparent focus-visible:ring-primary/20"
-            />
+        {/* Super Admin - No Institute Selected */}
+        {isSuperAdmin && !selectedInstituteId && (
+          <div className="flex flex-col items-center justify-center h-[400px] text-center gap-4">
+            <div className="p-6 bg-gradient-to-br from-primary/10 to-blue-500/10 rounded-2xl border border-primary/20">
+              <Building2 className="h-16 w-16 text-primary mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Select an Institute</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                Please select an institute from the dropdown above to view and manage exams.
+              </p>
+            </div>
           </div>
-          <div className="flex gap-3">
-            <Select value={classFilter} onValueChange={setClassFilter}>
-              <SelectTrigger className="w-[160px] h-11 rounded-xl bg-muted/30 border-transparent">
-                <SelectValue placeholder="All Classes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Classes</SelectItem>
-                {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[160px] h-11 rounded-xl bg-muted/30 border-transparent">
-                <SelectValue placeholder="All Status" />
+        )}
+
+        {/* Main Content - Only show when institute is selected (for super admin) or always (for others) */}
+        {(!isSuperAdmin || selectedInstituteId) && (
+          <>
+            {/* Filters Bar */}
+            <div className="flex flex-col gap-4 sm:flex-row p-4 bg-card rounded-2xl border border-border/50 shadow-sm">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search by exam name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-11 rounded-xl h-11 bg-muted/30 border-transparent focus-visible:ring-primary/20"
+                />
+              </div>
+              <div className="flex gap-3">
+                <Select value={classFilter} onValueChange={setClassFilter}>
+                  <SelectTrigger className="w-[160px] h-11 rounded-xl bg-muted/30 border-transparent">
+                    <SelectValue placeholder="All Classes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Classes</SelectItem>
+                    {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name} {c.section}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[160px] h-11 rounded-xl bg-muted/30 border-transparent">
+                    <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
@@ -247,6 +298,8 @@ export default function Exams() {
               </Card>
             ))}
           </div>
+        )}
+          </>
         )}
       </div>
 

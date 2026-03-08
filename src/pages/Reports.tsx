@@ -16,12 +16,13 @@ import {
 } from "recharts";
 import {
   Download, FileText, TrendingUp, TrendingDown, Minus,
-  Trophy, Target, BarChart3, Filter, Loader2, AlertCircle, Sparkles, BookOpen, GraduationCap, LayoutDashboard
+  Trophy, Target, BarChart3, Filter, Loader2, AlertCircle, Sparkles, BookOpen, GraduationCap, LayoutDashboard, Building2
 } from "lucide-react";
 import { getExamResults, getPerformanceTrend, getExams, getClasses } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-import type { Exam, Class as ClassType } from "@/types";
+import type { Exam, Class as ClassType, Institute } from "@/types";
+import { InstituteSelector } from "@/components/InstituteSelector";
 
 /* ---------- tiny helpers ---------- */
 
@@ -96,22 +97,49 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const isSuperAdmin = isRole('super_admin');
   const isStaff = isRole('super_admin', 'institute_admin', 'faculty');
   const showClassFilter = isStaff;
 
+  const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
+    if (isSuperAdmin) {
+      return localStorage.getItem('super_admin_selected_institute');
+    }
+    return null;
+  });
+
+  const handleInstituteSelect = (instituteId: string | null, _institute: Institute | null) => {
+    setSelectedInstituteId(instituteId);
+    if (instituteId) {
+      localStorage.setItem('super_admin_selected_institute', instituteId);
+    } else {
+      localStorage.removeItem('super_admin_selected_institute');
+    }
+  };
+
   const fetchData = useCallback(async () => {
+    if (isSuperAdmin && !selectedInstituteId) {
+      setResults([]);
+      setTrend([]);
+      setExams([]);
+      setClasses([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
       const params: Record<string, string> = {};
       if (selectedExam !== "all") params.exam_id = selectedExam;
       if (classFilter !== "all" && showClassFilter) params.class_id = classFilter;
+      if (isSuperAdmin && selectedInstituteId) params.institute_id = selectedInstituteId;
 
+      const classParams = isSuperAdmin && selectedInstituteId ? { institute_id: selectedInstituteId } : {};
       const [resRes, trendRes, examRes, clsRes] = await Promise.all([
         getExamResults(params),
-        getPerformanceTrend(classFilter !== "all" && showClassFilter ? { class_id: classFilter } : undefined),
-        getExams(),
-        showClassFilter ? getClasses() : Promise.resolve(null),
+        getPerformanceTrend(classFilter !== "all" && showClassFilter ? { class_id: classFilter, ...classParams } : classParams),
+        getExams(isSuperAdmin && selectedInstituteId ? { institute_id: selectedInstituteId } : {}),
+        showClassFilter ? getClasses(classParams) : Promise.resolve(null),
       ]);
 
       if (resRes.success && resRes.data) {
@@ -131,7 +159,7 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  }, [selectedExam, classFilter, showClassFilter]);
+  }, [selectedExam, classFilter, showClassFilter, isSuperAdmin, selectedInstituteId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -209,18 +237,41 @@ export default function Reports() {
                   : "Track your academic journey, test results, and subject-wise progress over time."}
               </p>
             </div>
-            <div className="flex gap-3 shrink-0">
-              <Button onClick={() => handleDownload("Comprehensive Sync")} className={cn(
-                "shadow-lg pointer-events-auto transition-transform hover:scale-105 active:scale-95",
-                isStaff ? "shadow-violet-500/25 bg-violet-600 hover:bg-violet-700 text-white" : "shadow-primary/25 bg-primary hover:bg-primary/90 text-primary-foreground"
-              )}>
-                <Sparkles className="h-4 w-4 mr-2" /> Generate AI Summary
-              </Button>
+            <div className="flex gap-3 shrink-0 items-center">
+              {isSuperAdmin && (
+                <InstituteSelector
+                  selectedInstituteId={selectedInstituteId}
+                  onSelectInstitute={handleInstituteSelect}
+                />
+              )}
+              {(!isSuperAdmin || selectedInstituteId) && (
+                <Button onClick={() => handleDownload("Comprehensive Sync")} className={cn(
+                  "shadow-lg pointer-events-auto transition-transform hover:scale-105 active:scale-95",
+                  isStaff ? "shadow-violet-500/25 bg-violet-600 hover:bg-violet-700 text-white" : "shadow-primary/25 bg-primary hover:bg-primary/90 text-primary-foreground"
+                )}>
+                  <Sparkles className="h-4 w-4 mr-2" /> Generate AI Summary
+                </Button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* MODERN FILTERS */}
+        {/* Super Admin - No Institute Selected */}
+        {isSuperAdmin && !selectedInstituteId && (
+          <div className="flex flex-col items-center justify-center h-[400px] text-center gap-4">
+            <div className="p-6 bg-gradient-to-br from-primary/10 to-blue-500/10 rounded-2xl border border-primary/20">
+              <Building2 className="h-16 w-16 text-primary mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Select an Institute</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                Please select an institute from the dropdown above to view reports and analytics.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Main Content - Only show when institute is selected (for super admin) or always (for others) */}
+        {(!isSuperAdmin || selectedInstituteId) && (
+          <>        {/* MODERN FILTERS */}
         <div className="glass-panel p-4 rounded-xl flex flex-wrap gap-4 items-center justify-between border-border/50 sticky top-4 z-20 shadow-sm backdrop-blur-xl">
           <div className="flex items-center gap-2 text-muted-foreground px-2">
             <Filter className="w-4 h-4" />

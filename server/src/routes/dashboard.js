@@ -250,11 +250,83 @@ router.get('/parent', asyncHandler(async (req, res) => {
 router.get('/super-admin', asyncHandler(async (req, res) => {
   if (req.user.role !== 'super_admin') throw new AppError('Forbidden', 403);
 
-  const [institutes, users, students] = await Promise.all([
+  const [institutes, users, students, subscriptionStats, recentInstitutes, systemActivity, monthlyGrowth] = await Promise.all([
+    // Institute status breakdown
     query("SELECT status, COUNT(*) AS c FROM institutes GROUP BY status"),
+    
+    // User role breakdown
     query("SELECT role, COUNT(*) AS c FROM users GROUP BY role"),
+    
+    // Active students count
     query("SELECT COUNT(*) AS c FROM students WHERE status='active'"),
+    
+    // Subscription plan distribution with revenue calculation
+    query(`
+      SELECT 
+        i.subscription_plan,
+        COUNT(*) AS institute_count,
+        COALESCE(sp.monthly_price, 0) AS monthly_price,
+        COALESCE(sp.annual_price, 0) AS annual_price,
+        COUNT(*) * COALESCE(sp.monthly_price, 0) AS monthly_revenue
+      FROM institutes i
+      LEFT JOIN subscription_plans sp ON sp.slug = i.subscription_plan
+      WHERE i.status = 'active'
+      GROUP BY i.subscription_plan, sp.monthly_price, sp.annual_price
+      ORDER BY monthly_revenue DESC
+    `),
+    
+    // Recent institutes (last 10)
+    query(`
+      SELECT 
+        i.id, i.name, i.code, i.city, i.status, i.subscription_plan, i.created_at,
+        COUNT(DISTINCT s.id) AS student_count,
+        COUNT(DISTINCT t.id) AS teacher_count
+      FROM institutes i
+      LEFT JOIN students s ON s.institute_id = i.id AND s.status = 'active'
+      LEFT JOIN teachers t ON t.institute_id = i.id AND t.status = 'active'
+      GROUP BY i.id
+      ORDER BY i.created_at DESC
+      LIMIT 10
+    `),
+    
+    // System activity (last 24h)
+    query(`
+      SELECT 
+        action,
+        COUNT(*) AS count,
+        MAX(created_at) AS last_occurrence
+      FROM audit_logs
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY action
+      ORDER BY count DESC
+      LIMIT 8
+    `),
+    
+    // Monthly institute growth (last 6 months)
+    query(`
+      SELECT 
+        TO_CHAR(DATE_TRUNC('month', created_at), 'Mon') AS month,
+        EXTRACT(MONTH FROM created_at) AS month_num,
+        COUNT(*) AS new_institutes
+      FROM institutes
+      WHERE created_at > NOW() - INTERVAL '6 months'
+      GROUP BY DATE_TRUNC('month', created_at), EXTRACT(MONTH FROM created_at)
+      ORDER BY DATE_TRUNC('month', created_at)
+    `)
   ]);
+
+  // Calculate total metrics
+  const totalActiveInstitutes = institutes.rows.find(r => r.status === 'active')?.c || 0;
+  const totalMRR = subscriptionStats.rows.reduce((sum, r) => sum + parseFloat(r.monthly_revenue || 0), 0);
+  const totalARR = totalMRR * 12;
+
+  // Expiring soon (institutes created more than 11 months ago - simple logic)
+  const expiringRes = await query(`
+    SELECT COUNT(*) AS c FROM institutes 
+    WHERE status = 'active' 
+    AND created_at < NOW() - INTERVAL '11 months'
+    AND created_at > NOW() - INTERVAL '12 months'
+  `);
 
   res.json({
     success: true,
@@ -262,6 +334,40 @@ router.get('/super-admin', asyncHandler(async (req, res) => {
       instituteSummary: institutes.rows,
       userSummary: users.rows,
       totalActiveStudents: parseInt(students.rows[0]?.c || 0),
+      
+      // New revenue metrics
+      revenue: {
+        mrr: totalMRR,
+        arr: totalARR,
+        subscriptionDistribution: subscriptionStats.rows.map(r => ({
+          plan: r.subscription_plan || 'starter',
+          instituteCount: parseInt(r.institute_count),
+          monthlyPrice: parseFloat(r.monthly_price),
+          monthlyRevenue: parseFloat(r.monthly_revenue)
+        }))
+      },
+      
+      // Recent institutes with counts
+      recentInstitutes: recentInstitutes.rows.map(r => ({
+        ...r,
+        student_count: parseInt(r.student_count),
+        teacher_count: parseInt(r.teacher_count)
+      })),
+      
+      // System activity
+      systemActivity: systemActivity.rows,
+      
+      // Growth metrics
+      monthlyGrowth: monthlyGrowth.rows.map(r => ({
+        month: r.month,
+        newInstitutes: parseInt(r.new_institutes)
+      })),
+      
+      // Alerts
+      alerts: {
+        expiringSoon: parseInt(expiringRes.rows[0]?.c || 0),
+        suspendedInstitutes: parseInt(institutes.rows.find(r => r.status === 'suspended')?.c || 0)
+      }
     },
   });
 }));

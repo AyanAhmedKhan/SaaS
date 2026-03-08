@@ -11,7 +11,11 @@ router.use(authenticate, requireInstitute);
 // ── GET /api/academic-years ──
 router.get('/', asyncHandler(async (req, res) => {
     const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-    if (!instId) throw new AppError('Institute ID required', 400);
+    
+    // For super admins without institute_id, return empty array
+    if (!instId) {
+        return res.json({ success: true, data: { academicYears: [] } });
+    }
 
     const { rows } = await query(
         'SELECT * FROM academic_years WHERE institute_id = $1 ORDER BY start_date DESC',
@@ -23,7 +27,11 @@ router.get('/', asyncHandler(async (req, res) => {
 // ── GET /api/academic-years/current ──
 router.get('/current', asyncHandler(async (req, res) => {
     const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-    if (!instId) throw new AppError('Institute ID required', 400);
+    
+    // For super admins, require institute_id for this specific endpoint
+    if (!instId) {
+        throw new AppError('Institute ID required for super admins', 400);
+    }
 
     const { rows } = await query(
         'SELECT * FROM academic_years WHERE institute_id = $1 AND is_current = true',

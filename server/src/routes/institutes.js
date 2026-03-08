@@ -94,7 +94,7 @@ router.post('/', authenticate, authorize('super_admin'), asyncHandler(async (req
         await client.query(
             `INSERT INTO institutes (id, name, code, address, city, state, phone, email, website, max_students, subscription_plan)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-            [id, name, code.toUpperCase(), address, city, state, phone, email, website, max_students || 500, subscription_plan || 'basic']
+            [id, name, code.toUpperCase(), address, city, state, phone, email, website, max_students || 500, subscription_plan || 'starter']
         );
 
         // Create default academic year
@@ -126,7 +126,7 @@ router.put('/:id', authenticate, authorize('super_admin', 'institute_admin'), as
         throw new AppError('Access denied', 403);
     }
 
-    const { name, address, city, state, phone, email, website, logo_url, modules_enabled, ai_insight_enabled, max_students, status } = req.body;
+    const { name, address, city, state, phone, email, website, logo_url, modules_enabled, ai_insight_enabled, max_students, subscription_plan, status } = req.body;
 
     const oldResult = await query('SELECT * FROM institutes WHERE id = $1', [id]);
     if (!oldResult.rows[0]) throw new AppError('Institute not found', 404);
@@ -153,6 +153,7 @@ router.put('/:id', authenticate, authorize('super_admin', 'institute_admin'), as
     addField('modules_enabled', modules_enabled);
     addField('ai_insight_enabled', ai_insight_enabled);
     addField('max_students', max_students);
+    addField('subscription_plan', subscription_plan);
     if (req.user.role === 'super_admin') addField('status', status);
 
     if (fields.length === 0) throw new AppError('No fields to update', 400);

@@ -26,10 +26,29 @@ export interface Institute {
   logo_url?: string;
   modules_enabled: Record<string, boolean>;
   ai_insight_enabled: boolean;
-  status: 'active' | 'suspended' | 'archived';
+  status: 'active' | 'suspended' | 'archived' | 'trial';
   subscription_plan: string;
   max_students: number;
   created_at: string;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  slug: string;
+  name: string;
+  tagline?: string;
+  monthly_price: number;
+  annual_price: number;
+  max_students: number;
+  max_teachers: number;
+  max_admins: number;
+  max_classes: number;
+  features: { text: string; included: boolean; highlight?: boolean }[];
+  is_default: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AcademicYear {
@@ -84,6 +103,7 @@ export interface Student {
   parent_phone?: string;
   blood_group?: string;
   avatar?: string;
+  ai_plan_enabled?: boolean;
   status: 'active' | 'inactive' | 'graduated' | 'transferred';
   // Joined fields
   class_name?: string;
@@ -356,6 +376,8 @@ export interface AuthUser extends User {
     id: string;
     name: string;
     code: string;
+    subscription_plan?: string;
+    max_students?: number;
     modules_enabled: Record<string, boolean>;
     ai_insight_enabled: boolean;
   };

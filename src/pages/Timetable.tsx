@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Clock, MapPin, AlertCircle, Loader2, GraduationCap } from "lucide-react";
+import { Clock, MapPin, AlertCircle, Loader2, GraduationCap, Building2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,8 @@ import type { TimetableEntry, Class as ClassType, Exam } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Settings2 } from "lucide-react";
 import { ManageTimetableDialog } from "@/components/timetable/ManageTimetableDialog";
+import { InstituteSelector } from "@/components/InstituteSelector";
+import type { Institute } from "@/types";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -29,19 +31,44 @@ export default function Timetable() {
   const [error, setError] = useState<string | null>(null);
   const [showManage, setShowManage] = useState(false);
 
+  const isSuperAdmin = isRole('super_admin');
   const showClassFilter = isRole('super_admin', 'institute_admin', 'faculty');
 
+  const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
+    if (isSuperAdmin) {
+      return localStorage.getItem('super_admin_selected_institute');
+    }
+    return null;
+  });
+
+  const handleInstituteSelect = (instituteId: string | null, _institute: Institute | null) => {
+    setSelectedInstituteId(instituteId);
+    if (instituteId) {
+      localStorage.setItem('super_admin_selected_institute', instituteId);
+    } else {
+      localStorage.removeItem('super_admin_selected_institute');
+    }
+  };
+
   const fetchData = useCallback(async () => {
+    if (isSuperAdmin && !selectedInstituteId) {
+      setEntries([]);
+      setExams([]);
+      setClasses([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
       const params: Record<string, string> = {};
       if (classFilter !== "all") params.class_id = classFilter;
+      if (isSuperAdmin && selectedInstituteId) params.institute_id = selectedInstituteId;
 
       const [ttRes, clsRes, examRes] = await Promise.all([
         getTimetable(params),
-        showClassFilter ? getClasses() : Promise.resolve(null),
-        getExams({ ...params, status: "scheduled" }), // Fetch upcoming/scheduled exams
+        showClassFilter ? getClasses(isSuperAdmin && selectedInstituteId ? { institute_id: selectedInstituteId } : undefined) : Promise.resolve(null),
+        getExams({ ...params, status: "scheduled" }),
       ]);
 
       if (ttRes.success && ttRes.data) {
@@ -58,7 +85,7 @@ export default function Timetable() {
     } finally {
       setLoading(false);
     }
-  }, [classFilter, showClassFilter]);
+  }, [classFilter, showClassFilter, isSuperAdmin, selectedInstituteId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -115,8 +142,14 @@ export default function Timetable() {
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Weekly Timetable</h1>
             <p className="text-muted-foreground text-sm">View class schedules, period timings, and upcoming exams.</p>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            {showClassFilter && (
+          <div className="flex gap-2 flex-wrap items-center">
+            {isSuperAdmin && (
+              <InstituteSelector
+                selectedInstituteId={selectedInstituteId}
+                onSelectInstitute={handleInstituteSelect}
+              />
+            )}
+            {showClassFilter && (!isSuperAdmin || selectedInstituteId) && (
               <Select value={classFilter} onValueChange={setClassFilter}>
                 <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
                 <SelectContent>
@@ -125,7 +158,7 @@ export default function Timetable() {
                 </SelectContent>
               </Select>
             )}
-            {showClassFilter && classFilter !== "all" && (
+            {showClassFilter && classFilter !== "all" && (!isSuperAdmin || selectedInstituteId) && (
               <Button onClick={() => setShowManage(true)} className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md">
                 <Settings2 className="h-4 w-4 mr-2" />
                 Manage Timetable
@@ -134,13 +167,29 @@ export default function Timetable() {
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="flex flex-wrap gap-4 bg-card px-4 py-3 rounded-xl border border-border/50 shadow-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-primary/20 border border-primary/40" />
-            <span className="text-sm font-medium">Standard Class</span>
+        {/* Super Admin - No Institute Selected */}
+        {isSuperAdmin && !selectedInstituteId && (
+          <div className="flex flex-col items-center justify-center h-[400px] text-center gap-4">
+            <div className="p-6 bg-gradient-to-br from-primary/10 to-blue-500/10 rounded-2xl border border-primary/20">
+              <Building2 className="h-16 w-16 text-primary mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Select an Institute</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                Please select an institute from the dropdown above to view and manage timetables.
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+        )}
+
+        {/* Main Content - Only show when institute is selected (for super admin) or always (for others) */}
+        {(!isSuperAdmin || selectedInstituteId) && (
+          <>
+            {/* Legend */}
+            <div className="flex flex-wrap gap-4 bg-card px-4 py-3 rounded-xl border border-border/50 shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded bg-primary/20 border border-primary/40" />
+                <span className="text-sm font-medium">Standard Class</span>
+              </div>
+              <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded bg-accent/20 border border-accent/40" />
             <span className="text-sm font-medium">Lab Session</span>
           </div>

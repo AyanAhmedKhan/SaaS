@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, CalendarDays, Bell, AlertCircle, Loader2 } from "lucide-react";
+import { Plus, Search, CalendarDays, Bell, AlertCircle, Loader2, Building2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +14,9 @@ import {
 } from "@/components/ui/select";
 import { getNotices } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { InstituteSelector } from "@/components/InstituteSelector";
 import { cn } from "@/lib/utils";
-import type { Notice } from "@/types";
+import type { Notice, Institute } from "@/types";
 
 export default function Notices() {
   const { isRole } = useAuth();
@@ -25,15 +26,43 @@ export default function Notices() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Super admin institute selection
+  const isSuperAdmin = isRole('super_admin');
+  const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
+    if (isSuperAdmin) {
+      return localStorage.getItem('super_admin_selected_institute');
+    }
+    return null;
+  });
+  const [selectedInstitute, setSelectedInstitute] = useState<Institute | null>(null);
+
   const canCreate = isRole('super_admin', 'institute_admin', 'faculty');
 
+  const handleInstituteSelect = (instituteId: string | null, institute: Institute | null) => {
+    setSelectedInstituteId(instituteId);
+    setSelectedInstitute(institute);
+    if (instituteId) {
+      localStorage.setItem('super_admin_selected_institute', instituteId);
+    } else {
+      localStorage.removeItem('super_admin_selected_institute');
+    }
+  };
+
   const fetchNotices = useCallback(async () => {
+    // For super admins, don't fetch if no institute is selected
+    if (isSuperAdmin && !selectedInstituteId) {
+      setLoading(false);
+      setNotices([]);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
       const params: Record<string, string> = {};
       if (priorityFilter !== "all") params.priority = priorityFilter;
       if (searchQuery) params.search = searchQuery;
+      if (isSuperAdmin && selectedInstituteId) params.institute_id = selectedInstituteId;
 
       const response = await getNotices(params);
       if (response.success && response.data) {
@@ -46,7 +75,7 @@ export default function Notices() {
     } finally {
       setLoading(false);
     }
-  }, [priorityFilter, searchQuery]);
+  }, [priorityFilter, searchQuery, isSuperAdmin, selectedInstituteId]);
 
   useEffect(() => {
     const debounce = setTimeout(fetchNotices, 300);
@@ -92,13 +121,34 @@ export default function Notices() {
               Announcements and important updates for the institution.
             </p>
           </div>
-          {canCreate && (
-            <Button className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md hover:shadow-lg transition-all duration-200">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Notice
-            </Button>
-          )}
+          <div className="flex items-center gap-3">
+            {isSuperAdmin && (
+              <InstituteSelector
+                selectedInstituteId={selectedInstituteId}
+                onSelectInstitute={handleInstituteSelect}
+              />
+            )}
+            {canCreate && (!isSuperAdmin || selectedInstituteId) && (
+              <Button className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md hover:shadow-lg transition-all duration-200">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Notice
+              </Button>
+            )}
+          </div>
         </div>
+
+        {/* Super Admin: No Institute Selected */}
+        {isSuperAdmin && !selectedInstituteId && !loading && (
+          <div className="text-center py-20 border rounded-xl bg-gradient-to-br from-primary/5 to-blue-500/5 shadow-sm">
+            <div className="h-20 w-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
+              <Building2 className="h-10 w-10 text-primary/60" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Select an Institute</h3>
+            <p className="text-muted-foreground text-sm font-medium mb-6 max-w-md mx-auto">
+              Please select an institute from the dropdown above to view and manage its notices.
+            </p>
+          </div>
+        )}
 
         {/* Search & Filter */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">

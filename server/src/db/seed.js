@@ -15,6 +15,119 @@ async function seed() {
       await client.query('BEGIN');
 
       // ════════════════════════════════════════
+      // 0. SUBSCRIPTION PLANS
+      // ════════════════════════════════════════
+      const defaultPlans = [
+        {
+          id: 'plan_starter', slug: 'starter', name: 'Starter',
+          tagline: 'Everything a small school needs',
+          monthly_price: 2999, annual_price: 29990,
+          max_students: 200, max_teachers: 15, max_admins: 1, max_classes: 10,
+          features: JSON.stringify([
+            { text: 'Admin Dashboard', included: true },
+            { text: 'Student Management', included: true },
+            { text: 'Teacher Management', included: true },
+            { text: 'Attendance Tracking', included: true },
+            { text: 'Timetable', included: true },
+            { text: 'Fee Management', included: true },
+            { text: 'Notices & Announcements', included: true },
+            { text: 'Up to 10 Classes', included: true },
+            { text: 'AI Insights', included: false },
+            { text: 'Exams & Grading', included: false },
+            { text: 'Syllabus Tracking', included: false },
+            { text: 'Reports & Analytics', included: false },
+            { text: 'Assignments', included: false },
+            { text: 'Multi-Admin Support', included: false },
+          ]),
+          is_default: true, sort_order: 1,
+        },
+        {
+          id: 'plan_professional', slug: 'professional', name: 'Professional',
+          tagline: 'Complete school OS for academics',
+          monthly_price: 7999, annual_price: 79990,
+          max_students: 1000, max_teachers: 75, max_admins: 5, max_classes: 40,
+          features: JSON.stringify([
+            { text: 'Everything in Starter', included: true, highlight: true },
+            { text: 'Basic AI Insights', included: true },
+            { text: 'Exams & Grading System', included: true },
+            { text: 'Syllabus Tracking', included: true },
+            { text: 'Performance Reports', included: true },
+            { text: 'Assignments Module', included: true },
+            { text: 'Fee Analytics & Overdue', included: true },
+            { text: 'Up to 5 Admin Accounts', included: true },
+            { text: 'Up to 40 Classes', included: true },
+            { text: 'Student & Parent Dashboards', included: true },
+            { text: 'At-Risk Student Detection', included: false },
+            { text: 'Predictive Analytics', included: false },
+            { text: 'AI Report Generation', included: false },
+            { text: 'Multi-Branch Management', included: false },
+          ]),
+          is_default: true, sort_order: 2,
+        },
+        {
+          id: 'plan_ai_pro', slug: 'ai_pro', name: 'AI Pro',
+          tagline: "Your school's AI co-pilot",
+          monthly_price: 12999, annual_price: 129990,
+          max_students: 2000, max_teachers: 150, max_admins: 10, max_classes: 80,
+          features: JSON.stringify([
+            { text: 'Everything in Professional', included: true, highlight: true },
+            { text: 'At-Risk Student Detection', included: true },
+            { text: 'Predictive Performance', included: true },
+            { text: 'Attendance Heatmaps', included: true },
+            { text: 'Score Distribution Analysis', included: true },
+            { text: 'Fee Defaulter Intelligence', included: true },
+            { text: 'Teacher Workload Optimizer', included: true },
+            { text: 'AI Report Generation', included: true },
+            { text: 'Smart Alerts & Notifications', included: true },
+            { text: 'Syllabus Pace Insights', included: true },
+            { text: 'AI Parent Summaries', included: true },
+            { text: 'Up to 80 Classes', included: true },
+            { text: 'Multi-Branch Management', included: false },
+            { text: 'REST API Access', included: false },
+          ]),
+          is_default: true, sort_order: 3,
+        },
+        {
+          id: 'plan_enterprise', slug: 'enterprise', name: 'Enterprise',
+          tagline: 'Scale without limits',
+          monthly_price: 19999, annual_price: 199990,
+          max_students: 99999, max_teachers: 99999, max_admins: 99999, max_classes: 99999,
+          features: JSON.stringify([
+            { text: 'Everything in AI Pro', included: true, highlight: true },
+            { text: 'Unlimited Students & Staff', included: true },
+            { text: 'Multi-Branch Management', included: true },
+            { text: 'Super Admin Dashboard', included: true },
+            { text: 'Custom Branding & White-Label', included: true },
+            { text: 'REST API Access', included: true },
+            { text: 'Custom Report Builder', included: true },
+            { text: 'Bulk Import/Export', included: true },
+            { text: 'Audit Logs & Compliance', included: true },
+            { text: 'Custom Staff Roles', included: true },
+            { text: 'Dedicated Account Manager', included: true },
+            { text: 'Priority Support (4hr SLA)', included: true },
+            { text: 'Free Data Migration', included: true },
+            { text: 'On-Premise Deployment Option', included: true },
+          ]),
+          is_default: true, sort_order: 4,
+        },
+      ];
+
+      for (const p of defaultPlans) {
+        await client.query(
+          `INSERT INTO subscription_plans (id, slug, name, tagline, monthly_price, annual_price, max_students, max_teachers, max_admins, max_classes, features, is_default, sort_order)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+           ON CONFLICT (id) DO UPDATE SET
+             name = EXCLUDED.name, tagline = EXCLUDED.tagline,
+             monthly_price = EXCLUDED.monthly_price, annual_price = EXCLUDED.annual_price,
+             max_students = EXCLUDED.max_students, max_teachers = EXCLUDED.max_teachers,
+             max_admins = EXCLUDED.max_admins, max_classes = EXCLUDED.max_classes,
+             features = EXCLUDED.features, sort_order = EXCLUDED.sort_order`,
+          [p.id, p.slug, p.name, p.tagline, p.monthly_price, p.annual_price, p.max_students, p.max_teachers, p.max_admins, p.max_classes, p.features, p.is_default, p.sort_order]
+        );
+      }
+      console.log('[SEED] Subscription plans seeded:', defaultPlans.length);
+
+      // ════════════════════════════════════════
       // 1. INSTITUTE
       // ════════════════════════════════════════
       await client.query(`
@@ -25,7 +138,7 @@ async function seed() {
         'inst_01', 'Springfield Academy', 'SPRING01',
         '123 Education Lane', 'Springfield', 'Maharashtra',
         '+91 9876543210', 'admin@springfield.edu',
-        'premium', 5000
+        'ai_pro', 5000
       ]);
       console.log('[SEED] Institute created');
 

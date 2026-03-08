@@ -5,7 +5,7 @@ import type {
   AuthUser, Student, Teacher, Class, Subject, AcademicYear, Institute,
   AttendanceRecord, TimetableEntry, Notice, SyllabusEntry, Exam, ExamResult,
   Assignment, AssignmentSubmission, FeeStructure, FeePayment, TeacherRemark,
-  GradingSystem, Notification, Pagination,
+  GradingSystem, Notification, Pagination, SubscriptionPlan,
 } from '@/types';
 
 const API_BASE = '/api';
@@ -754,6 +754,30 @@ export async function createInstitute(data: Partial<Institute>) {
 
 export async function updateInstitute(id: string, data: Partial<Institute>) {
   return api.put<{ institute: Institute }>(`/institutes/${id}`, data);
+}
+
+// ═══════════════════════════════════════════
+// SUBSCRIPTION PLANS API
+// ═══════════════════════════════════════════
+
+export async function getPlans(includeInactive = false) {
+  return api.get<{ plans: SubscriptionPlan[] }>('/plans', includeInactive ? { include_inactive: 'true' } : undefined);
+}
+
+export async function getPlan(id: string) {
+  return api.get<{ plan: SubscriptionPlan }>(`/plans/${id}`);
+}
+
+export async function createPlan(data: Partial<SubscriptionPlan>) {
+  return api.post<{ plan: SubscriptionPlan }>('/plans', data);
+}
+
+export async function updatePlan(id: string, data: Partial<SubscriptionPlan>) {
+  return api.put<{ plan: SubscriptionPlan }>(`/plans/${id}`, data);
+}
+
+export async function deletePlan(id: string) {
+  return api.delete(`/plans/${id}`);
 }
 
 // ═══════════════════════════════════════════

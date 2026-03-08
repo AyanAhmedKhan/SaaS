@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { BookOpen, CheckCircle2, Clock, ChevronRight, AlertCircle, Loader2 } from "lucide-react";
+import { BookOpen, CheckCircle2, Clock, ChevronRight, AlertCircle, Loader2, Building2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +14,10 @@ import {
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { getSyllabus, getClasses } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import type { SyllabusEntry, Class as ClassType, Subject } from "@/types";
+import type { SyllabusEntry, Class as ClassType, Subject, Institute } from "@/types";
 import { AddSyllabusDialog } from "@/components/syllabus/AddSyllabusDialog";
 import { EditSyllabusDialog } from "@/components/syllabus/EditSyllabusDialog";
+import { InstituteSelector } from "@/components/InstituteSelector";
 
 interface GroupedUnit {
   unitName: string;
@@ -68,20 +69,45 @@ export default function Syllabus() {
   const [error, setError] = useState<string | null>(null);
   const [editTopic, setEditTopic] = useState<SyllabusEntry | null>(null);
 
+  const isSuperAdmin = isRole('super_admin');
   const showClassFilter = isRole('super_admin', 'institute_admin', 'faculty');
   const canManageSyllabus = isRole('super_admin', 'institute_admin', 'faculty');
 
+  const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
+    if (isSuperAdmin) {
+      return localStorage.getItem('super_admin_selected_institute');
+    }
+    return null;
+  });
+
+  const handleInstituteSelect = (instituteId: string | null, _institute: Institute | null) => {
+    setSelectedInstituteId(instituteId);
+    if (instituteId) {
+      localStorage.setItem('super_admin_selected_institute', instituteId);
+    } else {
+      localStorage.removeItem('super_admin_selected_institute');
+    }
+  };
+
   const fetchData = useCallback(async () => {
+    if (isSuperAdmin && !selectedInstituteId) {
+      setEntries([]);
+      setClasses([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
       const params: Record<string, string> = {};
       if (classFilter !== "all") params.class_id = classFilter;
       if (subjectFilter !== "all") params.subject_id = subjectFilter;
+      if (isSuperAdmin && selectedInstituteId) params.institute_id = selectedInstituteId;
 
+      const classParams = isSuperAdmin && selectedInstituteId ? { institute_id: selectedInstituteId } : {};
       const [syllRes, clsRes] = await Promise.all([
         getSyllabus(params),
-        showClassFilter ? getClasses() : Promise.resolve(null),
+        showClassFilter ? getClasses(classParams) : Promise.resolve(null),
       ]);
 
       if (syllRes.success && syllRes.data) {
@@ -95,7 +121,7 @@ export default function Syllabus() {
     } finally {
       setLoading(false);
     }
-  }, [classFilter, subjectFilter, showClassFilter]);
+  }, [classFilter, subjectFilter, showClassFilter, isSuperAdmin, selectedInstituteId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -148,8 +174,14 @@ export default function Syllabus() {
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Syllabus</h1>
             <p className="text-muted-foreground text-sm">Track syllabus coverage and topic completion.</p>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            {showClassFilter && (
+          <div className="flex gap-2 flex-wrap items-center">
+            {isSuperAdmin && (
+              <InstituteSelector
+                selectedInstituteId={selectedInstituteId}
+                onSelectInstitute={handleInstituteSelect}
+              />
+            )}
+            {showClassFilter && (!isSuperAdmin || selectedInstituteId) && (
               <Select value={classFilter} onValueChange={setClassFilter}>
                 <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Classes" /></SelectTrigger>
                 <SelectContent>
@@ -158,30 +190,46 @@ export default function Syllabus() {
                 </SelectContent>
               </Select>
             )}
-            {canManageSyllabus && (
+            {canManageSyllabus && (!isSuperAdmin || selectedInstituteId) && (
               <AddSyllabusDialog onSuccess={fetchData} defaultClassId={classFilter} />
             )}
           </div>
         </div>
 
-        {/* Loading */}
-        {loading && (
-          <div className="flex items-center justify-center h-40 gap-3">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <p className="text-muted-foreground text-sm">Loading syllabus...</p>
+        {/* Super Admin - No Institute Selected */}
+        {isSuperAdmin && !selectedInstituteId && (
+          <div className="flex flex-col items-center justify-center h-[400px] text-center gap-4">
+            <div className="p-6 bg-gradient-to-br from-primary/10 to-blue-500/10 rounded-2xl border border-primary/20">
+              <Building2 className="h-16 w-16 text-primary mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Select an Institute</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                Please select an institute from the dropdown above to view and manage syllabus.
+              </p>
+            </div>
           </div>
         )}
 
-        {/* Error */}
-        {error && !loading && (
-          <div className="flex flex-col items-center justify-center h-40 text-center gap-3">
-            <AlertCircle className="h-8 w-8 text-destructive/60" />
-            <p className="text-muted-foreground text-sm">{error}</p>
-          </div>
-        )}
+        {/* Main Content - Only show when institute is selected (for super admin) or always (for others) */}
+        {(!isSuperAdmin || selectedInstituteId) && (
+          <>
+            {/* Loading */}
+            {loading && (
+              <div className="flex items-center justify-center h-40 gap-3">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <p className="text-muted-foreground text-sm">Loading syllabus...</p>
+              </div>
+            )}
 
-        {/* Empty */}
-        {!loading && !error && entries.length === 0 && (
+            {/* Error */}
+            {error && !loading && (
+              <div className="flex flex-col items-center justify-center h-40 text-center gap-3">
+                <AlertCircle className="h-8 w-8 text-destructive/60" />
+                <p className="text-muted-foreground text-sm">{error}</p>
+              </div>
+            )}
+
+            {/* Empty */}
+            {!loading && !error && entries.length === 0 && (
           <div className="text-center py-16">
             <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
               <BookOpen className="h-8 w-8 text-muted-foreground/30" />

@@ -37,6 +37,8 @@ const StudentProfilePage = lazy(() => import("./pages/StudentProfilePage"));
 const Settings = lazy(() => import("./pages/Settings"));
 const AcademicYears = lazy(() => import("./pages/AcademicYears"));
 const Classes = lazy(() => import("./pages/Classes"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const ManagePlans = lazy(() => import("./pages/ManagePlans"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -115,6 +117,8 @@ function AppRoutes() {
 
       {/* Super admin only */}
       <Route path="/institutes" element={<ProtectedRoute roles={['super_admin']}><Institutes /></ProtectedRoute>} />
+      <Route path="/pricing" element={<ProtectedRoute roles={ADMIN_ROLES}><Pricing /></ProtectedRoute>} />
+      <Route path="/manage-plans" element={<ProtectedRoute roles={['super_admin']}><ManagePlans /></ProtectedRoute>} />
 
       {/* Placeholder routes */}
       <Route path="/grading" element={<ProtectedRoute roles={ADMIN_ROLES}><ComingSoon title="Grading Configuration" /></ProtectedRoute>} />

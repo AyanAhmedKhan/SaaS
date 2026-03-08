@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
     Search, BookOpen, Loader2, AlertCircle, Plus, Pencil,
-    Hash, FileText, MoreVertical, CheckCircle, XCircle,
+    Hash, FileText, MoreVertical, CheckCircle, XCircle, Building2,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ import { getSubjects, createSubject, updateSubject } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import type { Subject } from "@/types";
+import { InstituteSelector } from "@/components/InstituteSelector";
+import type { Institute } from "@/types";
 
 // ─── Add Subject Dialog ───
 function AddSubjectDialog({ onSuccess }: { onSuccess: () => void }) {
@@ -255,13 +257,36 @@ export default function Subjects() {
     const [searchQuery, setSearchQuery] = useState("");
     const [editSubject, setEditSubject] = useState<Subject | null>(null);
 
+    const isSuperAdmin = isRole('super_admin');
     const canManage = isRole('super_admin', 'institute_admin');
 
+    const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
+        if (isSuperAdmin) {
+            return localStorage.getItem('super_admin_selected_institute');
+        }
+        return null;
+    });
+
+    const handleInstituteSelect = (instituteId: string | null, _institute: Institute | null) => {
+        setSelectedInstituteId(instituteId);
+        if (instituteId) {
+            localStorage.setItem('super_admin_selected_institute', instituteId);
+        } else {
+            localStorage.removeItem('super_admin_selected_institute');
+        }
+    };
+
     const fetchData = useCallback(async () => {
+        if (isSuperAdmin && !selectedInstituteId) {
+            setSubjects([]);
+            setLoading(false);
+            return;
+        }
         try {
             setLoading(true);
             setError(null);
-            const res = await getSubjects();
+            const params = isSuperAdmin && selectedInstituteId ? { institute_id: selectedInstituteId } : {};
+            const res = await getSubjects(params);
             if (res.success && res.data) {
                 setSubjects((res.data as { subjects: Subject[] }).subjects || []);
             }
@@ -270,7 +295,7 @@ export default function Subjects() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [isSuperAdmin, selectedInstituteId]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -287,17 +312,42 @@ export default function Subjects() {
             <div className="space-y-6 page-enter">
                 {/* Header */}
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
+                    <div className="flex-1">
                         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Subjects</h1>
                         <p className="text-muted-foreground text-sm">
                             Manage subjects taught at your institute. Assign subjects to teachers from the Teachers page.
                         </p>
                     </div>
-                    {canManage && <AddSubjectDialog onSuccess={fetchData} />}
+                    <div className="flex items-center gap-3">
+                        {isSuperAdmin && (
+                            <InstituteSelector
+                                selectedInstituteId={selectedInstituteId}
+                                onSelectInstitute={handleInstituteSelect}
+                            />
+                        )}
+                        {canManage && isSuperAdmin && selectedInstituteId && <AddSubjectDialog onSuccess={fetchData} />}
+                        {canManage && !isSuperAdmin && <AddSubjectDialog onSuccess={fetchData} />}
+                    </div>
                 </div>
 
-                {/* Summary */}
-                {!loading && !error && subjects.length > 0 && (
+                {/* Super Admin - No Institute Selected */}
+                {isSuperAdmin && !selectedInstituteId && (
+                    <div className="flex flex-col items-center justify-center h-[400px] text-center gap-4">
+                        <div className="p-6 bg-gradient-to-br from-primary/10 to-blue-500/10 rounded-2xl border border-primary/20">
+                            <Building2 className="h-16 w-16 text-primary mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold mb-2">Select an Institute</h3>
+                            <p className="text-sm text-muted-foreground max-w-md">
+                                Please select an institute from the dropdown above to view and manage subjects.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Main Content - Only show when institute is selected (for super admin) or always (for others) */}
+                {(!isSuperAdmin || selectedInstituteId) && (
+                    <>
+                        {/* Summary */}
+                        {!loading && !error && subjects.length > 0 && (
                     <div className="grid grid-cols-3 gap-3">
                         <div className="bg-gradient-to-br from-primary/10 to-blue-500/10 border border-primary/20 rounded-xl p-4 text-center">
                             <p className="text-2xl font-bold text-primary">{subjects.length}</p>
@@ -406,6 +456,8 @@ export default function Subjects() {
                             {searchQuery ? "No subjects matching your search." : "No subjects yet. Add your first subject!"}
                         </p>
                     </div>
+                )}
+                    </>
                 )}
             </div>
 

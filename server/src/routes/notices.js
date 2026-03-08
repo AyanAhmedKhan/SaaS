@@ -10,6 +10,23 @@ router.use(authenticate, requireInstitute);
 // GET /api/notices
 router.get('/', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  
+  // For super admins without institute_id, return empty array
+  if (!instId) {
+    return res.json({
+      success: true,
+      data: {
+        notices: [],
+        pagination: {
+          page: parseInt(req.query.page || '1'),
+          limit: parseInt(req.query.limit || '20'),
+          total: 0,
+          totalPages: 0,
+        },
+      },
+    });
+  }
+  
   const { priority, limit = '20', page = '1' } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
   const params = [instId];
@@ -55,6 +72,12 @@ router.get('/', asyncHandler(async (req, res) => {
 // GET /api/notices/:id
 router.get('/:id', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  
+  // For super admins, require institute_id
+  if (!instId) {
+    throw new AppError('Institute ID required for super admins', 400);
+  }
+  
   const { rows } = await query(
     `SELECT n.*, u.name AS created_by_name FROM notices n
      LEFT JOIN users u ON n.created_by = u.id

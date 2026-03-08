@@ -20,11 +20,13 @@ import {
     DialogHeader,
     DialogTitle,
     DialogFooter,
+    DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
     Select,
     SelectContent,
@@ -33,9 +35,9 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { updateInstitute, getInstitute } from "@/lib/api";
+import { updateInstitute, getInstitute, getPlans } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import type { Institute } from "@/types";
+import type { Institute, SubscriptionPlan } from "@/types";
 
 interface ManageInstituteDialogProps {
     institute: Institute;
@@ -72,6 +74,37 @@ interface InstituteStats {
     totalClasses: number;
 }
 
+const MODULES = [
+    { key: "attendance", label: "Attendance" },
+    { key: "assignments", label: "Assignments" },
+    { key: "fees", label: "Fees" },
+    { key: "exams", label: "Exams" },
+    { key: "syllabus", label: "Syllabus" },
+    { key: "timetable", label: "Timetable" },
+    { key: "notices", label: "Notices" },
+    { key: "reports", label: "Reports" },
+    { key: "ai_insight", label: "AI Insight" },
+] as const;
+
+const DEFAULT_MODULES_ENABLED: Record<string, boolean> = {
+    attendance: true,
+    assignments: true,
+    fees: true,
+    exams: true,
+    syllabus: true,
+    timetable: true,
+    notices: true,
+    reports: true,
+    ai_insight: true,
+};
+
+const FALLBACK_PLANS: SubscriptionPlan[] = [
+    { id: "plan_starter", slug: "starter", name: "Starter", tagline: "Everything a small school needs", monthly_price: 2999, annual_price: 29990, max_students: 200, max_teachers: 15, max_admins: 1, max_classes: 10, features: [], is_default: true, is_active: true, sort_order: 1 },
+    { id: "plan_professional", slug: "professional", name: "Professional", tagline: "Complete school OS for academics", monthly_price: 7999, annual_price: 79990, max_students: 1000, max_teachers: 75, max_admins: 5, max_classes: 40, features: [], is_default: true, is_active: true, sort_order: 2 },
+    { id: "plan_ai_pro", slug: "ai_pro", name: "AI Pro", tagline: "Your school's AI co-pilot", monthly_price: 12999, annual_price: 129990, max_students: 2000, max_teachers: 150, max_admins: 10, max_classes: 80, features: [], is_default: true, is_active: true, sort_order: 3 },
+    { id: "plan_enterprise", slug: "enterprise", name: "Enterprise", tagline: "Scale without limits", monthly_price: 19999, annual_price: 199990, max_students: 99999, max_teachers: 99999, max_admins: 99999, max_classes: 99999, features: [], is_default: true, is_active: true, sort_order: 4 },
+];
+
 export function ManageInstituteDialog({
     institute,
     open,
@@ -87,6 +120,12 @@ export function ManageInstituteDialog({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [stats, setStats] = useState<InstituteStats | null>(null);
     const [loadingStats, setLoadingStats] = useState(true);
+    const [modulesEnabled, setModulesEnabled] = useState<Record<string, boolean>>(DEFAULT_MODULES_ENABLED);
+    const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+    const [loadingPlans, setLoadingPlans] = useState(false);
+    const [planDialogOpen, setPlanDialogOpen] = useState(false);
+    const [selectedPlan, setSelectedPlan] = useState("starter");
+    const [plansLoadFailed, setPlansLoadFailed] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -102,6 +141,11 @@ export function ManageInstituteDialog({
                 max_students: String(institute.max_students || 500),
                 status: institute.status || "active",
             });
+            setSelectedPlan(institute.subscription_plan || "starter");
+            setModulesEnabled({
+                ...DEFAULT_MODULES_ENABLED,
+                ...(institute.modules_enabled || {}),
+            });
             setErrors({});
             // Fetch detailed stats
             setLoadingStats(true);
@@ -110,10 +154,31 @@ export function ManageInstituteDialog({
                     if (res.success && res.data) {
                         const data = res.data as { institute: Institute & { stats?: InstituteStats } };
                         if (data.institute.stats) setStats(data.institute.stats);
+                        setModulesEnabled({
+                            ...DEFAULT_MODULES_ENABLED,
+                            ...(data.institute.modules_enabled || {}),
+                        });
                     }
                 })
                 .catch(() => { })
                 .finally(() => setLoadingStats(false));
+
+            setLoadingPlans(true);
+            setPlansLoadFailed(false);
+            getPlans()
+                .then((res) => {
+                    if (res.success && res.data?.plans) {
+                        setPlans(res.data.plans);
+                    } else {
+                        setPlans(FALLBACK_PLANS);
+                        setPlansLoadFailed(true);
+                    }
+                })
+                .catch(() => {
+                    setPlans(FALLBACK_PLANS);
+                    setPlansLoadFailed(true);
+                })
+                .finally(() => setLoadingPlans(false));
         }
     }, [open, institute]);
 
@@ -144,6 +209,8 @@ export function ManageInstituteDialog({
             if (form.email) payload.email = form.email.trim();
             if (form.website) payload.website = form.website.trim();
             payload.max_students = parseInt(form.max_students) || 500;
+            payload.subscription_plan = selectedPlan;
+            payload.modules_enabled = modulesEnabled;
 
             const res = await updateInstitute(institute.id, payload as any);
             if (res.success) {
@@ -161,6 +228,10 @@ export function ManageInstituteDialog({
     const renderError = (field: string) => {
         if (!errors[field]) return null;
         return <p className="text-xs text-destructive mt-1">{errors[field]}</p>;
+    };
+
+    const toggleModule = (moduleKey: string, enabled: boolean) => {
+        setModulesEnabled((prev) => ({ ...prev, [moduleKey]: enabled }));
     };
 
     return (
@@ -275,11 +346,73 @@ export function ManageInstituteDialog({
                             </div>
                             <div>
                                 <Label className="text-sm font-medium">Plan</Label>
-                                <div className="mt-1.5">
+                                <div className="mt-1.5 flex items-center gap-2">
                                     <Badge variant="outline" className="text-sm capitalize px-3 py-1.5">
                                         <CreditCard className="h-3.5 w-3.5 mr-1" />
-                                        {institute.subscription_plan || "basic"}
+                                        {selectedPlan}
                                     </Badge>
+                                    <Dialog open={planDialogOpen} onOpenChange={setPlanDialogOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button type="button" variant="outline" size="sm">Change Plan</Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="sm:max-w-[460px]">
+                                            <DialogHeader>
+                                                <DialogTitle>Select Subscription Plan</DialogTitle>
+                                                <DialogDescription>Choose a plan for this institute.</DialogDescription>
+                                            </DialogHeader>
+                                            {loadingPlans ? (
+                                                <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                    Loading plans...
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {plansLoadFailed && (
+                                                        <p className="text-xs text-amber-600 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-1">
+                                                            Unable to load plans from server. Showing default plan options.
+                                                        </p>
+                                                    )}
+                                                    {plans.length === 0 && (
+                                                        <p className="text-sm text-muted-foreground py-3">No plans available.</p>
+                                                    )}
+                                                    {plans.map((plan) => (
+                                                        <button
+                                                            key={plan.id}
+                                                            type="button"
+                                                            onClick={() => setSelectedPlan(plan.slug)}
+                                                            className={`w-full text-left rounded-lg border p-3 transition-colors ${selectedPlan === plan.slug ? "border-primary bg-primary/5" : "hover:bg-muted/40"}`}
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="font-medium capitalize">{plan.name}</span>
+                                                                {selectedPlan === plan.slug && <Badge variant="secondary">Selected</Badge>}
+                                                            </div>
+                                                            <p className="text-xs text-muted-foreground mt-1">{plan.tagline || "No tagline"}</p>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <DialogFooter>
+                                                <Button type="button" onClick={() => setPlanDialogOpen(false)}>Done</Button>
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
+                            </div>
+                            <div className="sm:col-span-2 border-t pt-4 mt-1">
+                                <Label className="text-sm font-medium flex items-center gap-1">
+                                    <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                                    Feature Access
+                                </Label>
+                                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {MODULES.map((module) => (
+                                        <div key={module.key} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                                            <span className="text-sm font-medium">{module.label}</span>
+                                            <Switch
+                                                checked={modulesEnabled[module.key] !== false}
+                                                onCheckedChange={(checked) => toggleModule(module.key, checked)}
+                                            />
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>

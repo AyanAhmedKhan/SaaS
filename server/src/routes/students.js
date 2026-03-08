@@ -256,7 +256,7 @@ router.post('/bulk', authorize('institute_admin', 'super_admin'), asyncHandler(a
         let errors = [];
 
         for (const [index, student] of students.entries()) {
-            const { name, email, roll_number, class_id, admission_date, date_of_birth, gender, address, phone, blood_group } = student;
+            const { name, email, roll_number, class_id, admission_date, date_of_birth, gender, address, phone, blood_group, ai_plan_enabled } = student;
 
             if (!name || !email || !roll_number) {
                 errors.push({ row: index + 1, error: 'Name, email, and roll number are required' });
@@ -283,10 +283,10 @@ router.post('/bulk', authorize('institute_admin', 'super_admin'), asyncHandler(a
             try {
                 await client.query(
                     `INSERT INTO students (id, institute_id, academic_year_id, class_id, name, email, roll_number,
-                      admission_date, date_of_birth, gender, address, phone, blood_group)
-                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                                            admission_date, date_of_birth, gender, address, phone, blood_group, ai_plan_enabled)
+                                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
                     [studentId, instId, ayId, class_id || null, name, email, roll_number,
-                        admission_date || null, date_of_birth || null, gender || null, address || null, phone || null, blood_group || null]
+                                                admission_date || null, date_of_birth || null, gender || null, address || null, phone || null, blood_group || null, ai_plan_enabled === true]
                 );
                 successCount++;
             } catch (err) {
@@ -316,7 +316,7 @@ router.post('/bulk', authorize('institute_admin', 'super_admin'), asyncHandler(a
 router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHandler(async (req, res) => {
     const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
     const { name, email, roll_number, class_id, admission_date, date_of_birth, gender, address, phone,
-        parent_name, parent_email, parent_phone, blood_group, create_login, password } = req.body;
+        parent_name, parent_email, parent_phone, blood_group, ai_plan_enabled, create_login, password } = req.body;
 
     if (!name || !email || !roll_number) {
         throw new AppError('Name, email, and roll number are required', 400);
@@ -377,6 +377,13 @@ router.post('/', authorize('institute_admin', 'faculty', 'super_admin'), asyncHa
                 parentUserId, parent_name || null, parent_email || null, parent_phone || null, blood_group || null]
         );
 
+        if (ai_plan_enabled === true) {
+            await client.query(
+                'UPDATE students SET ai_plan_enabled = true WHERE id = $1',
+                [studentId]
+            );
+        }
+
         await client.query('COMMIT');
 
         await logAudit({ instituteId: instId, userId: req.user.id, action: 'create', entityType: 'student', entityId: studentId, newValues: { name, email, roll_number, class_id }, req });
@@ -417,19 +424,21 @@ router.put('/:id', authorize('institute_admin', 'faculty', 'super_admin'), async
     }
 
     const { name, email, roll_number, class_id, admission_date, date_of_birth, gender, address, phone,
-        parent_name, parent_email, parent_phone, blood_group, status } = req.body;
+        parent_name, parent_email, parent_phone, blood_group, status, ai_plan_enabled } = req.body;
 
     await query(
         `UPDATE students SET name = $1, email = $2, roll_number = $3, class_id = $4, 
          admission_date = $5, date_of_birth = $6, gender = $7, address = $8, phone = $9,
          parent_name = $10, parent_email = $11, parent_phone = $12, blood_group = $13, 
-         status = $14, updated_at = NOW() WHERE id = $15`,
+         status = $14, ai_plan_enabled = $15, updated_at = NOW() WHERE id = $16`,
         [
             name || e.name, email || e.email, roll_number || e.roll_number, class_id ?? e.class_id,
             admission_date ?? e.admission_date, date_of_birth ?? e.date_of_birth, gender ?? e.gender,
             address ?? e.address, phone ?? e.phone, parent_name ?? e.parent_name,
             parent_email ?? e.parent_email, parent_phone ?? e.parent_phone,
-            blood_group ?? e.blood_group, status || e.status, req.params.id,
+            blood_group ?? e.blood_group, status || e.status,
+            ai_plan_enabled === undefined ? e.ai_plan_enabled : ai_plan_enabled,
+            req.params.id,
         ]
     );
 

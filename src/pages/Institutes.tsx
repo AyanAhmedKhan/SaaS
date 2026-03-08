@@ -60,7 +60,6 @@ export default function Institutes() {
       case "active": return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
       case "suspended": return "bg-red-500/10 text-red-600 border-red-500/20";
       case "archived": return "bg-muted text-muted-foreground border-muted";
-      case "trial": return "bg-amber-500/10 text-amber-600 border-amber-500/20";
       default: return "";
     }
   };
@@ -70,16 +69,16 @@ export default function Institutes() {
       case "active": return "bg-emerald-500";
       case "suspended": return "bg-red-500";
       case "archived": return "bg-gray-400";
-      case "trial": return "bg-amber-500";
       default: return "bg-gray-400";
     }
   };
 
   const getPlanColor = (plan: string) => {
     switch (plan) {
+      case "starter": return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+      case "professional": return "bg-blue-500/10 text-blue-600 border-blue-500/20";
+      case "ai_pro": return "bg-amber-500/10 text-amber-600 border-amber-500/20";
       case "enterprise": return "bg-violet-500/10 text-violet-600 border-violet-500/20";
-      case "premium": return "bg-amber-500/10 text-amber-600 border-amber-500/20";
-      case "standard": return "bg-blue-500/10 text-blue-600 border-blue-500/20";
       default: return "bg-muted/50 text-muted-foreground border-border/50";
     }
   };
@@ -138,7 +137,6 @@ export default function Institutes() {
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="suspended">Suspended</SelectItem>
-              <SelectItem value="trial">Trial</SelectItem>
               <SelectItem value="archived">Archived</SelectItem>
             </SelectContent>
           </Select>
@@ -176,8 +174,7 @@ export default function Institutes() {
                     "h-1.5",
                     institute.status === "active" ? "bg-gradient-to-r from-emerald-500 to-green-500" :
                       institute.status === "suspended" ? "bg-gradient-to-r from-red-500 to-rose-500" :
-                        institute.status === "trial" ? "bg-gradient-to-r from-amber-400 to-orange-500" :
-                          "bg-gradient-to-r from-gray-300 to-gray-400"
+                        "bg-gradient-to-r from-gray-300 to-gray-400"
                   )} />
 
                   <div className="p-5 space-y-4">
@@ -226,7 +223,7 @@ export default function Institutes() {
                     <div className="flex items-center justify-between pt-3 border-t border-border/40">
                       <Badge variant="outline" className={cn("capitalize text-[10px] px-2", getPlanColor(institute.subscription_plan))}>
                         <CreditCard className="h-2.5 w-2.5 mr-1" />
-                        {institute.subscription_plan || "basic"}
+                        {institute.subscription_plan || "starter"}
                       </Badge>
                       <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <Users className="h-3 w-3" />

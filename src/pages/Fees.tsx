@@ -3,7 +3,7 @@ import {
   Plus, Search, DollarSign, AlertCircle, Loader2,
   CheckCircle2, XCircle, Clock, IndianRupee, Receipt,
   ArrowRight, Wallet, TrendingUp, CreditCard, Calendar,
-  FileText, ShieldCheck, Edit3, Trash2
+  FileText, ShieldCheck, Edit3, Trash2, Building2
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -41,8 +41,9 @@ import {
   createFeeStructure, updateFeeStructure, deleteFeeStructure
 } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import type { FeePayment, Class as ClassType, Student, FeeStructure } from "@/types";
+import type { FeePayment, Class as ClassType, Student, FeeStructure, Institute } from "@/types";
 import { cn } from "@/lib/utils";
+import { InstituteSelector } from "@/components/InstituteSelector";
 
 export default function Fees() {
   const { isRole } = useAuth();
@@ -93,10 +94,27 @@ export default function Fees() {
     status: "paid"
   });
 
+  const isSuperAdmin = isRole('super_admin');
   const isStudent = isRole('student');
   const isParent = isRole('parent');
   const canCreate = isRole('super_admin', 'institute_admin');
   const isStudentView = isStudent || isParent;
+
+  const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
+    if (isSuperAdmin) {
+      return localStorage.getItem('super_admin_selected_institute');
+    }
+    return null;
+  });
+
+  const handleInstituteSelect = (instituteId: string | null, _institute: Institute | null) => {
+    setSelectedInstituteId(instituteId);
+    if (instituteId) {
+      localStorage.setItem('super_admin_selected_institute', instituteId);
+    } else {
+      localStorage.removeItem('super_admin_selected_institute');
+    }
+  };
 
   // Summary stats calculations
   const totalAmount = fees.reduce((s, f) => s + (f.amount || 0), 0);
@@ -108,6 +126,12 @@ export default function Fees() {
   const paidPercentage = totalAmount > 0 ? Math.round((totalPaid / totalAmount) * 100) : 0;
 
   const fetchData = useCallback(async () => {
+    if (isSuperAdmin && !selectedInstituteId) {
+      setFees([]);
+      setClasses([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -115,10 +139,12 @@ export default function Fees() {
       if (classFilter !== "all") params.class_id = classFilter;
       if (statusFilter !== "all") params.status = statusFilter;
       if (searchQuery) params.search = searchQuery;
+      if (isSuperAdmin && selectedInstituteId) params.institute_id = selectedInstituteId;
 
+      const classParams = isSuperAdmin && selectedInstituteId ? { institute_id: selectedInstituteId } : {};
       const [feeRes, classRes] = await Promise.all([
         getFeePayments(params),
-        isStudentView ? Promise.resolve({ success: true, data: { classes: [] } }) : getClasses(),
+        isStudentView ? Promise.resolve({ success: true, data: { classes: [] } }) : getClasses(classParams),
       ]);
 
       if (feeRes.success && feeRes.data) {
@@ -133,7 +159,7 @@ export default function Fees() {
     } finally {
       setLoading(false);
     }
-  }, [classFilter, statusFilter, searchQuery, isStudentView]);
+  }, [classFilter, statusFilter, searchQuery, isStudentView, isSuperAdmin, selectedInstituteId]);
 
   const fetchStructures = useCallback(async () => {
     try {
@@ -392,29 +418,53 @@ export default function Fees() {
           </div>
 
           {/* Actions Contextual to Tabs */}
-          {!isStudentView && (
-            <div className="flex gap-3">
-              {activeTab === "payments" && canCreate && (
-                <Button onClick={openCreateModal} className="shrink-0 h-12 px-6 rounded-2xl bg-gradient-to-r from-primary to-indigo-600 hover:from-primary/90 hover:to-indigo-600/90 shadow-lg shadow-primary/30 transition-transform active:scale-95 group">
-                  <Plus className="h-5 w-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
-                  <span className="font-bold tracking-wide">Record Payment</span>
-                </Button>
-              )}
-              {activeTab === "structures" && canCreate && (
-                <Button onClick={openCreateStructureModal} className="shrink-0 h-12 px-6 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-600/90 hover:to-indigo-600/90 shadow-lg shadow-purple-600/30 transition-transform active:scale-95 group">
-                  <Plus className="h-5 w-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
-                  <span className="font-bold tracking-wide">New Structure</span>
-                </Button>
-              )}
-            </div>
-          )}
+          <div className="flex gap-3 items-center">
+            {isSuperAdmin && (
+              <InstituteSelector
+                selectedInstituteId={selectedInstituteId}
+                onSelectInstitute={handleInstituteSelect}
+              />
+            )}
+            {!isStudentView && (!isSuperAdmin || selectedInstituteId) && (
+              <>
+                {activeTab === "payments" && canCreate && (
+                  <Button onClick={openCreateModal} className="shrink-0 h-12 px-6 rounded-2xl bg-gradient-to-r from-primary to-indigo-600 hover:from-primary/90 hover:to-indigo-600/90 shadow-lg shadow-primary/30 transition-transform active:scale-95 group">
+                    <Plus className="h-5 w-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
+                    <span className="font-bold tracking-wide">Record Payment</span>
+                  </Button>
+                )}
+                {activeTab === "structures" && canCreate && (
+                  <Button onClick={openCreateStructureModal} className="shrink-0 h-12 px-6 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-600/90 hover:to-indigo-600/90 shadow-lg shadow-purple-600/30 transition-transform active:scale-95 group">
+                    <Plus className="h-5 w-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
+                    <span className="font-bold tracking-wide">New Structure</span>
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
-        <Tabs defaultValue="payments" value={activeTab} onValueChange={setActiveTab} className="w-full space-y-8">
+        {/* Super Admin - No Institute Selected */}
+        {isSuperAdmin && !selectedInstituteId && (
+          <div className="flex flex-col items-center justify-center h-[400px] text-center gap-4">
+            <div className="p-6 bg-gradient-to-br from-primary/10 to-blue-500/10 rounded-2xl border border-primary/20">
+              <Building2 className="h-16 w-16 text-primary mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Select an Institute</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                Please select an institute from the dropdown above to view and manage fee records.
+              </p>
+            </div>
+          </div>
+        )}
 
-          {!isStudentView && (
-            <TabsList className="bg-background/60 backdrop-blur-xl border border-border/50 p-1.5 rounded-2xl h-auto shadow-sm inline-flex">
-              <TabsTrigger value="payments" className="rounded-xl px-6 py-3 font-bold text-sm data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:shadow-md transition-all">
+        {/* Main Content - Only show when institute is selected (for super admin) or always (for others) */}
+        {(!isSuperAdmin || selectedInstituteId) && (
+          <>
+            <Tabs defaultValue="payments" value={activeTab} onValueChange={setActiveTab} className="w-full space-y-8">
+
+              {!isStudentView && (
+                <TabsList className="bg-background/60 backdrop-blur-xl border border-border/50 p-1.5 rounded-2xl h-auto shadow-sm inline-flex">
+                  <TabsTrigger value="payments" className="rounded-xl px-6 py-3 font-bold text-sm data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:shadow-md transition-all">
                 <IndianRupee className="h-4 w-4 mr-2" />
                 Fee Ledger
               </TabsTrigger>
@@ -1325,7 +1375,9 @@ export default function Fees() {
             </div>
           </DialogContent>
         </Dialog>
-      </div >
-    </DashboardLayout >
+          </>
+        )}
+      </div>
+    </DashboardLayout>
   );
 }

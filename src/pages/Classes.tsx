@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-    Plus, Edit2, Trash2, Loader2, AlertCircle, BookOpen, Users
+    Plus, Edit2, Trash2, Loader2, AlertCircle, BookOpen, Users, Building2
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +36,8 @@ import {
 import { getClasses, createClass, updateClass, deleteClass, getAcademicYears } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import type { Class as ClassType, AcademicYear } from "@/types";
+import { InstituteSelector } from "@/components/InstituteSelector";
+import type { Class as ClassType, AcademicYear, Institute } from "@/types";
 
 export default function Classes() {
     const { isRole } = useAuth();
@@ -56,16 +57,46 @@ export default function Classes() {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const { toast } = useToast();
+
+    // Super admin institute selection
+    const isSuperAdmin = isRole('super_admin');
+    const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
+        if (isSuperAdmin) {
+            return localStorage.getItem('super_admin_selected_institute');
+        }
+        return null;
+    });
+    const [selectedInstitute, setSelectedInstitute] = useState<Institute | null>(null);
+
     const canManage = isRole('super_admin', 'institute_admin');
+
+    const handleInstituteSelect = (instituteId: string | null, institute: Institute | null) => {
+        setSelectedInstituteId(instituteId);
+        setSelectedInstitute(institute);
+        if (instituteId) {
+            localStorage.setItem('super_admin_selected_institute', instituteId);
+        } else {
+            localStorage.removeItem('super_admin_selected_institute');
+        }
+    };
 
     // Fetch data
     const fetchData = useCallback(async () => {
+        // For super admins, don't fetch if no institute is selected
+        if (isSuperAdmin && !selectedInstituteId) {
+            setLoading(false);
+            setClasses([]);
+            setAcademicYears([]);
+            return;
+        }
+
         try {
             setLoading(true);
             setError(null);
+            const params = isSuperAdmin && selectedInstituteId ? { institute_id: selectedInstituteId } : undefined;
             const [clsRes, ayRes] = await Promise.all([
-                getClasses(),
-                getAcademicYears()
+                getClasses(params),
+                getAcademicYears(params)
             ]);
 
             if (clsRes.success && clsRes.data) {
@@ -80,7 +111,7 @@ export default function Classes() {
         } finally {
             setLoading(false);
         }
-    }, [toast]);
+    }, [toast, isSuperAdmin, selectedInstituteId]);
 
     useEffect(() => { 
         fetchData(); 
@@ -204,13 +235,34 @@ export default function Classes() {
                         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Classes</h1>
                         <p className="text-muted-foreground text-sm">Manage all classes and sections.</p>
                     </div>
-                    {canManage && (
-                        <Button onClick={() => { resetForm(); setShowCreateDialog(true); }} className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Class
-                        </Button>
-                    )}
+                    <div className="flex items-center gap-3">
+                        {isSuperAdmin && (
+                            <InstituteSelector
+                                selectedInstituteId={selectedInstituteId}
+                                onSelectInstitute={handleInstituteSelect}
+                            />
+                        )}
+                        {canManage && (!isSuperAdmin || selectedInstituteId) && (
+                            <Button onClick={() => { resetForm(); setShowCreateDialog(true); }} className="shrink-0 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-md">
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Class
+                            </Button>
+                        )}
+                    </div>
                 </div>
+
+                {/* Super Admin: No Institute Selected */}
+                {isSuperAdmin && !selectedInstituteId && !loading && (
+                    <div className="text-center py-20 border rounded-xl bg-gradient-to-br from-primary/5 to-blue-500/5 shadow-sm">
+                        <div className="h-20 w-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
+                            <Building2 className="h-10 w-10 text-primary/60" />
+                        </div>
+                        <h3 className="text-xl font-semibold mb-2">Select an Institute</h3>
+                        <p className="text-muted-foreground text-sm font-medium mb-6 max-w-md mx-auto">
+                            Please select an institute from the dropdown above to view and manage its classes.
+                        </p>
+                    </div>
+                )}
 
                 {error && (
                     <Card className="border-destructive/50 bg-destructive/10">

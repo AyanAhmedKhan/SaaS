@@ -21,7 +21,7 @@ export async function createSchema() {
         modules_enabled JSONB DEFAULT '{"attendance":true,"assignments":true,"fees":true,"exams":true,"syllabus":true,"timetable":true,"notices":true,"reports":true,"ai_insight":true}',
         ai_insight_enabled BOOLEAN DEFAULT true,
         status TEXT DEFAULT 'active' CHECK(status IN ('active','suspended','archived')),
-        subscription_plan TEXT DEFAULT 'basic',
+        subscription_plan TEXT DEFAULT 'starter',
         max_students INTEGER DEFAULT 500,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -121,6 +121,7 @@ export async function createSchema() {
         parent_phone TEXT,
         blood_group TEXT,
         avatar TEXT,
+        ai_plan_enabled BOOLEAN DEFAULT false,
         status TEXT DEFAULT 'active' CHECK(status IN ('active','inactive','graduated','transferred')),
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -167,6 +168,35 @@ export async function createSchema() {
         updated_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(institute_id, role)
       );
+
+      -- Subscription Plans (dynamic, managed by super admin)
+      CREATE TABLE IF NOT EXISTS subscription_plans (
+        id TEXT PRIMARY KEY,
+        slug TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        tagline TEXT,
+        monthly_price INTEGER DEFAULT 0,
+        annual_price INTEGER DEFAULT 0,
+        max_students INTEGER DEFAULT 100,
+        max_teachers INTEGER DEFAULT 10,
+        max_admins INTEGER DEFAULT 1,
+        max_classes INTEGER DEFAULT 10,
+        features JSONB DEFAULT '[]',
+        is_default BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'students' AND column_name = 'ai_plan_enabled'
+        ) THEN
+          ALTER TABLE students ADD COLUMN ai_plan_enabled BOOLEAN DEFAULT false;
+        END IF;
+      END $$;
     `);
 
     // ── DEFERRED FK CONSTRAINTS (tables referenced after creation) ──
@@ -615,6 +645,8 @@ export async function createSchema() {
       'CREATE INDEX IF NOT EXISTS idx_request_logs_url ON request_logs(url)',
       'CREATE INDEX IF NOT EXISTS idx_request_logs_user ON request_logs(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_system_metrics_name ON system_metrics(metric_name, created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_subscription_plans_slug ON subscription_plans(slug)',
+      'CREATE INDEX IF NOT EXISTS idx_subscription_plans_active ON subscription_plans(is_active, sort_order)',
     ];
 
     for (const idx of indexes) {
@@ -638,6 +670,7 @@ export async function createSchema() {
       'notices', 'syllabus', 'exams', 'exam_results', 'assignments',
       'assignment_submissions', 'fee_structures', 'fee_payments',
       'institute_role_permissions',
+      'subscription_plans',
     ];
 
     for (const table of tablesWithUpdatedAt) {

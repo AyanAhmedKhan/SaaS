@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Search, MoreVertical, Mail, Phone, BookOpen, Loader2,
-  AlertCircle, Users, Shield, Award, Briefcase, GraduationCap,
+  AlertCircle, Users, Shield, Award, Briefcase, GraduationCap, Building2,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,8 @@ import {
 import { cn } from "@/lib/utils";
 import { getTeachers } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import type { Teacher } from "@/types";
+import { InstituteSelector } from "@/components/InstituteSelector";
+import type { Teacher, Institute } from "@/types";
 import { AddTeacherDialog } from "@/components/teacher/AddTeacherDialog";
 import { EditTeacherDialog } from "@/components/teacher/EditTeacherDialog";
 import { AssignTeacherDialog } from "@/components/teacher/AssignTeacherDialog";
@@ -42,15 +43,43 @@ export default function Teachers() {
   const [assignTeacher, setAssignTeacher] = useState<Teacher | null>(null);
   const [scheduleTeacher, setScheduleTeacher] = useState<Teacher | null>(null);
 
+  // Super admin institute selection
+  const isSuperAdmin = isRole('super_admin');
+  const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
+    if (isSuperAdmin) {
+      return localStorage.getItem('super_admin_selected_institute');
+    }
+    return null;
+  });
+  const [selectedInstitute, setSelectedInstitute] = useState<Institute | null>(null);
+
   const canCreate = isRole('super_admin', 'institute_admin');
 
+  const handleInstituteSelect = (instituteId: string | null, institute: Institute | null) => {
+    setSelectedInstituteId(instituteId);
+    setSelectedInstitute(institute);
+    if (instituteId) {
+      localStorage.setItem('super_admin_selected_institute', instituteId);
+    } else {
+      localStorage.removeItem('super_admin_selected_institute');
+    }
+  };
+
   const fetchTeachers = useCallback(async () => {
+    // For super admins, don't fetch if no institute is selected
+    if (isSuperAdmin && !selectedInstituteId) {
+      setLoading(false);
+      setTeachers([]);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
       const params: Record<string, string> = {};
       if (searchQuery) params.search = searchQuery;
       if (statusFilter !== "all") params.status = statusFilter;
+      if (isSuperAdmin && selectedInstituteId) params.institute_id = selectedInstituteId;
 
       const response = await getTeachers(params);
       if (response.success && response.data) {
@@ -62,7 +91,7 @@ export default function Teachers() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, isSuperAdmin, selectedInstituteId]);
 
   useEffect(() => {
     const debounce = setTimeout(fetchTeachers, 300);
@@ -104,10 +133,31 @@ export default function Teachers() {
               Manage faculty profiles, subject assignments, and class responsibilities.
             </p>
           </div>
-          {canCreate && (
-            <AddTeacherDialog onSuccess={fetchTeachers} />
-          )}
+          <div className="flex items-center gap-3">
+            {isSuperAdmin && (
+              <InstituteSelector
+                selectedInstituteId={selectedInstituteId}
+                onSelectInstitute={handleInstituteSelect}
+              />
+            )}
+            {canCreate && (!isSuperAdmin || selectedInstituteId) && (
+              <AddTeacherDialog onSuccess={fetchTeachers} />
+            )}
+          </div>
         </div>
+
+        {/* Super Admin: No Institute Selected */}
+        {isSuperAdmin && !selectedInstituteId && !loading && (
+          <div className="text-center py-20 border rounded-xl bg-gradient-to-br from-primary/5 to-blue-500/5 shadow-sm">
+            <div className="h-20 w-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
+              <Building2 className="h-10 w-10 text-primary/60" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Select an Institute</h3>
+            <p className="text-muted-foreground text-sm font-medium mb-6 max-w-md mx-auto">
+              Please select an institute from the dropdown above to view and manage its teachers.
+            </p>
+          </div>
+        )}
 
         {/* Summary Cards */}
         {!loading && !error && teachers.length > 0 && (

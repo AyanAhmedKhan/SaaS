@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, MoreVertical, Mail, Loader2, AlertCircle, GraduationCap } from "lucide-react";
+import { Search, MoreVertical, Mail, Loader2, AlertCircle, GraduationCap, Building2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,10 +20,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { getStudents, getClasses } from "@/lib/api";
+import { getStudents, getClasses, updateStudent } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import type { Student, Class as ClassType } from "@/types";
+import { useToast } from "@/hooks/use-toast";
+import { InstituteSelector } from "@/components/InstituteSelector";
+import type { Student, Class as ClassType, Institute } from "@/types";
 import { BulkImportDialog } from "@/components/student/BulkImportDialog";
 import { BulkPromoteDialog } from "@/components/student/BulkPromoteDialog";
 import { AddStudentDialog } from "@/components/student/AddStudentDialog";
@@ -48,10 +51,40 @@ export default function Students() {
   const [editStudent, setEditStudent] = useState<Student | null>(null);
   const [attendanceStudent, setAttendanceStudent] = useState<Student | null>(null);
   const [reportsStudent, setReportsStudent] = useState<Student | null>(null);
+  const [aiToggleLoading, setAiToggleLoading] = useState<Record<string, boolean>>({});
+  const { toast } = useToast();
+
+  // Super admin institute selection
+  const isSuperAdmin = isRole('super_admin');
+  const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
+    if (isSuperAdmin) {
+      return localStorage.getItem('super_admin_selected_institute');
+    }
+    return null;
+  });
+  const [selectedInstitute, setSelectedInstitute] = useState<Institute | null>(null);
 
   const canCreate = isRole('super_admin', 'institute_admin', 'faculty');
 
+  const handleInstituteSelect = (instituteId: string | null, institute: Institute | null) => {
+    setSelectedInstituteId(instituteId);
+    setSelectedInstitute(institute);
+    if (instituteId) {
+      localStorage.setItem('super_admin_selected_institute', instituteId);
+    } else {
+      localStorage.removeItem('super_admin_selected_institute');
+    }
+  };
+
   const fetchData = useCallback(async () => {
+    // For super admins, don't fetch if no institute is selected
+    if (isSuperAdmin && !selectedInstituteId) {
+      setLoading(false);
+      setStudents([]);
+      setClasses([]);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -59,10 +92,11 @@ export default function Students() {
       if (searchQuery) params.search = searchQuery;
       if (classFilter !== "all") params.class_id = classFilter;
       if (statusFilter !== "all") params.status = statusFilter;
+      if (isSuperAdmin && selectedInstituteId) params.institute_id = selectedInstituteId;
 
       const [studentRes, classRes] = await Promise.all([
         getStudents(params),
-        getClasses(),
+        getClasses(isSuperAdmin && selectedInstituteId ? { institute_id: selectedInstituteId } : undefined),
       ]);
 
       if (studentRes.success && studentRes.data) {
@@ -77,7 +111,7 @@ export default function Students() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, classFilter, statusFilter]);
+  }, [searchQuery, classFilter, statusFilter, isSuperAdmin, selectedInstituteId]);
 
   useEffect(() => {
     const debounce = setTimeout(fetchData, 300);
@@ -113,6 +147,23 @@ export default function Students() {
 
   const selectedStudents = students.filter(s => selectedIds.has(s.id));
 
+  const handleStudentAiToggle = async (student: Student, enabled: boolean) => {
+    try {
+      setAiToggleLoading((prev) => ({ ...prev, [student.id]: true }));
+      await updateStudent(student.id, { ai_plan_enabled: enabled } as Partial<Student>);
+      setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, ai_plan_enabled: enabled } : s));
+      toast({
+        title: "AI plan updated",
+        description: `${student.name}: AI plan ${enabled ? "enabled" : "disabled"}.`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update AI plan";
+      toast({ title: "Update failed", description: message, variant: "destructive" });
+    } finally {
+      setAiToggleLoading((prev) => ({ ...prev, [student.id]: false }));
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6 page-enter">
@@ -124,13 +175,34 @@ export default function Students() {
               Manage student profiles, attendance, and academic performance.
             </p>
           </div>
-          {canCreate && (
-            <div className="flex items-center gap-3">
-              <BulkImportDialog onSuccess={fetchData} />
-              <AddStudentDialog onSuccess={fetchData} />
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {isSuperAdmin && (
+              <InstituteSelector
+                selectedInstituteId={selectedInstituteId}
+                onSelectInstitute={handleInstituteSelect}
+              />
+            )}
+            {canCreate && (!isSuperAdmin || selectedInstituteId) && (
+              <>
+                <BulkImportDialog onSuccess={fetchData} />
+                <AddStudentDialog onSuccess={fetchData} />
+              </>
+            )}
+          </div>
         </div>
+
+        {/* Super Admin: No Institute Selected */}
+        {isSuperAdmin && !selectedInstituteId && !loading && (
+          <div className="text-center py-20 border rounded-xl bg-gradient-to-br from-primary/5 to-blue-500/5 shadow-sm">
+            <div className="h-20 w-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
+              <Building2 className="h-10 w-10 text-primary/60" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Select an Institute</h3>
+            <p className="text-muted-foreground text-sm font-medium mb-6 max-w-md mx-auto">
+              Please select an institute from the dropdown above to view and manage its students.
+            </p>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -259,18 +331,17 @@ export default function Students() {
                       </Badge>
                     </div>
 
-                    {student.gender && (
-                      <p className="text-xs text-muted-foreground capitalize">Gender: {student.gender}</p>
-                    )}
+                      {canCreate && (
+                        <div className="flex items-center justify-between rounded-lg border border-border/50 px-2.5 py-2">
+                          <span className="text-xs font-medium text-muted-foreground">AI Plan Access</span>
+                          <Switch
+                            checked={student.ai_plan_enabled === true}
+                            disabled={aiToggleLoading[student.id] === true}
+                            onCheckedChange={(checked) => handleStudentAiToggle(student, checked)}
+                          />
+                        </div>
+                      )}
 
-                    <div className="flex items-center gap-2 pt-2 text-sm text-muted-foreground border-t border-border/40">
-                      <Mail className="h-4 w-4" />
-                      <span className="truncate">{student.email}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
           </div>
         )}
 

@@ -17,6 +17,35 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function normalizeAuthUser(raw: AuthUser): AuthUser {
+  if (!raw) return raw;
+  if (raw.institute) return raw;
+
+  const source = raw as AuthUser & {
+    institute_name?: string;
+    institute_code?: string;
+    modules_enabled?: Record<string, boolean>;
+    ai_insight_enabled?: boolean;
+    subscription_plan?: string;
+    max_students?: number;
+  };
+
+  if (!raw.institute_id) return raw;
+
+  return {
+    ...raw,
+    institute: {
+      id: raw.institute_id,
+      name: source.institute_name || '',
+      code: source.institute_code || '',
+      modules_enabled: source.modules_enabled || {},
+      ai_insight_enabled: source.ai_insight_enabled ?? true,
+      subscription_plan: source.subscription_plan,
+      max_students: source.max_students,
+    },
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const response = await getMeApi();
         if (response.success && response.data?.user) {
-          setUser(response.data.user as AuthUser);
+          setUser(normalizeAuthUser(response.data.user as AuthUser));
         } else {
           api.clearToken();
         }
@@ -53,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await loginApi(email, password, instituteCode);
 
       if (response.success && response.data?.user) {
-        setUser(response.data.user as AuthUser);
+        setUser(normalizeAuthUser(response.data.user as AuthUser));
         return true;
       }
 
@@ -69,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await registerApi(data);
 
       if (response.success && response.data?.user) {
-        setUser(response.data.user as AuthUser);
+        setUser(normalizeAuthUser(response.data.user as AuthUser));
         return true;
       }
 
