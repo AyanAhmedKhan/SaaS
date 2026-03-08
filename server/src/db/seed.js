@@ -368,7 +368,7 @@ export async function seed() {
             );
 
             const gender = faker.helpers.arrayElement(['Male', 'Female']);
-            const dob = faker.date.birthdate({ min: 12, max: 18 }).toISOString().split('T')[0];
+            const dob = faker.date.birthdate({ min: 12, max: 18, mode: 'age' }).toISOString().split('T')[0];
             allStudentRows.push([
               stuId, stuUID, inst.id, ayCurrentId, cls.id, sName, sEmail,
               `R${String(n + 1).padStart(3, '0')}`, '2024-04-01', dob, gender,
