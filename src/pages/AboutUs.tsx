@@ -13,7 +13,7 @@ export default function AboutUs() {
           <h1 className="text-3xl font-bold text-foreground">About Us</h1>
         </div>
         <p className="text-muted-foreground leading-relaxed">
-          EduYantra is a modern school management platform built to simplify academics, operations, and communication for institutions of every size.
+          EduYantra is a moderns school management platform built to simplify academics, operations, and communication for institutions of every size.
         </p>
         <div className="mt-8">
           <Button asChild>
