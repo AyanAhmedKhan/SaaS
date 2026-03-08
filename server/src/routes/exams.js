@@ -316,55 +316,84 @@ router.get('/:id/class-students', asyncHandler(async (req, res) => {
   res.json({ success: true, data: { students: rows } });
 }));
 
-// GET /api/exams/:id/metrics — full analytics: avg, median, std-dev, bands, grade dist, percentile
+// GET /api/exams/:id/metrics — optimised: single CTE query pushes all aggregation into Postgres
 router.get('/:id/metrics', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-  const examRes = await query('SELECT * FROM exams WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
-  if (!examRes.rows[0]) throw new AppError('Exam not found', 404);
-  const exam = examRes.rows[0];
 
-  const { rows } = await query(
-    `SELECT er.student_id, er.marks_obtained, er.is_absent, er.grade, er.rank,
-       s.name AS student_name, s.roll_number,
-       ROUND(PERCENT_RANK() OVER (ORDER BY er.marks_obtained) * 100)::int AS percentile
-     FROM exam_results er
-     JOIN students s ON er.student_id = s.id
-     WHERE er.exam_id = $1 AND er.institute_id = $2
-     ORDER BY er.rank NULLS LAST`,
-    [req.params.id, instId]
-  );
+  // One round-trip: exam meta + all results + window + aggregates
+  const { rows } = await query(`
+    WITH exam_meta AS (
+      SELECT total_marks, passing_marks
+      FROM exams
+      WHERE id = $1 AND institute_id = $2
+    ),
+    ranked AS (
+      SELECT
+        er.student_id,
+        er.marks_obtained,
+        er.grade,
+        er.rank,
+        er.is_absent,
+        s.name   AS student_name,
+        s.roll_number,
+        em.total_marks,
+        em.passing_marks,
+        ROUND(
+          PERCENT_RANK() OVER (ORDER BY er.marks_obtained NULLS FIRST) * 100
+        )::int AS percentile
+      FROM exam_results er
+      JOIN students s     ON er.student_id = s.id
+      CROSS JOIN exam_meta em
+      WHERE er.exam_id = $1 AND er.institute_id = $2
+    ),
+    agg AS (
+      SELECT
+        COUNT(*)::int                                                                     AS total_students,
+        COUNT(*) FILTER (WHERE is_absent)::int                                           AS absent_cnt,
+        COUNT(*) FILTER (WHERE NOT is_absent AND marks_obtained IS NOT NULL)::int        AS present_cnt,
+        ROUND(AVG(marks_obtained)      FILTER (WHERE NOT is_absent AND marks_obtained IS NOT NULL)::numeric, 2) AS avg_marks,
+        ROUND(STDDEV_POP(marks_obtained) FILTER (WHERE NOT is_absent AND marks_obtained IS NOT NULL)::numeric, 2) AS std_dev,
+        MAX(marks_obtained) FILTER (WHERE NOT is_absent AND marks_obtained IS NOT NULL)  AS highest,
+        MIN(marks_obtained) FILTER (WHERE NOT is_absent AND marks_obtained IS NOT NULL)  AS lowest,
+        ROUND(
+          (PERCENTILE_CONT(0.5) WITHIN GROUP (
+            ORDER BY CASE WHEN NOT is_absent AND marks_obtained IS NOT NULL
+                          THEN marks_obtained END
+          ))::numeric, 2
+        )                                                                                AS median_marks
+      FROM ranked
+    )
+    SELECT r.*, a.total_students, a.absent_cnt, a.present_cnt,
+           a.avg_marks, a.std_dev, a.highest, a.lowest, a.median_marks
+    FROM ranked r CROSS JOIN agg a
+    ORDER BY r.rank NULLS LAST
+  `, [req.params.id, instId]);
 
-  const totalMarks = exam.total_marks || 100;
-  const passingMarks = exam.passing_marks || 33;
-  const present = rows.filter(r => !r.is_absent && r.marks_obtained != null);
-  const marks = present.map(r => Number(r.marks_obtained));
-
-  let avg = 0, median = 0, stdDev = 0, highest = 0, lowest = 0;
-  if (marks.length > 0) {
-    avg = marks.reduce((a, b) => a + b, 0) / marks.length;
-    const sorted = [...marks].sort((a, b) => a - b);
-    median = sorted.length % 2 === 0
-      ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
-      : sorted[Math.floor(sorted.length / 2)];
-    highest = Math.max(...marks);
-    lowest = Math.min(...marks);
-    stdDev = Math.sqrt(marks.reduce((acc, m) => acc + (m - avg) ** 2, 0) / marks.length);
+  if (!rows.length) {
+    return res.json({ success: true, data: {
+      totalStudents: 0, absent: 0, present: 0, passed: 0, failed: 0,
+      passPercentage: 0, avg: 0, median: 0, stdDev: 0, highest: 0, lowest: 0,
+      gradeDist: {}, scoreBands: [
+        { label: '0–39%', count: 0 }, { label: '40–59%', count: 0 },
+        { label: '60–74%', count: 0 }, { label: '75–89%', count: 0 }, { label: '90–100%', count: 0 },
+      ], rankList: [],
+    }});
   }
 
-  // Grade distribution
-  const gradeDist = {};
-  present.forEach(r => { if (r.grade) gradeDist[r.grade] = (gradeDist[r.grade] || 0) + 1; });
+  const { total_students, absent_cnt, present_cnt, avg_marks, std_dev, highest, lowest, median_marks,
+          total_marks: totalMarks, passing_marks: passingMarks } = rows[0];
 
-  // Score bands (as % of total)
+  const present = rows.filter(r => !r.is_absent && r.marks_obtained != null);
+  const passed  = present.filter(r => Number(r.marks_obtained) >= Number(passingMarks)).length;
+
+  const gradeDist = {};
   const bands = [
-    { label: '0–39%', count: 0 },
-    { label: '40–59%', count: 0 },
-    { label: '60–74%', count: 0 },
-    { label: '75–89%', count: 0 },
-    { label: '90–100%', count: 0 },
+    { label: '0–39%', count: 0 }, { label: '40–59%', count: 0 },
+    { label: '60–74%', count: 0 }, { label: '75–89%', count: 0 }, { label: '90–100%', count: 0 },
   ];
   present.forEach(r => {
-    const pct = (r.marks_obtained / totalMarks) * 100;
+    if (r.grade) gradeDist[r.grade] = (gradeDist[r.grade] || 0) + 1;
+    const pct = (Number(r.marks_obtained) / Number(totalMarks || 100)) * 100;
     if (pct < 40) bands[0].count++;
     else if (pct < 60) bands[1].count++;
     else if (pct < 75) bands[2].count++;
@@ -372,33 +401,31 @@ router.get('/:id/metrics', asyncHandler(async (req, res) => {
     else bands[4].count++;
   });
 
-  const passed = present.filter(r => r.marks_obtained >= passingMarks).length;
-
   res.json({
     success: true,
     data: {
-      totalStudents: rows.length,
-      absent: rows.length - present.length,
-      present: present.length,
+      totalStudents: total_students,
+      absent: absent_cnt,
+      present: present_cnt,
       passed,
-      failed: present.length - passed,
-      passPercentage: present.length ? Math.round((passed / present.length) * 100) : 0,
-      avg: parseFloat(avg.toFixed(2)),
-      median: parseFloat(median.toFixed(2)),
-      stdDev: parseFloat(stdDev.toFixed(2)),
-      highest,
-      lowest,
+      failed: present_cnt - passed,
+      passPercentage: present_cnt ? Math.round((passed / present_cnt) * 100) : 0,
+      avg: parseFloat(avg_marks ?? 0),
+      median: parseFloat(median_marks ?? 0),
+      stdDev: parseFloat(std_dev ?? 0),
+      highest: highest ?? 0,
+      lowest: lowest ?? 0,
       gradeDist,
       scoreBands: bands,
       rankList: present.map(r => ({
         student_id: r.student_id,
         student_name: r.student_name,
         roll_number: r.roll_number,
-        marks_obtained: r.marks_obtained,
+        marks_obtained: Number(r.marks_obtained),
         grade: r.grade,
         rank: r.rank,
         percentile: r.percentile,
-        percentage: parseFloat(((r.marks_obtained / totalMarks) * 100).toFixed(1)),
+        percentage: parseFloat(((Number(r.marks_obtained) / Number(totalMarks || 100)) * 100).toFixed(1)),
       })),
     },
   });
