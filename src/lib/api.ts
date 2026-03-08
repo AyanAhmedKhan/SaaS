@@ -8,7 +8,7 @@ import type {
   GradingSystem, Notification, Pagination, SubscriptionPlan,
 } from '@/types';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 interface ApiResponse<T = unknown> {
   success: boolean;
@@ -773,7 +773,7 @@ export async function getClassSummary(params?: Record<string, string>) {
 }
 
 export async function getReportCard(studentId: string) {
-  return api.get<{ student: Student; exams: unknown[]; attendance: unknown; remarks: TeacherRemark[] }>(`/reports/report-card/${studentId}`);
+  return api.get<{ student: Student; examResults: unknown[]; attendance: { total: string; present: string; percentage: string }; remarks: TeacherRemark[] }>(`/reports/report-card/${studentId}`);
 }
 
 export async function getFeeSummary() {
