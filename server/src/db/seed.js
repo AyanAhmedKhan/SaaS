@@ -55,7 +55,7 @@ function shortId() {
 
 // ─── Seed ──────────────────────────────────────────────────────────────────────
 
-async function seed() {
+export async function seed() {
   console.log('[SEED] Starting comprehensive multi-tenant database seed…');
   faker.seed(12345);
 
@@ -835,12 +835,17 @@ async function seed() {
   } catch (error) {
     console.error('[SEED] Error seeding database:', error.message);
     throw error;
-  } finally {
-    await closePool();
   }
 }
 
-seed().catch((err) => {
-  console.error('[SEED] Fatal error:', err);
-  process.exit(1);
-});
+// When run directly as a script (npm run seed), execute and exit
+const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/').replace(/^.*:/, ''));
+if (isDirectRun) {
+  seed()
+    .then(() => closePool())
+    .catch(async (err) => {
+      console.error('[SEED] Fatal error:', err);
+      await closePool();
+      process.exit(1);
+    });
+}

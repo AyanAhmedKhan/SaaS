@@ -35,16 +35,32 @@ import holidayRoutes from './routes/holidays.js';
 import settingsRoutes from './routes/settings.js';
 import planRoutes from './routes/plans.js';
 import aiRoutes from './routes/ai.js';
+import seedRoutes from './routes/seed.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ── Security & parsing middleware ──
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
+
+// ── CORS – supports comma-separated origins in CORS_ORIGIN ──
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:8080')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
+    origin(origin, callback) {
+        // Allow requests with no origin (server-to-server, curl, mobile apps)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -123,6 +139,7 @@ app.use('/api/holidays', holidayRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/seed', seedRoutes);
 
 // ── 404 & Error handlers ──
 app.use(notFoundHandler);
