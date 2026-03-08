@@ -304,7 +304,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
 
               {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• RESULT ENTRY TAB â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
               {canEnterMarks && (
-                <TabsContent value="entry" className="flex-1 flex flex-col overflow-hidden m-0 border-none outline-none">
+                <TabsContent value="entry" className="flex-1 data-[state=active]:flex data-[state=active]:flex-col overflow-hidden m-0 border-none outline-none">
                   <div className="px-6 py-3 bg-muted/20 border-b border-border/40 flex items-center justify-between shrink-0 gap-3">
                     <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                       <AlertCircle className="h-3.5 w-3.5 shrink-0" />
@@ -396,7 +396,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
               )}
 
               {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• RANK LIST TAB â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-              <TabsContent value="ranks" className="flex-1 flex flex-col overflow-hidden m-0 border-none outline-none">
+              <TabsContent value="ranks" className="flex-1 data-[state=active]:flex data-[state=active]:flex-col overflow-hidden m-0 border-none outline-none">
                 <div className="px-6 py-3 bg-muted/20 border-b border-border/40 shrink-0 flex items-center justify-between">
                   <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <ArrowDownUp className="h-3.5 w-3.5" /> Students sorted by rank · percentile computed from class results
@@ -473,7 +473,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
               </TabsContent>
 
               {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• ANALYTICS TAB â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-              <TabsContent value="analysis" className="flex-1 overflow-auto m-0 border-none outline-none">
+              <TabsContent value="analysis" className="flex-1 data-[state=active]:block overflow-auto m-0 border-none outline-none">
                 <div className="p-5 space-y-6">
                   {!clientMetrics ? (
                     <div className="p-10 text-center rounded-xl border border-dashed border-border flex flex-col items-center gap-3">
