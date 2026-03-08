@@ -350,12 +350,17 @@ router.get('/:id/metrics', asyncHandler(async (req, res) => {
         er.student_id,
         er.marks_obtained,
         er.grade,
-        er.rank,
         er.is_absent,
         s.name   AS student_name,
         s.roll_number,
         em.total_marks,
         em.passing_marks,
+        CASE WHEN er.is_absent OR er.marks_obtained IS NULL THEN NULL
+          ELSE RANK() OVER (
+            PARTITION BY (NOT er.is_absent AND er.marks_obtained IS NOT NULL)
+            ORDER BY er.marks_obtained DESC
+          )::int
+        END AS rank,
         CASE WHEN er.is_absent OR er.marks_obtained IS NULL THEN NULL
           ELSE ROUND(
             PERCENT_RANK() OVER (
@@ -389,7 +394,7 @@ router.get('/:id/metrics', asyncHandler(async (req, res) => {
     SELECT r.*, a.total_students, a.absent_cnt, a.present_cnt,
            a.avg_marks, a.std_dev, a.highest, a.lowest, a.median_marks
     FROM ranked r CROSS JOIN agg a
-    ORDER BY r.rank NULLS LAST
+    ORDER BY r.marks_obtained DESC NULLS LAST
   `, [req.params.id, instId]);
 
   if (!rows.length) {
