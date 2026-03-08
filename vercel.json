@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://eduyantra-api.onrender.com/api/:path*" }
+    { "source": "/api/:path*", "destination": "https://saas-q8nb.onrender.com/api/:path*" }
   ]
 }
