@@ -362,6 +362,30 @@ export async function deleteStudent(id: string) {
   return api.delete(`/students/${id}`);
 }
 
+export interface ParentUser {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  linked_children?: number;
+}
+
+export async function getParentUsers(params?: { search?: string; institute_id?: string }) {
+  return api.get<{ parents: ParentUser[] }>('/students/parents', params as Record<string, string>);
+}
+
+export async function linkParent(studentId: string, parentUserId: string, instituteId?: string) {
+  return api.put<{ student: Student }>(`/students/${studentId}/link-parent`, {
+    parent_user_id: parentUserId,
+    ...(instituteId && { institute_id: instituteId }),
+  });
+}
+
+export async function unlinkParent(studentId: string, instituteId?: string) {
+  const params = instituteId ? `?institute_id=${instituteId}` : '';
+  return api.delete(`/students/${studentId}/link-parent${params}`);
+}
+
 // ═══════════════════════════════════════════
 // TEACHERS API
 // ═══════════════════════════════════════════
@@ -851,4 +875,40 @@ export async function getTimetableClasses() {
 
 export async function bulkSaveTimetable(classId: string, entries: Partial<TimetableEntry>[]) {
   return api.post<{ message: string }>('/timetable/bulk', { class_id: classId, entries });
+}
+
+// ─── AI / Gemini API ──────────────────────────────────────────────────────────
+
+export interface AiMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export async function aiChat(messages: AiMessage[]) {
+  return api.post<{ reply: string }>('/ai/chat', { messages });
+}
+
+export async function getAiInsights() {
+  return api.post<{ insights: string; metrics: Record<string, unknown>; top_absentees: unknown[] }>('/ai/insights', {});
+}
+
+export async function analyzeStudent(studentId: string) {
+  return api.post<{
+    student: Record<string, string>;
+    attendance: Record<string, string | number>;
+    assignments: Record<string, number>;
+    exam_breakdown: { subject: string; avg_pct: number }[];
+    analysis: string;
+  }>(`/ai/analyze-student/${studentId}`, {});
+}
+
+export async function generateStudentRemark(data: {
+  student_name: string;
+  class_name?: string;
+  attendance_rate?: number;
+  avg_score?: number;
+  subjects_struggling?: string[];
+  behavior_notes?: string;
+}) {
+  return api.post<{ remark: string }>('/ai/generate-remark', data);
 }

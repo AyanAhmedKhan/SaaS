@@ -1,9 +1,11 @@
-import { useState, useCallback } from "react";
+﻿import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, RefreshCw } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sparkles, RefreshCw, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { analyzeStudent } from "@/lib/api";
 
 interface AIInsightData {
   attendance: number;
@@ -18,6 +20,7 @@ interface AIInsightCardProps {
   data: AIInsightData;
   role: "student" | "parent" | "teacher" | "admin";
   showAdminToggle?: boolean;
+  studentId?: string;
 }
 
 function generateSummary(data: AIInsightData, role: string): string {
@@ -66,10 +69,49 @@ function generateSummary(data: AIInsightData, role: string): string {
   return `${rolePrefix}${attendanceNote} ${scoreNote} ${trendNote}${subjectNote ? " " + subjectNote : ""}${assignmentNote}`;
 }
 
-export function AIInsightCard({ data, role, showAdminToggle = false }: AIInsightCardProps) {
+function SimpleMarkdown({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className="space-y-1.5 text-sm leading-relaxed text-foreground/90">
+      {lines.map((line, i) => {
+        if (!line.trim()) return <div key={i} className="h-1" />;
+        if (line.startsWith("### ")) return <h3 key={i} className="font-bold text-foreground mt-3 mb-1 text-base">{line.slice(4)}</h3>;
+        if (line.startsWith("## ")) return <h2 key={i} className="font-bold text-foreground mt-4 mb-1.5 text-lg border-b pb-1">{line.slice(3)}</h2>;
+        if (line.startsWith("# ")) return <h1 key={i} className="font-bold text-foreground mt-4 text-xl">{line.slice(2)}</h1>;
+        if (line.startsWith("- ") || line.startsWith("* ")) {
+          return (
+            <div key={i} className="flex items-start gap-2 pl-2">
+              <span className="text-primary mt-1.5 text-xs shrink-0">●</span>
+              <span dangerouslySetInnerHTML={{ __html: line.slice(2).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />
+            </div>
+          );
+        }
+        if (/^\d+\.\s/.test(line)) {
+          const match = line.match(/^(\d+)\.\s(.*)/);
+          if (match) return (
+            <div key={i} className="flex items-start gap-2 pl-2">
+              <span className="text-primary font-bold shrink-0 text-xs mt-0.5">{match[1]}.</span>
+              <span dangerouslySetInnerHTML={{ __html: match[2].replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />
+            </div>
+          );
+        }
+        if (line.startsWith("**") && line.endsWith("**")) {
+          return <p key={i} className="font-semibold text-foreground" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />;
+        }
+        return <p key={i} dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />;
+      })}
+    </div>
+  );
+}
+
+export function AIInsightCard({ data, role, showAdminToggle = false, studentId }: AIInsightCardProps) {
   const [enabled, setEnabled] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [summary, setSummary] = useState(() => generateSummary(data, role));
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [showAi, setShowAi] = useState(false);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -78,6 +120,26 @@ export function AIInsightCard({ data, role, showAdminToggle = false }: AIInsight
       setIsRefreshing(false);
     }, 800);
   }, [data, role]);
+
+  const handleGeminiAnalysis = useCallback(async () => {
+    if (!studentId) return;
+    setAiLoading(true);
+    setAiError(null);
+    setShowAi(true);
+    try {
+      const res = await analyzeStudent(studentId);
+      if (res.success && res.data) {
+        const d = res.data as { analysis?: string; text?: string };
+        setAiText(d.analysis || d.text || "No analysis returned.");
+      } else {
+        setAiError("Failed to get AI analysis. Please try again.");
+      }
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Unable to connect to AI service.");
+    } finally {
+      setAiLoading(false);
+    }
+  }, [studentId]);
 
   if (!enabled && showAdminToggle) {
     return (
@@ -104,7 +166,7 @@ export function AIInsightCard({ data, role, showAdminToggle = false }: AIInsight
             <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             AI Insight
             <Badge variant="outline" className="text-[9px] sm:text-xs font-normal">
-              Beta
+              Gemini
             </Badge>
           </CardTitle>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -113,6 +175,29 @@ export function AIInsightCard({ data, role, showAdminToggle = false }: AIInsight
                 <span className="text-[10px] sm:text-xs text-muted-foreground hidden sm:inline">Enabled</span>
                 <Switch checked={enabled} onCheckedChange={setEnabled} />
               </div>
+            )}
+            {studentId && !aiText && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleGeminiAnalysis}
+                disabled={aiLoading}
+                className="h-7 sm:h-8 text-xs bg-primary/90 hover:bg-primary"
+              >
+                {aiLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                Ask Gemini
+              </Button>
+            )}
+            {studentId && aiText && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAi(v => !v)}
+                className="h-7 sm:h-8 text-xs"
+              >
+                {showAi ? <ChevronUp className="h-3 w-3 mr-1" /> : <ChevronDown className="h-3 w-3 mr-1" />}
+                {showAi ? "Collapse" : "See AI Report"}
+              </Button>
             )}
             <Button
               variant="outline"
@@ -127,8 +212,55 @@ export function AIInsightCard({ data, role, showAdminToggle = false }: AIInsight
           </div>
         </div>
       </CardHeader>
-      <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+      <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6 space-y-3">
         <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground">{summary}</p>
+
+        {/* AI Loading state */}
+        {aiLoading && (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">
+            <div className="relative shrink-0">
+              <div className="w-8 h-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+              <Sparkles className="absolute inset-0 m-auto h-3 w-3 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Gemini is analyzing...</p>
+              <p className="text-xs text-muted-foreground">Reviewing attendance, exams, and assignments</p>
+            </div>
+          </div>
+        )}
+
+        {/* AI Error */}
+        {aiError && !aiLoading && (
+          <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs">
+            {aiError}
+          </div>
+        )}
+
+        {/* AI Analysis Result */}
+        {showAi && aiText && !aiLoading && (
+          <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 via-transparent to-violet-500/5 p-4">
+            <div className="flex items-center gap-2 mb-3 pb-3 border-b border-primary/15">
+              <div className="p-1.5 rounded-lg bg-primary/10">
+                <Sparkles className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-foreground">Gemini AI Analysis</p>
+                <p className="text-xs text-muted-foreground">Powered by Google Gemini 2.0</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleGeminiAnalysis}
+                className="ml-auto h-7 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <RefreshCw className="h-3 w-3 mr-1" /> Regenerate
+              </Button>
+            </div>
+            <ScrollArea className="max-h-[320px]">
+              <SimpleMarkdown text={aiText} />
+            </ScrollArea>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

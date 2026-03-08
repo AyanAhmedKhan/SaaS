@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -16,9 +17,9 @@ import {
 } from "recharts";
 import {
   Download, FileText, TrendingUp, TrendingDown, Minus,
-  Trophy, Target, BarChart3, Filter, Loader2, AlertCircle, Sparkles, BookOpen, GraduationCap, LayoutDashboard, Building2
+  Trophy, Target, BarChart3, Filter, Loader2, AlertCircle, Sparkles, BookOpen, GraduationCap, LayoutDashboard, Building2, Brain, RefreshCw
 } from "lucide-react";
-import { getExamResults, getPerformanceTrend, getExams, getClasses } from "@/lib/api";
+import { getExamResults, getPerformanceTrend, getExams, getClasses, getAiInsights } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import type { Exam, Class as ClassType, Institute } from "@/types";
@@ -74,6 +75,38 @@ const SUBJECT_COLORS = [
   "hsl(0, 70%, 55%)",   // Red
 ];
 
+function SimpleMarkdown({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className="space-y-1.5 text-sm leading-relaxed text-foreground/90">
+      {lines.map((line, i) => {
+        if (!line.trim()) return <div key={i} className="h-1" />;
+        if (line.startsWith("### ")) return <h3 key={i} className="font-bold text-foreground mt-3 mb-1 text-base">{line.slice(4)}</h3>;
+        if (line.startsWith("## ")) return <h2 key={i} className="font-bold text-foreground mt-4 mb-1.5 text-lg border-b pb-1">{line.slice(3)}</h2>;
+        if (line.startsWith("# ")) return <h1 key={i} className="font-bold text-foreground mt-4 text-xl">{line.slice(2)}</h1>;
+        if (line.startsWith("- ") || line.startsWith("* ")) {
+          return (
+            <div key={i} className="flex items-start gap-2 pl-2">
+              <span className="text-primary mt-1.5 text-xs shrink-0">●</span>
+              <span dangerouslySetInnerHTML={{ __html: line.slice(2).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />
+            </div>
+          );
+        }
+        if (/^\d+\.\s/.test(line)) {
+          const match = line.match(/^(\d+)\.\s(.*)/);
+          if (match) return (
+            <div key={i} className="flex items-start gap-2 pl-2">
+              <span className="text-primary font-bold shrink-0 text-xs mt-0.5">{match[1]}.</span>
+              <span dangerouslySetInnerHTML={{ __html: match[2].replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />
+            </div>
+          );
+        }
+        return <p key={i} dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />;
+      })}
+    </div>
+  );
+}
+
 function handleDownload(reportType: string) {
   const content = `EduYantra Premium Report\n\nType: ${reportType}\nGenerated: ${new Date().toLocaleDateString()}\n\nPDF export functionality will be available shortly.`;
   const blob = new Blob([content], { type: "text/plain" });
@@ -96,6 +129,10 @@ export default function Reports() {
   const [classFilter, setClassFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("performance");
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const isSuperAdmin = isRole('super_admin');
   const isStaff = isRole('super_admin', 'institute_admin', 'faculty');
@@ -245,7 +282,25 @@ export default function Reports() {
                 />
               )}
               {(!isSuperAdmin || selectedInstituteId) && (
-                <Button onClick={() => handleDownload("Comprehensive Sync")} className={cn(
+                <Button onClick={async () => {
+                  setActiveTab("ai-analysis");
+                  if (aiAnalysis) return;
+                  setAiLoading(true);
+                  setAiError(null);
+                  try {
+                    const res = await getAiInsights();
+                    if (res.success && res.data) {
+                      const d = res.data as { insights?: string; text?: string; analysis?: string };
+                      setAiAnalysis(d.insights || d.analysis || d.text || "No analysis returned.");
+                    } else {
+                      setAiError("Failed to generate AI summary.");
+                    }
+                  } catch (err) {
+                    setAiError(err instanceof Error ? err.message : "AI service unavailable.");
+                  } finally {
+                    setAiLoading(false);
+                  }
+                }} className={cn(
                   "shadow-lg pointer-events-auto transition-transform hover:scale-105 active:scale-95",
                   isStaff ? "shadow-violet-500/25 bg-violet-600 hover:bg-violet-700 text-white" : "shadow-primary/25 bg-primary hover:bg-primary/90 text-primary-foreground"
                 )}>
@@ -396,8 +451,8 @@ export default function Reports() {
             </div>
 
             {/* MODERNIZED TABS */}
-            <Tabs defaultValue="performance" className="space-y-6">
-              <TabsList className="bg-muted/50 p-1 border border-border/50 rounded-xl h-auto">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+              <TabsList className="bg-muted/50 p-1 border border-border/50 rounded-xl h-auto flex-wrap">
                 <TabsTrigger value="performance" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm py-2.5 px-4">
                   <BarChart3 className="w-4 h-4 mr-2" /> Performance Graph
                 </TabsTrigger>
@@ -406,6 +461,10 @@ export default function Reports() {
                 </TabsTrigger>
                 <TabsTrigger value="download" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm py-2.5 px-4">
                   <Download className="w-4 h-4 mr-2" /> Report Cards
+                </TabsTrigger>
+                <TabsTrigger value="ai-analysis" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm py-2.5 px-4 relative">
+                  <Brain className="w-4 h-4 mr-2 text-primary" /> AI Analysis
+                  <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">Gemini</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -604,6 +663,169 @@ export default function Reports() {
                     </Card>
                   ))}
                 </div>
+              </TabsContent>
+
+              {/* AI Analysis Tab */}
+              <TabsContent value="ai-analysis" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <Card className="shadow-xl bg-card/40 backdrop-blur border-primary/20 overflow-hidden">
+                  <div className="h-1 w-full bg-gradient-to-r from-violet-500 via-primary to-blue-500" />
+                  <CardHeader className="pb-4 border-b border-border/30 bg-gradient-to-br from-primary/5 via-transparent to-violet-500/5">
+                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-primary/10">
+                          <Brain className="h-6 w-6 text-primary" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-xl font-bold flex items-center gap-2">
+                            Gemini AI Analysis
+                            <Badge variant="outline" className="text-xs font-normal border-primary/30 text-primary">2.0 Flash</Badge>
+                          </CardTitle>
+                          <CardDescription className="mt-0.5">
+                            AI-powered insights on attendance, performance trends, and recommendations
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        {aiAnalysis && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              setAiLoading(true);
+                              setAiError(null);
+                              setAiAnalysis(null);
+                              try {
+                                const res = await getAiInsights();
+                                if (res.success && res.data) {
+                                  const d = res.data as { insights?: string; text?: string; analysis?: string };
+                                  setAiAnalysis(d.insights || d.analysis || d.text || "No analysis returned.");
+                                } else {
+                                  setAiError("Failed to generate AI summary.");
+                                }
+                              } catch (err) {
+                                setAiError(err instanceof Error ? err.message : "AI service unavailable.");
+                              } finally {
+                                setAiLoading(false);
+                              }
+                            }}
+                            className="gap-2"
+                          >
+                            <RefreshCw className="h-4 w-4" /> Regenerate
+                          </Button>
+                        )}
+                        {!aiAnalysis && !aiLoading && (
+                          <Button
+                            onClick={async () => {
+                              setAiLoading(true);
+                              setAiError(null);
+                              try {
+                                const res = await getAiInsights();
+                                if (res.success && res.data) {
+                                  const d = res.data as { insights?: string; text?: string; analysis?: string };
+                                  setAiAnalysis(d.insights || d.analysis || d.text || "No analysis returned.");
+                                } else {
+                                  setAiError("Failed to generate AI summary.");
+                                }
+                              } catch (err) {
+                                setAiError(err instanceof Error ? err.message : "AI service unavailable.");
+                              } finally {
+                                setAiLoading(false);
+                              }
+                            }}
+                            className="gap-2 bg-gradient-to-r from-violet-600 to-primary hover:from-violet-700 hover:to-primary/90 text-white shadow-lg shadow-primary/25"
+                          >
+                            <Sparkles className="h-4 w-4" /> Generate AI Report
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {/* Empty State */}
+                    {!aiAnalysis && !aiLoading && !aiError && (
+                      <div className="flex flex-col items-center justify-center py-20 gap-6 text-center">
+                        <div className="relative">
+                          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary/20 to-violet-500/20 flex items-center justify-center">
+                            <Sparkles className="h-12 w-12 text-primary" />
+                          </div>
+                          <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center text-[10px] font-bold text-white">AI</div>
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-foreground mb-2">AI-Powered Academic Analysis</h3>
+                          <p className="text-muted-foreground text-sm max-w-md">
+                            Click "Generate AI Report" to get a comprehensive Gemini AI analysis of student performance,
+                            attendance trends, subject insights, at-risk students, and actionable recommendations.
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-xl">
+                          {[
+                            { label: "Attendance Analysis", icon: "📊" },
+                            { label: "Performance Trends", icon: "📈" },
+                            { label: "At-Risk Students", icon: "⚠️" },
+                            { label: "Recommendations", icon: "💡" },
+                          ].map((item) => (
+                            <div key={item.label} className="p-3 rounded-xl border border-border/50 bg-muted/30 text-center">
+                              <div className="text-2xl mb-1">{item.icon}</div>
+                              <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Loading */}
+                    {aiLoading && (
+                      <div className="flex flex-col items-center justify-center py-16 gap-4">
+                        <div className="relative">
+                          <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+                          <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-primary" />
+                        </div>
+                        <div className="text-center">
+                          <p className="font-semibold text-foreground mb-1">Gemini is analyzing your data...</p>
+                          <p className="text-sm text-muted-foreground">Processing attendance, exam results, and performance trends</p>
+                        </div>
+                        <div className="flex gap-1 mt-2">
+                          {[0, 1, 2].map(i => (
+                            <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Error */}
+                    {aiError && !aiLoading && (
+                      <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+                        <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20">
+                          <AlertCircle className="h-10 w-10 text-destructive" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground mb-1">Analysis Failed</p>
+                          <p className="text-sm text-muted-foreground">{aiError}</p>
+                        </div>
+                        <Button variant="outline" onClick={async () => {
+                          setAiLoading(true); setAiError(null);
+                          try {
+                            const res = await getAiInsights();
+                            if (res.success && res.data) {
+                              const d = res.data as { insights?: string; text?: string; analysis?: string };
+                              setAiAnalysis(d.insights || d.analysis || d.text || "No analysis returned.");
+                            } else setAiError("Failed to generate AI summary.");
+                          } catch (err) { setAiError(err instanceof Error ? err.message : "AI service unavailable."); }
+                          finally { setAiLoading(false); }
+                        }}>Try Again</Button>
+                      </div>
+                    )}
+
+                    {/* Result */}
+                    {aiAnalysis && !aiLoading && (
+                      <ScrollArea className="max-h-[600px]">
+                        <div className="prose prose-sm max-w-none">
+                          <SimpleMarkdown text={aiAnalysis} />
+                        </div>
+                      </ScrollArea>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
           </>

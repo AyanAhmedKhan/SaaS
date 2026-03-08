@@ -497,6 +497,7 @@ function ChildView({
           weakSubject,
         }}
         role="parent"
+        studentId={student.id}
       />
 
       {/* ═══════════════ Quick Actions ═══════════════ */}

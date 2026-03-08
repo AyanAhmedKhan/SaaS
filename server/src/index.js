@@ -33,6 +33,7 @@ import monitoringRoutes from './routes/monitoring.js';
 import holidayRoutes from './routes/holidays.js';
 import settingsRoutes from './routes/settings.js';
 import planRoutes from './routes/plans.js';
+import aiRoutes from './routes/ai.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -120,6 +121,7 @@ app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/plans', planRoutes);
+app.use('/api/ai', aiRoutes);
 
 // ── 404 & Error handlers ──
 app.use(notFoundHandler);

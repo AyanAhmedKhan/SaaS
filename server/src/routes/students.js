@@ -162,6 +162,32 @@ router.get('/me/profile', asyncHandler(async (req, res) => {
     });
 }));
 
+// GET /api/students/parents — list all parent users for this institute
+router.get('/parents', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
+    const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+    const { search } = req.query;
+
+    let whereClause = "WHERE u.institute_id = $1 AND u.role = 'parent' AND u.is_active = true";
+    const params = [instId];
+
+    if (search) {
+        params.push(`%${search}%`);
+        whereClause += ` AND (u.name ILIKE $${params.length} OR u.email ILIKE $${params.length})`;
+    }
+
+    const { rows } = await query(
+        `SELECT u.id, u.name, u.email, u.phone,
+                (SELECT COUNT(*) FROM students s WHERE s.parent_id = u.id) AS linked_children
+         FROM users u
+         ${whereClause}
+         ORDER BY u.name ASC
+         LIMIT 100`,
+        params
+    );
+
+    res.json({ success: true, data: { parents: rows } });
+}));
+
 // GET /api/students/:id — full profile with stats
 router.get('/:id', asyncHandler(async (req, res) => {
     const { rows } = await query(

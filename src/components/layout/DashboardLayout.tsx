@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { Header } from "./Header";
+import { AiChatWidget } from "@/components/dashboard/AiChatWidget";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -19,6 +20,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </main>
         </SidebarInset>
       </div>
+      {/* AI chat assistant — available across all authenticated pages */}
+      <AiChatWidget />
     </SidebarProvider>
   );
 }

@@ -33,6 +33,7 @@ import { AddStudentDialog } from "@/components/student/AddStudentDialog";
 import { EditStudentDialog } from "@/components/student/EditStudentDialog";
 import { StudentAttendanceDialog } from "@/components/student/StudentAttendanceDialog";
 import { StudentReportsDialog } from "@/components/student/StudentReportsDialog";
+import { LinkParentDialog } from "@/components/student/LinkParentDialog";
 
 export default function Students() {
   const { isRole } = useAuth();
@@ -51,6 +52,7 @@ export default function Students() {
   const [editStudent, setEditStudent] = useState<Student | null>(null);
   const [attendanceStudent, setAttendanceStudent] = useState<Student | null>(null);
   const [reportsStudent, setReportsStudent] = useState<Student | null>(null);
+  const [linkParentStudent, setLinkParentStudent] = useState<Student | null>(null);
   const [aiToggleLoading, setAiToggleLoading] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
@@ -315,6 +317,11 @@ export default function Students() {
                         <DropdownMenuItem onClick={() => setEditStudent(student)}>Edit Details</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setAttendanceStudent(student)}>View Attendance</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setReportsStudent(student)}>View Reports</DropdownMenuItem>
+                        {isRole('institute_admin', 'super_admin') && (
+                          <DropdownMenuItem onClick={() => setLinkParentStudent(student)}>
+                            {student.parent_id ? 'Manage Parent Link' : 'Link Parent'}
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -389,6 +396,14 @@ export default function Students() {
           student={reportsStudent}
           open={!!reportsStudent}
           onOpenChange={(open) => { if (!open) setReportsStudent(null); }}
+        />
+      )}
+      {linkParentStudent && (
+        <LinkParentDialog
+          student={linkParentStudent}
+          open={!!linkParentStudent}
+          onOpenChange={(open) => { if (!open) setLinkParentStudent(null); }}
+          onSuccess={() => { setLinkParentStudent(null); fetchData(); }}
         />
       )}
     </DashboardLayout>
