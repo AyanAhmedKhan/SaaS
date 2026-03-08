@@ -591,6 +591,26 @@ export async function getExamRankList(examId: string) {
   return api.get<{ rankList: ExamResult[] }>(`/exams/${examId}/rank-list`);
 }
 
+export async function getExamClassStudents(examId: string) {
+  return api.get<{ students: { student_id: string; student_name: string; roll_number: string }[] }>(`/exams/${examId}/class-students`);
+}
+
+export interface ExamMetrics {
+  totalStudents: number; absent: number; present: number;
+  passed: number; failed: number; passPercentage: number;
+  avg: number; median: number; stdDev: number; highest: number; lowest: number;
+  gradeDist: Record<string, number>;
+  scoreBands: { label: string; count: number }[];
+  rankList: {
+    student_id: string; student_name: string; roll_number: string;
+    marks_obtained: number; grade: string; rank: number; percentile: number; percentage: number;
+  }[];
+}
+
+export async function getExamMetrics(examId: string) {
+  return api.get<ExamMetrics>(`/exams/${examId}/metrics`);
+}
+
 // ═══════════════════════════════════════════
 // ASSIGNMENTS API
 // ═══════════════════════════════════════════

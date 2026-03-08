@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { query, getClient } from '../db/connection.js';
-import { authenticate, authorize, requireInstitute, logAudit } from '../middleware/auth.js';
+import { authenticate, authorize, requireInstitute, logAudit, checkFacultyPermission } from '../middleware/auth.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
@@ -284,24 +284,124 @@ router.post('/:id/results', authorize('institute_admin', 'faculty', 'super_admin
   } finally { client.release(); }
 }));
 
-// GET /api/exams/:id/rank-list — ranked results per subject
+// GET /api/exams/:id/rank-list — ranked results with percentile
 router.get('/:id/rank-list', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-  const { subject_id } = req.query;
-  const params = [req.params.id, instId];
 
-  let sql = `SELECT er.*, s.name AS student_name, s.roll_number, sub.name AS subject_name
-             FROM exam_results er
-             JOIN students s ON er.student_id = s.id
-             JOIN exams e ON er.exam_id = e.id
-             LEFT JOIN subjects sub ON e.subject_id = sub.id
-             WHERE er.exam_id = $1 AND er.institute_id = $2`;
-
-  if (subject_id) { params.push(subject_id); sql += ` AND e.subject_id = $${params.length}`; }
-  sql += ' ORDER BY er.rank';
-
-  const { rows } = await query(sql, params);
+  const { rows } = await query(
+    `SELECT er.*, s.name AS student_name, s.roll_number,
+       ROUND(PERCENT_RANK() OVER (ORDER BY er.marks_obtained) * 100)::int AS percentile
+     FROM exam_results er
+     JOIN students s ON er.student_id = s.id
+     WHERE er.exam_id = $1 AND er.institute_id = $2 AND er.is_absent = false
+     ORDER BY er.rank`,
+    [req.params.id, instId]
+  );
   res.json({ success: true, data: { rankList: rows } });
+}));
+
+// GET /api/exams/:id/class-students — all students in exam's class for roster
+router.get('/:id/class-students', asyncHandler(async (req, res) => {
+  const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  const exam = await query('SELECT class_id FROM exams WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
+  if (!exam.rows[0]) throw new AppError('Exam not found', 404);
+
+  const { rows } = await query(
+    `SELECT s.id AS student_id, s.name AS student_name, s.roll_number
+     FROM students s
+     WHERE s.class_id = $1 AND s.institute_id = $2 AND s.status = 'active'
+     ORDER BY s.roll_number`,
+    [exam.rows[0].class_id, instId]
+  );
+  res.json({ success: true, data: { students: rows } });
+}));
+
+// GET /api/exams/:id/metrics — full analytics: avg, median, std-dev, bands, grade dist, percentile
+router.get('/:id/metrics', asyncHandler(async (req, res) => {
+  const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  const examRes = await query('SELECT * FROM exams WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
+  if (!examRes.rows[0]) throw new AppError('Exam not found', 404);
+  const exam = examRes.rows[0];
+
+  const { rows } = await query(
+    `SELECT er.student_id, er.marks_obtained, er.is_absent, er.grade, er.rank,
+       s.name AS student_name, s.roll_number,
+       ROUND(PERCENT_RANK() OVER (ORDER BY er.marks_obtained) * 100)::int AS percentile
+     FROM exam_results er
+     JOIN students s ON er.student_id = s.id
+     WHERE er.exam_id = $1 AND er.institute_id = $2
+     ORDER BY er.rank NULLS LAST`,
+    [req.params.id, instId]
+  );
+
+  const totalMarks = exam.total_marks || 100;
+  const passingMarks = exam.passing_marks || 33;
+  const present = rows.filter(r => !r.is_absent && r.marks_obtained != null);
+  const marks = present.map(r => Number(r.marks_obtained));
+
+  let avg = 0, median = 0, stdDev = 0, highest = 0, lowest = 0;
+  if (marks.length > 0) {
+    avg = marks.reduce((a, b) => a + b, 0) / marks.length;
+    const sorted = [...marks].sort((a, b) => a - b);
+    median = sorted.length % 2 === 0
+      ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+      : sorted[Math.floor(sorted.length / 2)];
+    highest = Math.max(...marks);
+    lowest = Math.min(...marks);
+    stdDev = Math.sqrt(marks.reduce((acc, m) => acc + (m - avg) ** 2, 0) / marks.length);
+  }
+
+  // Grade distribution
+  const gradeDist = {};
+  present.forEach(r => { if (r.grade) gradeDist[r.grade] = (gradeDist[r.grade] || 0) + 1; });
+
+  // Score bands (as % of total)
+  const bands = [
+    { label: '0–39%', count: 0 },
+    { label: '40–59%', count: 0 },
+    { label: '60–74%', count: 0 },
+    { label: '75–89%', count: 0 },
+    { label: '90–100%', count: 0 },
+  ];
+  present.forEach(r => {
+    const pct = (r.marks_obtained / totalMarks) * 100;
+    if (pct < 40) bands[0].count++;
+    else if (pct < 60) bands[1].count++;
+    else if (pct < 75) bands[2].count++;
+    else if (pct < 90) bands[3].count++;
+    else bands[4].count++;
+  });
+
+  const passed = present.filter(r => r.marks_obtained >= passingMarks).length;
+
+  res.json({
+    success: true,
+    data: {
+      totalStudents: rows.length,
+      absent: rows.length - present.length,
+      present: present.length,
+      passed,
+      failed: present.length - passed,
+      passPercentage: present.length ? Math.round((passed / present.length) * 100) : 0,
+      avg: parseFloat(avg.toFixed(2)),
+      median: parseFloat(median.toFixed(2)),
+      stdDev: parseFloat(stdDev.toFixed(2)),
+      highest,
+      lowest,
+      gradeDist,
+      scoreBands: bands,
+      rankList: present.map(r => ({
+        student_id: r.student_id,
+        student_name: r.student_name,
+        roll_number: r.roll_number,
+        marks_obtained: r.marks_obtained,
+        grade: r.grade,
+        rank: r.rank,
+        percentile: r.percentile,
+        percentage: parseFloat(((r.marks_obtained / totalMarks) * 100).toFixed(1)),
+      })),
+    },
+  });
 }));
 
 export default router;
