@@ -7,6 +7,20 @@ import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 const router = Router();
 router.use(authenticate, requireInstitute);
 
+// ── In-memory metrics cache (TTL 60 s) ──
+const metricsCache = new Map();   // key → { data, ts }
+const CACHE_TTL = 60_000;
+function getCached(key) {
+  const entry = metricsCache.get(key);
+  if (entry && Date.now() - entry.ts < CACHE_TTL) return entry.data;
+  metricsCache.delete(key);
+  return null;
+}
+function setCache(key, data) { metricsCache.set(key, { data, ts: Date.now() }); }
+function invalidateCache(examId) {
+  for (const k of metricsCache.keys()) { if (k.startsWith(examId + ':')) metricsCache.delete(k); }
+}
+
 // ── Exams CRUD ──
 
 // GET /api/exams — list exams
@@ -276,6 +290,7 @@ router.post('/:id/results', authorize('institute_admin', 'faculty', 'super_admin
     );
 
     await client.query('COMMIT');
+    invalidateCache(req.params.id);
     await logAudit({ instituteId: instId, userId: req.user.id, action: 'enter_results', entityType: 'exam_results', newValues: { exam_id: req.params.id, count: results.length }, req });
     res.json({ success: true, message: `${results.length} results entered` });
   } catch (err) {
@@ -319,6 +334,9 @@ router.get('/:id/class-students', asyncHandler(async (req, res) => {
 // GET /api/exams/:id/metrics — optimised: single CTE query pushes all aggregation into Postgres
 router.get('/:id/metrics', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  const cacheKey = `${req.params.id}:${instId}`;
+  const cached = getCached(cacheKey);
+  if (cached) return res.json({ success: true, data: cached });
 
   // One round-trip: exam meta + all results + window + aggregates
   const { rows } = await query(`
@@ -338,9 +356,14 @@ router.get('/:id/metrics', asyncHandler(async (req, res) => {
         s.roll_number,
         em.total_marks,
         em.passing_marks,
-        ROUND(
-          PERCENT_RANK() OVER (ORDER BY er.marks_obtained NULLS FIRST) * 100
-        )::int AS percentile
+        CASE WHEN er.is_absent OR er.marks_obtained IS NULL THEN NULL
+          ELSE ROUND(
+            PERCENT_RANK() OVER (
+              PARTITION BY (NOT er.is_absent AND er.marks_obtained IS NOT NULL)
+              ORDER BY er.marks_obtained
+            ) * 100
+          )::int
+        END AS percentile
       FROM exam_results er
       JOIN students s     ON er.student_id = s.id
       CROSS JOIN exam_meta em
@@ -401,9 +424,7 @@ router.get('/:id/metrics', asyncHandler(async (req, res) => {
     else bands[4].count++;
   });
 
-  res.json({
-    success: true,
-    data: {
+  const metricsData = {
       totalStudents: total_students,
       absent: absent_cnt,
       present: present_cnt,
@@ -427,8 +448,10 @@ router.get('/:id/metrics', asyncHandler(async (req, res) => {
         percentile: r.percentile,
         percentage: parseFloat(((Number(r.marks_obtained) / Number(totalMarks || 100)) * 100).toFixed(1)),
       })),
-    },
-  });
+    };
+
+  setCache(cacheKey, metricsData);
+  res.json({ success: true, data: metricsData });
 }));
 
 export default router;

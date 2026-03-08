@@ -16,7 +16,8 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip,
   Cell, PieChart, Pie, Legend
 } from "recharts";
-import { getExam, enterExamResults, getExamClassStudents } from "@/lib/api";
+import { getExam, enterExamResults, getExamClassStudents, getExamMetrics } from "@/lib/api";
+import type { ExamMetrics } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
   const [editedResults, setEditedResults] = useState<
     Record<string, { marks_obtained: string; is_absent: boolean; remarks: string }>
   >({});
+  const [serverMetrics, setServerMetrics] = useState<ExamMetrics | null>(null);
 
   /* role-based edit access â€” admins always, teachers always (server rejects if unassigned) */
   const canEnterMarks = isRole("super_admin", "institute_admin", "faculty");
@@ -55,16 +57,21 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
   /* â”€â”€â”€ Load â”€â”€â”€ */
   useEffect(() => {
     if (examId) loadAll(examId);
-    else { setExam(null); setResults([]); setRoster([]); setEditedResults({}); }
+    else { setExam(null); setResults([]); setRoster([]); setEditedResults({}); setServerMetrics(null); }
   }, [examId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadAll = async (id: string) => {
     setLoading(true);
     try {
-      const [examRes, rosterRes] = await Promise.all([
+      const [examRes, rosterRes, metricsRes] = await Promise.all([
         getExam(id),
         canEnterMarks ? getExamClassStudents(id) : Promise.resolve(null),
+        getExamMetrics(id),
       ]);
+
+      if (metricsRes.success && metricsRes.data) {
+        setServerMetrics(metricsRes.data);
+      }
 
       if (examRes.success && examRes.data) {
         const fetchedExam = examRes.data.exam;
