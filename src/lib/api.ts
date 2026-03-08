@@ -767,8 +767,8 @@ export async function getPerformanceTrend(params?: Record<string, string>) {
   return api.get<{ performanceTrend: unknown[] }>('/reports/performance-trend', params);
 }
 
-export async function getClassSummary() {
-  return api.get<{ summary: unknown[] }>('/reports/class-summary');
+export async function getClassSummary(params?: Record<string, string>) {
+  return api.get<{ summary: unknown[] }>('/reports/class-summary', params);
 }
 
 export async function getReportCard(studentId: string) {

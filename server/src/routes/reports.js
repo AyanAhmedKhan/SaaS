@@ -6,21 +6,41 @@ import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 const router = Router();
 router.use(authenticate, requireInstitute);
 
-// GET /api/reports/exam-results — with proper FK joins
+// GET /api/reports/exam-results — with proper FK joins + role-based scoping
 router.get('/exam-results', asyncHandler(async (req, res) => {
-  const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-  const { student_id, exam_id, subject_id, class_id } = req.query;
+  const role = req.user.role;
+  const instId = role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  const { exam_id, subject_id } = req.query;
+  // class_id / student_id filters only for admin roles
+  const class_id = (role === 'super_admin' || role === 'institute_admin') ? req.query.class_id : null;
+  const student_id = (role === 'super_admin' || role === 'institute_admin') ? req.query.student_id : null;
   const params = [instId];
 
   let sql = `SELECT er.*, s.name AS student_name, s.roll_number,
              c.name AS class_name, c.section,
-             sub.name AS subject_name, e.name AS exam_name, e.exam_type
+             sub.name AS subject_name, e.name AS exam_name, e.exam_type,
+             e.exam_date
              FROM exam_results er
              JOIN students s ON er.student_id = s.id
              JOIN classes c ON s.class_id = c.id
              JOIN exams e ON er.exam_id = e.id
              LEFT JOIN subjects sub ON e.subject_id = sub.id
              WHERE er.institute_id = $1`;
+
+  // Role-based data scoping
+  if (role === 'faculty') {
+    params.push(req.user.id);
+    sql += ` AND s.class_id IN (
+      SELECT DISTINCT ta.class_id FROM teacher_assignments ta
+      JOIN teachers t ON ta.teacher_id = t.id
+      WHERE t.user_id = $${params.length} AND ta.institute_id = $1)`;
+  } else if (role === 'student') {
+    params.push(req.user.id);
+    sql += ` AND s.user_id = $${params.length}`;
+  } else if (role === 'parent') {
+    params.push(req.user.id);
+    sql += ` AND s.parent_id = $${params.length}`;
+  }
 
   if (student_id) { params.push(student_id); sql += ` AND er.student_id = $${params.length}`; }
   if (exam_id) { params.push(exam_id); sql += ` AND er.exam_id = $${params.length}`; }
@@ -32,13 +52,32 @@ router.get('/exam-results', asyncHandler(async (req, res) => {
   res.json({ success: true, data: { results: rows } });
 }));
 
-// GET /api/reports/performance-trend — exam-over-exam trend
+// GET /api/reports/performance-trend — exam-over-exam trend + role-based scoping
 router.get('/performance-trend', asyncHandler(async (req, res) => {
-  const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-  const { student_id, class_id } = req.query;
+  const role = req.user.role;
+  const instId = role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  // class_id / student_id filters only for admin roles
+  const class_id = (role === 'super_admin' || role === 'institute_admin') ? req.query.class_id : null;
+  const student_id = (role === 'super_admin' || role === 'institute_admin') ? req.query.student_id : null;
   const params = [instId];
 
   let where = 'er.institute_id = $1';
+
+  // Role-based data scoping
+  if (role === 'faculty') {
+    params.push(req.user.id);
+    where += ` AND s.class_id IN (
+      SELECT DISTINCT ta.class_id FROM teacher_assignments ta
+      JOIN teachers t ON ta.teacher_id = t.id
+      WHERE t.user_id = $${params.length} AND ta.institute_id = $1)`;
+  } else if (role === 'student') {
+    params.push(req.user.id);
+    where += ` AND s.user_id = $${params.length}`;
+  } else if (role === 'parent') {
+    params.push(req.user.id);
+    where += ` AND s.parent_id = $${params.length}`;
+  }
+
   if (student_id) { params.push(student_id); where += ` AND er.student_id = $${params.length}`; }
   if (class_id) { params.push(class_id); where += ` AND s.class_id = $${params.length}`; }
 
@@ -70,12 +109,12 @@ router.get('/performance-trend', asyncHandler(async (req, res) => {
   res.json({ success: true, data: { performanceTrend } });
 }));
 
-// GET /api/reports/class-summary — per-class multi-tenant overview
+// GET /api/reports/class-summary — per-class overview, faculty-scoped if needed
 router.get('/class-summary', asyncHandler(async (req, res) => {
-  const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
+  const role = req.user.role;
+  const instId = role === 'super_admin' ? req.query.institute_id : req.instituteId;
 
-  const { rows } = await query(
-    `SELECT c.id, c.name AS class_name, c.section,
+  let sql = `SELECT c.id, c.name AS class_name, c.section,
        COUNT(DISTINCT s.id) AS student_count,
        (SELECT ROUND(COUNT(*) FILTER (WHERE ar.status='present')::NUMERIC/NULLIF(COUNT(*),0)*100,1)
         FROM attendance_records ar WHERE ar.class_id=c.id) AS avg_attendance,
@@ -83,11 +122,20 @@ router.get('/class-summary', asyncHandler(async (req, res) => {
         FROM exam_results er JOIN exams e2 ON er.exam_id=e2.id JOIN students st ON er.student_id=st.id WHERE st.class_id=c.id) AS avg_performance
      FROM classes c
      LEFT JOIN students s ON s.class_id=c.id AND s.status='active'
-     WHERE c.institute_id=$1
-     GROUP BY c.id, c.name, c.section ORDER BY c.name, c.section`,
-    [instId]
-  );
+     WHERE c.institute_id=$1`;
 
+  const params = [instId];
+
+  if (role === 'faculty') {
+    params.push(req.user.id);
+    sql += ` AND c.id IN (
+      SELECT DISTINCT ta.class_id FROM teacher_assignments ta
+      JOIN teachers t ON ta.teacher_id = t.id
+      WHERE t.user_id = $${params.length} AND ta.institute_id = $1)`;
+  }
+
+  sql += ` GROUP BY c.id, c.name, c.section ORDER BY c.name, c.section`;
+  const { rows } = await query(sql, params);
   res.json({ success: true, data: { summary: rows } });
 }));
 
