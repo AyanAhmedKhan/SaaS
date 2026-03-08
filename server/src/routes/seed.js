@@ -52,7 +52,14 @@ router.post(
         },
       });
     } catch (error) {
-      next(error);
+      // Return detailed error for debugging seed issues
+      res.status(500).json({
+        success: false,
+        error: {
+          message: error.message,
+          stack: error.stack,
+        },
+      });
     }
   }
 );
