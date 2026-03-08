@@ -26,21 +26,28 @@ function invalidateCache(examId) {
 // GET /api/exams — list exams
 router.get('/', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
-  const { academic_year_id, exam_type, class_id, page = '1', limit = '20' } = req.query;
+  const { academic_year_id, exam_type, class_id, status, page = '1', limit = '20' } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
   const params = [instId];
 
+  // Compute status dynamically from exam_date instead of using the static DB column
+  const statusExpr = `CASE WHEN e.exam_date::date > CURRENT_DATE THEN 'upcoming' WHEN e.exam_date::date = CURRENT_DATE THEN 'ongoing' ELSE 'completed' END`;
+
+  let whereSql = `WHERE e.institute_id = $1`;
+
+  if (academic_year_id) { params.push(academic_year_id); whereSql += ` AND e.academic_year_id = $${params.length}`; }
+  if (exam_type) { params.push(exam_type); whereSql += ` AND e.exam_type = $${params.length}`; }
+  if (class_id) { params.push(class_id); whereSql += ` AND e.class_id = $${params.length}`; }
+  if (status) { params.push(status); whereSql += ` AND ${statusExpr} = $${params.length}`; }
+
   let sql = `SELECT e.*, ay.name AS academic_year,
-             (SELECT COUNT(*) FROM exam_results er WHERE er.exam_id = e.id) AS result_count
+             (SELECT COUNT(*) FROM exam_results er WHERE er.exam_id = e.id) AS result_count,
+             ${statusExpr} AS status
              FROM exams e
              LEFT JOIN academic_years ay ON e.academic_year_id = ay.id
-             WHERE e.institute_id = $1`;
+             ${whereSql}`;
 
-  if (academic_year_id) { params.push(academic_year_id); sql += ` AND e.academic_year_id = $${params.length}`; }
-  if (exam_type) { params.push(exam_type); sql += ` AND e.exam_type = $${params.length}`; }
-  if (class_id) { params.push(class_id); sql += ` AND e.class_id = $${params.length}`; }
-
-  const countSql = sql.replace(/SELECT e\.\*.*?FROM/, 'SELECT COUNT(*) FROM');
+  const countSql = `SELECT COUNT(*) FROM exams e ${whereSql}`;
   sql += ` ORDER BY e.exam_date DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
   params.push(parseInt(limit), offset);
 
@@ -67,7 +74,8 @@ router.get('/:id', asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
 
   const exam = await query(
-    `SELECT e.*, ay.name AS academic_year
+    `SELECT e.*, ay.name AS academic_year,
+       CASE WHEN e.exam_date::date > CURRENT_DATE THEN 'upcoming' WHEN e.exam_date::date = CURRENT_DATE THEN 'ongoing' ELSE 'completed' END AS status
      FROM exams e LEFT JOIN academic_years ay ON e.academic_year_id = ay.id
      WHERE e.id = $1 AND e.institute_id = $2`,
     [req.params.id, instId]

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -373,14 +373,15 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                           </TableHeader>
                           <TableBody>
                             {serverMetrics.rankList.map((r) => {
-                              const topThree = r.rank <= 3;
+                              const topThree = r.rank != null && r.rank <= 3;
                               return (
                                 <TableRow key={r.student_id} className={cn("hover:bg-muted/20", topThree && "bg-amber-500/5")}>
                                   <TableCell className="text-center">
                                     {r.rank === 1 ? <span className="text-lg">🥇</span>
                                       : r.rank === 2 ? <span className="text-lg">🥈</span>
                                       : r.rank === 3 ? <span className="text-lg">🥉</span>
-                                      : <span className="font-bold text-sm text-muted-foreground">#{r.rank}</span>}
+                                      : r.rank != null ? <span className="font-bold text-sm text-muted-foreground">#{r.rank}</span>
+                                      : <span className="text-muted-foreground">—</span>}
                                   </TableCell>
                                   <TableCell className="font-mono text-xs text-muted-foreground">{r.roll_number || "—"}</TableCell>
                                   <TableCell className="font-semibold text-sm">{r.student_name}</TableCell>
@@ -533,7 +534,7 @@ export function ExamDetailsDialog({ examId, onOpenChange, onSuccess }: Props) {
                               {serverMetrics.rankList.map((r) => (
                                 <TableRow key={r.student_id} className="hover:bg-muted/10">
                                   <TableCell className="text-center font-bold">
-                                    {r.rank === 1 ? "🥇" : r.rank === 2 ? "🥈" : r.rank === 3 ? "🥉" : `#${r.rank}`}
+                                    {r.rank === 1 ? "🥇" : r.rank === 2 ? "🥈" : r.rank === 3 ? "🥉" : r.rank != null ? `#${r.rank}` : "—"}
                                   </TableCell>
                                   <TableCell>
                                     <div className="font-semibold text-sm">{r.student_name}</div>

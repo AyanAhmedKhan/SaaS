@@ -35,6 +35,9 @@ export default function Exams() {
 
   const isSuperAdmin = isRole('super_admin');
   const canCreate = isRole('super_admin', 'institute_admin', 'faculty');
+  const isStudent = isRole('student');
+  const isParent = isRole('parent');
+  const isViewOnly = isStudent || isParent;
 
   const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(() => {
     if (isSuperAdmin) {
@@ -96,7 +99,6 @@ export default function Exams() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "upcoming":
-      case "scheduled":
         return <Badge className="bg-blue-500/10 text-blue-600 border-blue-200">Upcoming</Badge>;
       case "ongoing":
         return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200">Ongoing</Badge>;
@@ -124,10 +126,12 @@ export default function Exams() {
               <Badge variant="outline" className="bg-background/80 backdrop-blur">Examination Center</Badge>
             </div>
             <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
-              Manage Exams & Grades
+              {isViewOnly ? 'My Exams & Results' : 'Manage Exams & Grades'}
             </h1>
             <p className="text-muted-foreground max-w-xl text-sm md:text-base">
-              Schedule assessments, track syllabus completion, and analyze student performance across classes.
+              {isViewOnly
+                ? 'View your upcoming exams, check results, and track your academic performance.'
+                : 'Schedule assessments, track syllabus completion, and analyze student performance across classes.'}
             </p>
           </div>
 
@@ -194,7 +198,7 @@ export default function Exams() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
+                <SelectItem value="upcoming">Upcoming</SelectItem>
                 <SelectItem value="ongoing">Ongoing</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
               </SelectContent>
@@ -227,7 +231,9 @@ export default function Exams() {
             </div>
             <h3 className="text-xl font-bold mb-2">No Exams Found</h3>
             <p className="text-muted-foreground max-w-sm mx-auto mb-6">
-              There are no examinations scheduled that match your current filters.
+              {isViewOnly
+                ? 'There are no exams available that match your current filters.'
+                : 'There are no examinations scheduled that match your current filters.'}
             </p>
             {canCreate && (
               <Button variant="outline" onClick={() => setIsCreateOpen(true)} className="rounded-xl">
@@ -291,7 +297,7 @@ export default function Exams() {
                       className="w-full rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-all group-hover:shadow-md"
                       variant="ghost"
                     >
-                      Grade & Analyze
+                      {isViewOnly ? 'View Results' : 'Grade & Analyze'}
                     </Button>
                   </div>
                 </CardContent>
