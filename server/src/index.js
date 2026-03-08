@@ -39,6 +39,9 @@ import seedRoutes from './routes/seed.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust first proxy (Render, Vercel, etc.) so express-rate-limit sees real client IPs
+app.set('trust proxy', 1);
+
 // ── Security & parsing middleware ──
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
