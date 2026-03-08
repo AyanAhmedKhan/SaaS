@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { aiChat, type AiMessage } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
-import type { UserRole } from '@/types';
 
 // Simple markdown-to-JSX renderer (headers, bullets, bold only)
 function SimpleMarkdown({ text }: { text: string }) {
