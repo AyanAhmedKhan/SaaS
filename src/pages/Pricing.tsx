@@ -221,6 +221,7 @@ function mapPlanToUI(plan: SubscriptionPlan): PlanUI {
 function PlanCard({
     plan,
     isAnnual,
+    isGuest,
     currentPlan,
     index,
     isUpdating,
@@ -228,6 +229,7 @@ function PlanCard({
 }: {
     plan: PlanUI;
     isAnnual: boolean;
+    isGuest: boolean;
     currentPlan?: string;
     index: number;
     isUpdating: boolean;
@@ -235,6 +237,10 @@ function PlanCard({
 }) {
     const price = isAnnual ? Math.round(plan.annualPrice / 12) : plan.monthlyPrice;
     const totalAnnual = plan.annualPrice;
+    const annualSavings = Math.max(plan.monthlyPrice * 12 - totalAnnual, 0);
+    const annualSavingsPercent = plan.monthlyPrice > 0
+        ? Math.round((annualSavings / (plan.monthlyPrice * 12)) * 100)
+        : 0;
     const isCurrentPlan = currentPlan === plan.slug;
     const PlanIcon = plan.icon;
 
@@ -285,10 +291,17 @@ function PlanCard({
                         <span className="text-muted-foreground font-medium text-sm">/mo</span>
                     </div>
                     {isAnnual ? (
-                        <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                            <TrendingUp className="h-3 w-3" />
-                            {formatPrice(totalAnnual)}/year
-                        </p>
+                        <div className="space-y-1.5">
+                            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                <TrendingUp className="h-3 w-3" />
+                                {formatPrice(totalAnnual)}/year
+                            </p>
+                            {annualSavings > 0 && (
+                                <Badge variant="secondary" className="text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20">
+                                    Save {formatPrice(annualSavings)} ({annualSavingsPercent}%)
+                                </Badge>
+                            )}
+                        </div>
                     ) : (
                         <p className="text-xs text-muted-foreground">Billed monthly</p>
                     )}
@@ -322,8 +335,11 @@ function PlanCard({
                     disabled={isCurrentPlan || isUpdating}
                     onClick={() => onChoose(plan.slug)}
                 >
-                    {isCurrentPlan ? "Your Current Plan" : (<>{plan.cta}<ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" /></>)}
+                    {isCurrentPlan ? "Your Current Plan" : (<>{isGuest ? "Start Free Trial" : plan.cta}<ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" /></>)}
                 </Button>
+                {isGuest && !isCurrentPlan && (
+                    <p className="text-xs text-center text-muted-foreground">No credit card required</p>
+                )}
             </div>
 
             <div className="mx-8 h-px bg-border/60" />
@@ -367,6 +383,16 @@ export default function Pricing() {
     }, [user]);
 
     const uiPlans = useMemo(() => plans.map(mapPlanToUI), [plans]);
+    const maxAnnualSavingsPercent = useMemo(() => {
+        if (!uiPlans.length) return 0;
+        return Math.max(
+            ...uiPlans.map((plan) => {
+                const annualSavings = Math.max(plan.monthlyPrice * 12 - plan.annualPrice, 0);
+                if (plan.monthlyPrice === 0) return 0;
+                return Math.round((annualSavings / (plan.monthlyPrice * 12)) * 100);
+            })
+        );
+    }, [uiPlans]);
 
     const handlePlanChange = async (slug: string) => {
         if (!user) {
@@ -460,7 +486,11 @@ export default function Pricing() {
                         <span className={cn("text-sm font-bold transition-colors", !isAnnual ? "text-foreground" : "text-muted-foreground")}>Monthly</span>
                         <Switch checked={isAnnual} onCheckedChange={setIsAnnual} className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-emerald-500 data-[state=checked]:to-green-500" />
                         <span className={cn("text-sm font-bold transition-colors", isAnnual ? "text-foreground" : "text-muted-foreground")}>Annual</span>
+                        {isAnnual && maxAnnualSavingsPercent > 0 && (
+                            <Badge className="bg-emerald-500 text-white border-0 text-xs">Save up to {maxAnnualSavingsPercent}%</Badge>
+                        )}
                     </div>
+                    <p className="text-xs text-muted-foreground">Seed data preview for design and content layout</p>
                 </div>
 
                 {loading && (
@@ -484,12 +514,13 @@ export default function Pricing() {
                 )}
 
                 {!loading && !error && (
-                    <div className="grid gap-6 lg:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4 max-w-[1400px] mx-auto items-start">
+                    <div className="grid gap-6 lg:gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-4 max-w-[1400px] mx-auto items-start">
                         {uiPlans.map((plan, index) => (
                             <PlanCard
                                 key={plan.id}
                                 plan={plan}
                                 isAnnual={isAnnual}
+                                isGuest={!user}
                                 currentPlan={currentPlan}
                                 index={index}
                                 isUpdating={updatingSlug !== null}

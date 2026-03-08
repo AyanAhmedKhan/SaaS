@@ -16,8 +16,8 @@ import NotFound from "./pages/NotFound";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
 const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
-const ParentDashboard = lazy(() => import("./pages/ParentDashboard"));
-const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
+const ParentDashboard = lazy(() => import("./pages/ParentDashboard.tsx"));
+const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard.tsx"));
 const Students = lazy(() => import("./pages/Students"));
 const Teachers = lazy(() => import("./pages/Teachers"));
 const Attendance = lazy(() => import("./pages/Attendance"));
@@ -37,15 +37,15 @@ const StudentProfilePage = lazy(() => import("./pages/StudentProfilePage"));
 const Settings = lazy(() => import("./pages/Settings"));
 const AcademicYears = lazy(() => import("./pages/AcademicYears"));
 const Classes = lazy(() => import("./pages/Classes"));
-const Pricing = lazy(() => import("./pages/Pricing"));
+const Pricing = lazy(() => import("./pages/Pricing.tsx"));
 const ManagePlans = lazy(() => import("./pages/ManagePlans"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const AboutUs = lazy(() => import("./pages/AboutUs"));
-const Contact = lazy(() => import("./pages/Contact"));
-const Careers = lazy(() => import("./pages/Careers"));
-const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const Contact = lazy(() => import("./pages/Contact.tsx"));
+const Careers = lazy(() => import("./pages/Careers.tsx"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy.tsx"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
-const DataSecurity = lazy(() => import("./pages/DataSecurity"));
+const DataSecurity = lazy(() => import("./pages/DataSecurity.tsx"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
