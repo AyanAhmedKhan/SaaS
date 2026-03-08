@@ -1,15 +1,34 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { seed } from '../db/seed.js';
+import { query } from '../db/connection.js';
 
 const router = Router();
 
+// Middleware: allow unauthenticated access only if the DB has zero users (first-time setup)
+async function firstTimeOrAuth(req, res, next) {
+  try {
+    const { rows } = await query('SELECT 1 FROM users LIMIT 1');
+    if (rows.length === 0) {
+      // Empty database — allow without auth (first-time setup)
+      return next();
+    }
+    // Users exist — require super_admin auth
+    authenticate(req, res, (err) => {
+      if (err) return next(err);
+      authorize('super_admin')(req, res, next);
+    });
+  } catch {
+    // Table doesn't exist yet — allow (first-time setup)
+    return next();
+  }
+}
+
 // POST /api/seed — run the full database seed
-// Restricted to super_admin only
+// First-time: no auth needed. After that: super_admin only.
 router.post(
   '/',
-  authenticate,
-  authorize('super_admin'),
+  firstTimeOrAuth,
   async (req, res, next) => {
     try {
       const start = Date.now();
