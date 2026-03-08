@@ -35,11 +35,13 @@ import { getSuperAdminDashboard, getPlans } from "@/lib/api";
 import type { SubscriptionPlan } from "@/types";
 
 interface InstituteSummary {
+  [key: string]: string;
   status: string;
   c: string;
 }
 
 interface UserSummary {
+  [key: string]: string;
   role: string;
   c: string;
 }
@@ -92,7 +94,7 @@ interface SuperAdminStats {
   };
 }
 
-function countFromSummary(list: { [k: string]: string }[], key: string, value: string) {
+function countFromSummary(list: { [key: string]: string }[], key: string, value: string) {
   const found = list.find((row) => row[key] === value);
   return parseInt(found?.c || "0", 10);
 }

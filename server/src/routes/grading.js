@@ -14,7 +14,7 @@ router.get('/', asyncHandler(async (req, res) => {
     'SELECT * FROM grading_systems WHERE institute_id = $1 ORDER BY min_percentage DESC',
     [instId]
   );
-  res.json({ success: true, data: { grades: rows } });
+  res.json({ success: true, data: { gradingSystems: rows } });
 }));
 
 // POST /api/grading — create a grade entry
@@ -34,7 +34,7 @@ router.post('/', authorize('institute_admin', 'super_admin'), asyncHandler(async
 
   const { rows } = await query('SELECT * FROM grading_systems WHERE id=$1', [id]);
   await logAudit({ instituteId: instId, userId: req.user.id, action: 'create_grade', entityType: 'grading_system', entityId: id, req });
-  res.status(201).json({ success: true, data: { grade: rows[0] } });
+  res.status(201).json({ success: true, data: { gradingSystem: rows[0] } });
 }));
 
 // POST /api/grading/bulk — bulk upsert grading system
@@ -56,7 +56,7 @@ router.post('/bulk', authorize('institute_admin', 'super_admin'), asyncHandler(a
 
   await logAudit({ instituteId: instId, userId: req.user.id, action: 'bulk_update_grading', entityType: 'grading_system', req });
   const { rows } = await query('SELECT * FROM grading_systems WHERE institute_id=$1 ORDER BY min_percentage DESC', [instId]);
-  res.json({ success: true, data: { grades: rows } });
+  res.json({ success: true, data: { gradingSystems: rows } });
 }));
 
 // PUT /api/grading/:id — update grade entry
@@ -75,7 +75,7 @@ router.put('/:id', authorize('institute_admin', 'super_admin'), asyncHandler(asy
   );
 
   const { rows } = await query('SELECT * FROM grading_systems WHERE id=$1', [req.params.id]);
-  res.json({ success: true, data: { grade: rows[0] } });
+  res.json({ success: true, data: { gradingSystem: rows[0] } });
 }));
 
 // DELETE /api/grading/:id

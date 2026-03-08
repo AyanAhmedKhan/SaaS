@@ -344,6 +344,7 @@ export async function createSchema() {
         passing_marks DOUBLE PRECISION DEFAULT 33,
         weightage DOUBLE PRECISION DEFAULT 1.0,
         exam_date DATE,
+        syllabus_topics TEXT,
         status TEXT DEFAULT 'scheduled' CHECK(status IN ('scheduled','ongoing','completed','cancelled')),
         created_by TEXT REFERENCES users(id),
         created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -377,6 +378,18 @@ export async function createSchema() {
         is_default BOOLEAN DEFAULT false,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+    `);
+
+    // Add syllabus_topics column to exams if it doesn't exist (migration)
+    await query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'exams' AND column_name = 'syllabus_topics'
+        ) THEN
+          ALTER TABLE exams ADD COLUMN syllabus_topics TEXT;
+        END IF;
+      END $$;
     `);
 
     // ── ASSIGNMENTS & HOMEWORK MODULE ──
@@ -427,7 +440,7 @@ export async function createSchema() {
         class_id TEXT REFERENCES classes(id),
         name TEXT NOT NULL,
         amount DOUBLE PRECISION NOT NULL,
-        fee_type TEXT NOT NULL CHECK(fee_type IN ('tuition','exam','lab','library','transport','hostel','other')),
+        fee_type TEXT NOT NULL CHECK(fee_type IN ('tuition','exam','lab','library','transport','hostel','admission','other')),
         frequency TEXT DEFAULT 'monthly' CHECK(frequency IN ('one_time','monthly','quarterly','half_yearly','yearly')),
         due_day INTEGER DEFAULT 10,
         due_date DATE,
@@ -448,7 +461,7 @@ export async function createSchema() {
         paid_amount DOUBLE PRECISION DEFAULT 0,
         due_date DATE NOT NULL,
         paid_date DATE,
-        payment_method TEXT CHECK(payment_method IN ('cash','cheque','bank_transfer','other')),
+        payment_method TEXT CHECK(payment_method IN ('cash','cheque','bank_transfer','upi','other')),
         receipt_number TEXT,
         status TEXT DEFAULT 'pending' CHECK(status IN ('pending','partial','paid','overdue','waived')),
         remarks TEXT,
@@ -456,6 +469,21 @@ export async function createSchema() {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+    `);
+
+    // Update existing CHECK constraints for fee_type and payment_method (migration)
+    await query(`
+      DO $$ BEGIN
+        ALTER TABLE fee_structures DROP CONSTRAINT IF EXISTS fee_structures_fee_type_check;
+        ALTER TABLE fee_structures ADD CONSTRAINT fee_structures_fee_type_check 
+          CHECK (fee_type IN ('tuition','exam','lab','library','transport','hostel','admission','other'));
+        
+        ALTER TABLE fee_payments DROP CONSTRAINT IF EXISTS fee_payments_payment_method_check;
+        ALTER TABLE fee_payments ADD CONSTRAINT fee_payments_payment_method_check 
+          CHECK (payment_method IN ('cash','cheque','bank_transfer','upi','other'));
+      EXCEPTION WHEN others THEN
+        NULL; -- Ignore if constraints don't exist
+      END $$;
     `);
 
     // ── TEACHER REMARKS / FEEDBACK ──  

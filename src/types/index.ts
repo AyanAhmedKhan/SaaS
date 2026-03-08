@@ -282,11 +282,16 @@ export interface FeeStructure {
   institute_id: string;
   academic_year_id: string;
   class_id?: string;
+  class_name?: string;
+  section?: string;
   name: string;
   amount: number;
-  fee_type: 'tuition' | 'exam' | 'lab' | 'library' | 'transport' | 'hostel' | 'other';
+  fee_type: 'tuition' | 'exam' | 'lab' | 'library' | 'transport' | 'hostel' | 'admission' | 'other';
   frequency: 'one_time' | 'monthly' | 'quarterly' | 'half_yearly' | 'yearly';
   due_day: number;
+  due_date?: string;
+  description?: string;
+  installments_allowed?: boolean;
   is_active: boolean;
 }
 
@@ -299,7 +304,7 @@ export interface FeePayment {
   paid_amount: number;
   due_date: string;
   paid_date?: string;
-  payment_method?: 'cash' | 'cheque' | 'bank_transfer' | 'other';
+  payment_method?: 'cash' | 'cheque' | 'bank_transfer' | 'upi' | 'other';
   receipt_number?: string;
   status: 'pending' | 'partial' | 'paid' | 'overdue' | 'waived';
   remarks?: string;

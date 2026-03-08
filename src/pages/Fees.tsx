@@ -45,6 +45,62 @@ import type { FeePayment, Class as ClassType, Student, FeeStructure, Institute }
 import { cn } from "@/lib/utils";
 import { InstituteSelector } from "@/components/InstituteSelector";
 
+// API response type helpers
+interface FeeStructuresResponse {
+  structures: FeeStructure[];
+}
+
+interface StudentsResponse {
+  students: Student[];
+}
+
+interface FeePaymentPayload {
+  student_id: string;
+  fee_structure_id: string;
+  paid_amount: number;
+  payment_method: PaymentMethod;
+  receipt_number: string;
+  remarks: string;
+  due_date: string;
+  status: PaymentStatus;
+}
+
+interface FeeStructurePayload {
+  name: string;
+  fee_type: FeeType;
+  amount: number;
+  class_id: string | null;
+  due_date: string | null;
+  installments_allowed: boolean;
+  description: string;
+}
+
+type PaymentMethod = 'cash' | 'cheque' | 'bank_transfer' | 'upi' | 'other';
+type PaymentStatus = 'pending' | 'partial' | 'paid' | 'overdue' | 'waived';
+type FeeType = 'tuition' | 'exam' | 'lab' | 'library' | 'transport' | 'hostel' | 'admission' | 'other';
+
+interface PaymentFormData {
+  class_id: string;
+  student_id: string;
+  fee_structure_id: string;
+  paid_amount: string;
+  payment_method: PaymentMethod;
+  receipt_number: string;
+  remarks: string;
+  due_date: string;
+  status: PaymentStatus;
+}
+
+interface StructureFormData {
+  name: string;
+  fee_type: FeeType;
+  class_id: string;
+  amount: string;
+  due_date: string;
+  installments_allowed: boolean;
+  description: string;
+}
+
 export default function Fees() {
   const { isRole } = useAuth();
   const [activeTab, setActiveTab] = useState("payments");
@@ -65,7 +121,7 @@ export default function Fees() {
   const [structuresError, setStructuresError] = useState<string | null>(null);
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
   const [editingStructure, setEditingStructure] = useState<FeeStructure | null>(null);
-  const [structFormData, setStructFormData] = useState({
+  const [structFormData, setStructFormData] = useState<StructureFormData>({
     name: "",
     fee_type: "tuition",
     class_id: "",
@@ -82,7 +138,7 @@ export default function Fees() {
   const [formError, setFormError] = useState("");
   const [formStudents, setFormStudents] = useState<Student[]>([]);
   const [formStructures, setFormStructures] = useState<FeeStructure[]>([]);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<PaymentFormData>({
     class_id: "",
     student_id: "",
     fee_structure_id: "",
@@ -167,12 +223,12 @@ export default function Fees() {
       setStructuresError(null);
       const res = await getFeeStructures();
       if (res.success && res.data) {
-        setStructures((res.data as any).structures || []);
+        setStructures((res.data as FeeStructuresResponse).structures || []);
       } else {
         setStructuresError(res.error?.message || "Failed to load fee structures");
       }
-    } catch (err: any) {
-      setStructuresError(err.message || "Failed to load fee structures");
+    } catch (err) {
+      setStructuresError(err instanceof Error ? err.message : "Failed to load fee structures");
     } finally {
       setStructuresLoading(false);
     }
@@ -193,8 +249,8 @@ export default function Fees() {
         getStudents({ class_id: classId, status: 'active', limit: '1000' }),
         getFeeStructures({ class_id: classId })
       ]);
-      if (stuRes.success && stuRes.data) setFormStudents((stuRes.data as any).students || []);
-      if (structRes.success && structRes.data) setFormStructures((structRes.data as any).structures || []);
+      if (stuRes.success && stuRes.data) setFormStudents((stuRes.data as StudentsResponse).students || []);
+      if (structRes.success && structRes.data) setFormStructures((structRes.data as FeeStructuresResponse).structures || []);
     } catch (err) {
       console.error(err);
     }
@@ -234,7 +290,7 @@ export default function Fees() {
 
     // We need to fetch the class's students and structures first
     // For fee payment, we might not have class_id directly on the object if it's just from the join, wait, we do.
-    const cid = (fee as any).class_id || classes.find(c => c.name === (fee as any).class_name)?.id || "";
+    const cid = (fee as FeePayment & { class_id?: string; class_name?: string }).class_id || classes.find(c => c.name === (fee as FeePayment & { class_name?: string }).class_name)?.id || "";
 
     setFormData({
       class_id: cid,
@@ -257,8 +313,8 @@ export default function Fees() {
     try {
       await deleteFeePayment(id);
       fetchData();
-    } catch (err: any) {
-      alert(err.message || "Failed to delete");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete");
     }
   };
 
@@ -271,15 +327,15 @@ export default function Fees() {
       }
       setIsSaving(true);
 
-      const payload: any = {
+      const payload: FeePaymentPayload = {
         student_id: formData.student_id,
         fee_structure_id: formData.fee_structure_id,
         paid_amount: Number(formData.paid_amount),
-        payment_method: formData.payment_method,
+        payment_method: formData.payment_method as FeePaymentPayload['payment_method'],
         receipt_number: formData.receipt_number,
         remarks: formData.remarks,
         due_date: formData.due_date,
-        status: formData.status
+        status: formData.status as FeePaymentPayload['status']
       };
 
       if (editingFeePayment) {
@@ -290,8 +346,8 @@ export default function Fees() {
 
       setIsSubmitModalOpen(false);
       fetchData();
-    } catch (err: any) {
-      setFormError(err.message || "Failed to save fee entry");
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to save fee entry");
     } finally {
       setIsSaving(false);
     }
@@ -359,8 +415,8 @@ export default function Fees() {
     try {
       await deleteFeeStructure(id);
       fetchStructures();
-    } catch (err: any) {
-      alert(err.message || "Failed to delete fee structure");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete fee structure");
     }
   };
 
@@ -372,9 +428,9 @@ export default function Fees() {
         return;
       }
       setIsSaving(true);
-      const payload: any = {
+      const payload: FeeStructurePayload = {
         name: structFormData.name,
-        fee_type: structFormData.fee_type,
+        fee_type: structFormData.fee_type as FeeStructurePayload['fee_type'],
         amount: Number(structFormData.amount),
         class_id: structFormData.class_id || null,
         due_date: structFormData.due_date || null,
@@ -389,8 +445,8 @@ export default function Fees() {
       }
       setIsStructureModalOpen(false);
       fetchStructures();
-    } catch (err: any) {
-      setFormError(err.message || "Failed to save fee structure");
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to save fee structure");
     } finally {
       setIsSaving(false);
     }
@@ -1159,7 +1215,7 @@ export default function Fees() {
                 </div>
                 <div className="space-y-1.5 focus-within:text-primary transition-colors">
                   <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Status</label>
-                  <Select value={formData.status} onValueChange={val => setFormData(p => ({ ...p, status: val }))}>
+                  <Select value={formData.status} onValueChange={val => setFormData(p => ({ ...p, status: val as PaymentStatus }))}>
                     <SelectTrigger className="h-11 rounded-xl shadow-sm border-border/60 font-bold">
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
@@ -1185,7 +1241,7 @@ export default function Fees() {
                 </div>
                 <div className="space-y-1.5 focus-within:text-primary transition-colors">
                   <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Payment Method</label>
-                  <Select value={formData.payment_method} onValueChange={val => setFormData(p => ({ ...p, payment_method: val }))}>
+                  <Select value={formData.payment_method} onValueChange={val => setFormData(p => ({ ...p, payment_method: val as PaymentMethod }))}>
                     <SelectTrigger className="h-11 rounded-xl shadow-sm border-border/60 font-medium capitalize">
                       <SelectValue placeholder="Method" />
                     </SelectTrigger>
@@ -1296,7 +1352,7 @@ export default function Fees() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 focus-within:text-purple-600 transition-colors">
                   <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Fee Type <span className="text-red-500">*</span></label>
-                  <Select value={structFormData.fee_type} onValueChange={val => setStructFormData(p => ({ ...p, fee_type: val }))}>
+                  <Select value={structFormData.fee_type} onValueChange={val => setStructFormData(p => ({ ...p, fee_type: val as FeeType }))}>
                     <SelectTrigger className="h-11 rounded-xl shadow-sm border-border/60 font-medium capitalize">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
@@ -1307,6 +1363,7 @@ export default function Fees() {
                       <SelectItem value="library">Library</SelectItem>
                       <SelectItem value="exam">Exam Fee</SelectItem>
                       <SelectItem value="hostel">Hostel Fee</SelectItem>
+                      <SelectItem value="lab">Lab Fee</SelectItem>
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>

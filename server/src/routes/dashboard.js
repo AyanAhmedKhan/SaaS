@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db/connection.js';
-import { authenticate, requireInstitute } from '../middleware/auth.js';
+import { authenticate, authorize, requireInstitute } from '../middleware/auth.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
@@ -9,7 +9,7 @@ router.use(authenticate, requireInstitute);
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // ── Admin / Institute-Admin dashboard ──
-router.get('/stats', asyncHandler(async (req, res) => {
+router.get('/stats', authorize('super_admin', 'institute_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.query.institute_id : req.instituteId;
   if (!instId) throw new AppError('institute_id required', 400);
 
@@ -94,7 +94,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
 }));
 
 // ── Teacher dashboard ──
-router.get('/teacher', asyncHandler(async (req, res) => {
+router.get('/teacher', authorize('faculty', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.instituteId;
   const teacherRes = await query('SELECT id FROM teachers WHERE user_id=$1 AND institute_id=$2', [req.user.id, instId]);
   if (!teacherRes.rows[0]) throw new AppError('Teacher profile not found', 404);
@@ -144,7 +144,7 @@ router.get('/teacher', asyncHandler(async (req, res) => {
 }));
 
 // ── Student dashboard ──
-router.get('/student', asyncHandler(async (req, res) => {
+router.get('/student', authorize('student', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.instituteId;
   const stuRes = await query(
     `SELECT s.*, c.name AS class_name, c.section AS class_section, ay.name AS academic_year_name
@@ -207,7 +207,7 @@ router.get('/student', asyncHandler(async (req, res) => {
 }));
 
 // ── Parent dashboard ──
-router.get('/parent', asyncHandler(async (req, res) => {
+router.get('/parent', authorize('parent', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.instituteId;
   const children = await query(
     `SELECT s.*, c.name AS class_name, c.section FROM students s
@@ -284,7 +284,7 @@ router.get('/parent', asyncHandler(async (req, res) => {
 
   // Upcoming school events/holidays
   const events = await query(
-    `SELECT * FROM holidays WHERE institute_id=$1 AND holiday_date >= CURRENT_DATE ORDER BY holiday_date LIMIT 5`,
+    `SELECT id, institute_id, date AS holiday_date, name, description, holiday_type, created_by, created_at, updated_at FROM holidays WHERE institute_id=$1 AND date >= CURRENT_DATE ORDER BY date LIMIT 5`,
     [instId]
   );
 
@@ -299,9 +299,7 @@ router.get('/parent', asyncHandler(async (req, res) => {
 }));
 
 // ── Super Admin overview ──
-router.get('/super-admin', asyncHandler(async (req, res) => {
-  if (req.user.role !== 'super_admin') throw new AppError('Forbidden', 403);
-
+router.get('/super-admin', authorize('super_admin'), asyncHandler(async (req, res) => {
   const [institutes, users, students, subscriptionStats, recentInstitutes, systemActivity, monthlyGrowth] = await Promise.all([
     // Institute status breakdown
     query("SELECT status, COUNT(*) AS c FROM institutes GROUP BY status"),
