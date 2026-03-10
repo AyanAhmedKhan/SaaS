@@ -54,6 +54,15 @@ interface StudentsResponse {
   students: Student[];
 }
 
+interface StudentFeeDues {
+  id: string;
+  name: string;
+  fee_type: string;
+  amount: number;
+  total_paid: number;
+  pending_amount: number;
+}
+
 interface FeePaymentPayload {
   student_id: string;
   fee_structure_id: string;
@@ -116,6 +125,7 @@ export default function Fees() {
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedFee, setSelectedFee] = useState<FeePayment | null>(null);
+  const [globalMetrics, setGlobalMetrics] = useState({ total: 0, paid: 0, pending: 0 });
 
   // Fee Structures States
   const [structures, setStructures] = useState<FeeStructure[]>([]);
@@ -139,7 +149,8 @@ export default function Fees() {
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [formStudents, setFormStudents] = useState<Student[]>([]);
-  const [formStructures, setFormStructures] = useState<FeeStructure[]>([]);
+  const [formStructures, setFormStructures] = useState<StudentFeeDues[]>([]);
+  const [studentFeesLoading, setStudentFeesLoading] = useState(false);
   const [formData, setFormData] = useState<PaymentFormData>({
     class_id: "",
     student_id: "",
@@ -211,6 +222,24 @@ export default function Fees() {
       if (classRes.success && classRes.data) {
         setClasses((classRes.data as { classes: ClassType[] }).classes || []);
       }
+
+      if (!isStudentView) {
+        try {
+          const summaryRes = await getFeeSummary();
+          if (summaryRes.success && summaryRes.data) {
+            const summaryData = (summaryRes.data as { feeSummary: any[] }).feeSummary || [];
+            let sumTotal = 0;
+            let sumPaid = 0;
+            let sumPending = 0;
+            for (const s of summaryData) {
+              sumTotal += (s.fee_amount * s.total_students);
+              sumPaid += Number(s.total_collected);
+              sumPending += Number(s.total_pending);
+            }
+            setGlobalMetrics({ total: sumTotal, paid: sumPaid, pending: sumPending });
+          }
+        } catch (e) { console.error("Failed to load fee summary", e); }
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load fee records";
       setError(message);
@@ -260,29 +289,49 @@ export default function Fees() {
 
   const loadFormDependencies = async (classId: string) => {
     try {
-      const [stuRes, structRes] = await Promise.all([
-        getStudents({ class_id: classId, status: 'active', limit: '1000' }),
-        getFeeStructures({ class_id: classId })
-      ]);
+      const stuRes = await getStudents({ class_id: classId, status: 'active', limit: '1000' });
       if (stuRes.success && stuRes.data) setFormStudents((stuRes.data as StudentsResponse).students || []);
-      if (structRes.success && structRes.data) setFormStructures((structRes.data as FeeStructuresResponse).structures || []);
     } catch (err) {
       console.error(err);
     }
   };
 
   const handleClassChange = (val: string) => {
-    setFormData(prev => ({ ...prev, class_id: val, student_id: "", fee_structure_id: "" }));
+    setFormData(prev => ({ ...prev, class_id: val, student_id: "", fee_structure_id: "", paid_amount: "", status: "paid" }));
+    setFormStructures([]);
     loadFormDependencies(val);
+  };
+
+  const handleStudentChange = async (val: string) => {
+    setFormData(prev => ({ ...prev, student_id: val, fee_structure_id: "", paid_amount: "", status: "paid" }));
+    if (!val) {
+      setFormStructures([]);
+      return;
+    }
+    try {
+      setStudentFeesLoading(true);
+      const res = await getStudentFees(val);
+      if (res.success && res.data) {
+        setFormStructures((res.data.fees as StudentFeeDues[]) || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStudentFeesLoading(false);
+    }
   };
 
   const handleStructureChange = (val: string) => {
     const st = formStructures.find(s => s.id === val);
+    let amountToPay = "";
+    if (st) {
+      amountToPay = st.pending_amount > 0 ? st.pending_amount.toString() : "0";
+    }
     setFormData(prev => ({
       ...prev,
       fee_structure_id: val,
-      paid_amount: st ? st.amount.toString() : "",
-      due_date: st?.due_date ? new Date(st.due_date).toISOString().split('T')[0] : prev.due_date
+      paid_amount: amountToPay,
+      status: amountToPay === "0" ? "paid" : prev.status
     }));
   };
 
@@ -320,6 +369,19 @@ export default function Fees() {
     });
 
     if (cid) await loadFormDependencies(cid);
+
+    // Attempt to load the specific structures for that student
+    if (fee.student_id) {
+      try {
+        setStudentFeesLoading(true);
+        const res = await getStudentFees(fee.student_id);
+        if (res.success && res.data) setFormStructures((res.data.fees as StudentFeeDues[]) || []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setStudentFeesLoading(false);
+      }
+    }
     setIsSubmitModalOpen(true);
   };
 
@@ -695,7 +757,7 @@ export default function Fees() {
                             </div>
                             <div>
                               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Total Receivables</p>
-                              <p className="text-2xl font-black">{formatCurrency(totalAmount)}</p>
+                              <p className="text-2xl font-black">{formatCurrency(globalMetrics.total)}</p>
                             </div>
                           </CardContent>
                         </Card>
@@ -708,7 +770,7 @@ export default function Fees() {
                             </div>
                             <div>
                               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Collected</p>
-                              <p className="text-2xl font-black">{formatCurrency(totalPaid)}</p>
+                              <p className="text-2xl font-black">{formatCurrency(globalMetrics.paid)}</p>
                             </div>
                           </CardContent>
                         </Card>
@@ -721,7 +783,7 @@ export default function Fees() {
                             </div>
                             <div>
                               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Pending Fees</p>
-                              <p className="text-2xl font-black">{formatCurrency(totalPending)}</p>
+                              <p className="text-2xl font-black">{formatCurrency(globalMetrics.pending)}</p>
                             </div>
                           </CardContent>
                         </Card>
@@ -1196,7 +1258,7 @@ export default function Fees() {
 
                     <div className="space-y-1.5 focus-within:text-primary transition-colors">
                       <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Student <span className="text-red-500">*</span></label>
-                      <Select value={formData.student_id} onValueChange={val => setFormData(p => ({ ...p, student_id: val }))} disabled={!formData.class_id}>
+                      <Select value={formData.student_id} onValueChange={handleStudentChange} disabled={!formData.class_id}>
                         <SelectTrigger className="h-11 rounded-xl shadow-sm border-border/60 font-medium disabled:opacity-50">
                           <SelectValue placeholder="Select student" />
                         </SelectTrigger>
@@ -1207,18 +1269,31 @@ export default function Fees() {
                     </div>
                   </div>
 
-                  <div className="space-y-1.5 focus-within:text-primary transition-colors">
-                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Fee Type / Structure <span className="text-red-500">*</span></label>
-                    <Select value={formData.fee_structure_id} onValueChange={handleStructureChange} disabled={!formData.class_id}>
+                  <div className="space-y-1.5 focus-within:text-primary transition-colors relative">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center justify-between">
+                      <span>Fee Type / Structure <span className="text-red-500">*</span></span>
+                      {studentFeesLoading && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                    </label>
+                    <Select value={formData.fee_structure_id} onValueChange={handleStructureChange} disabled={!formData.student_id || studentFeesLoading}>
                       <SelectTrigger className="h-11 rounded-xl shadow-sm border-border/60 font-medium disabled:opacity-50">
                         <SelectValue placeholder="Select fee type" />
                       </SelectTrigger>
                       <SelectContent className="rounded-xl shadow-xl border-border/50 max-h-56">
-                        {formStructures.map(f => (
-                          <SelectItem key={f.id} value={f.id}>
+                        {formStructures.length === 0 ? (
+                          <div className="p-4 text-center text-sm text-muted-foreground">No pending fees found</div>
+                        ) : formStructures.map(f => (
+                          <SelectItem key={f.id} value={f.id} disabled={f.pending_amount <= 0 && !editingFeePayment}>
                             <div className="flex justify-between items-center w-full min-w-[200px] gap-4">
-                              <span>{f.name} <span className="text-muted-foreground">({f.fee_type.replace(/_/g, ' ')})</span></span>
-                              <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{f.amount}</span>
+                              <span>{f.name} <span className="text-muted-foreground ml-1">({f.fee_type?.replace(/_/g, ' ')})</span></span>
+                              {f.pending_amount > 0 ? (
+                                <Badge variant="destructive" className="bg-red-500/10 text-red-600 border-red-500/20 font-bold ml-4">
+                                  Due: ₹{f.pending_amount}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold ml-4">
+                                  Paid
+                                </Badge>
+                              )}
                             </div>
                           </SelectItem>
                         ))}
