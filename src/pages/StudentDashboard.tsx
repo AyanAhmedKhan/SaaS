@@ -24,7 +24,7 @@ import { AIInsightCard } from "@/components/dashboard/AIInsightCard";
 import { StudentAssignmentDetailsDialog } from "@/components/student/StudentAssignmentDetailsDialog";
 import { cn } from "@/lib/utils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Cell } from "recharts";
-import { getStudentDashboard, getTimetable, getAttendanceSubjectWise, getExams } from "@/lib/api";
+import { getStudentDashboard, getTimetable, getAttendanceSubjectWise, getExams, getAttendance } from "@/lib/api";
 import type { Exam } from "@/types";
 
 interface StudentData {
@@ -124,6 +124,7 @@ export default function StudentDashboard() {
   const [notices, setNotices] = useState<NoticeRow[]>([]);
   const [todayClasses, setTodayClasses] = useState<TimetableRow[]>([]);
   const [subjectStats, setSubjectStats] = useState<{ name: string; percentage: number; present: number; total: number }[]>([]);
+  const [recentAttRecords, setRecentAttRecords] = useState<{ date: string; status: string; subject_name?: string; class_name?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -140,11 +141,12 @@ export default function StudentDashboard() {
       const jsDay = new Date().getDay();
       const schemaDay = jsDay === 0 ? 6 : jsDay - 1;
 
-      const [dashRes, ttRes, attRes, examRes] = await Promise.all([
+      const [dashRes, ttRes, attRes, examRes, recentAttRes] = await Promise.all([
         getStudentDashboard(),
         getTimetable({ day: String(schemaDay) }),
         getAttendanceSubjectWise(),
-        getExams({ status: 'scheduled' }) // Fetch upcoming exams for the student's class
+        getExams({ status: 'scheduled' }),
+        getAttendance({ limit: '5' }),
       ]);
 
       if (dashRes.success && dashRes.data) {
@@ -182,6 +184,11 @@ export default function StudentDashboard() {
       if (ttRes.success && ttRes.data) {
         const entries = (ttRes.data as { timetable: TimetableRow[] }).timetable || [];
         setTodayClasses(entries.sort((a, b) => a.period_number - b.period_number));
+      }
+
+      if (recentAttRes.success && recentAttRes.data) {
+        const recs = (recentAttRes.data as { records: { date: string; status: string; subject_name?: string; class_name?: string }[] }).records || [];
+        setRecentAttRecords(recs.slice(0, 5));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load dashboard");
@@ -658,19 +665,31 @@ export default function StudentDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-4 pb-4">
-                {subjectStats.length > 0 ? (
-                  <div className="h-[100px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={subjectStats.slice(0, 5)} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
-                        <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} dy={5} />
-                        <RechartsTooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} contentStyle={{ borderRadius: '8px', fontSize: '12px' }} />
-                        <Bar dataKey="percentage" radius={[3, 3, 0, 0]} maxBarSize={20}>
-                          {subjectStats.slice(0, 5).map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.percentage >= 75 ? "hsl(var(--primary))" : entry.percentage >= 60 ? "#f59e0b" : "#ef4444"} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                {recentAttRecords.length > 0 ? (
+                  <div className="space-y-1 max-h-[120px] overflow-y-auto">
+                    {recentAttRecords.map((rec, i) => {
+                      const statusColor = rec.status === 'present' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25'
+                        : rec.status === 'late' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25'
+                          : rec.status === 'excused' ? 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25'
+                            : 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/25';
+                      const dot = rec.status === 'present' ? 'bg-emerald-500' : rec.status === 'late' ? 'bg-amber-500' : rec.status === 'excused' ? 'bg-blue-500' : 'bg-rose-500';
+                      return (
+                        <div key={`att-${i}`} className="flex items-center justify-between gap-2 py-1 px-2 rounded-lg hover:bg-muted/30 transition-colors">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", dot)} />
+                            <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+                              {new Date(rec.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                            </span>
+                            <span className="text-[10px] font-semibold text-foreground truncate">
+                              {rec.subject_name || rec.class_name || 'General'}
+                            </span>
+                          </div>
+                          <span className={cn("text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0", statusColor)}>
+                            {rec.status}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : totalDays > 0 ? (
                   <div className="h-[100px] flex flex-col items-center justify-center rounded-xl bg-muted/20 border border-dashed border-border/50 gap-1.5">
