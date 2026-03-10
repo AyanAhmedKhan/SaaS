@@ -672,6 +672,16 @@ export default function StudentDashboard() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+                ) : totalDays > 0 ? (
+                  <div className="h-[100px] flex flex-col items-center justify-center rounded-xl bg-muted/20 border border-dashed border-border/50 gap-1.5">
+                    <div className="relative">
+                      <CircularProgress value={attendancePct} size={48} strokeWidth={5} color={getAttendanceColor(attendancePct)} />
+                      <span className={`absolute inset-0 flex items-center justify-center text-[11px] font-extrabold ${getAttendanceColor(attendancePct)}`}>
+                        {attendancePct}%
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-muted-foreground">{presentDays} present / {absentDays} absent of {totalDays} days</span>
+                  </div>
                 ) : (
                   <div className="h-[100px] flex flex-col items-center justify-center text-xs text-muted-foreground bg-muted/20 rounded-xl border border-dashed border-border/50">
                     <BarChart2 className="h-6 w-6 text-muted-foreground/30 mb-2" />
