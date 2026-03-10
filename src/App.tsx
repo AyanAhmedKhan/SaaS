@@ -116,7 +116,7 @@ function AppRoutes() {
       <Route path="/students" element={<ProtectedRoute roles={STAFF_ROLES}><Students /></ProtectedRoute>} />
       <Route path="/teachers" element={<ProtectedRoute roles={ADMIN_ROLES}><Teachers /></ProtectedRoute>} />
       <Route path="/fees" element={<ProtectedRoute roles={[...ADMIN_ROLES, 'student', 'parent']}><Fees /></ProtectedRoute>} />
-      <Route path="/reports" element={<ProtectedRoute roles={STAFF_ROLES}><Reports /></ProtectedRoute>} />
+      <Route path="/reports" element={<ProtectedRoute roles={[...STAFF_ROLES, 'student']}><Reports /></ProtectedRoute>} />
 
       {/* All authenticated users */}
       <Route path="/attendance" element={<ProtectedRoute roles={ALL_ROLES}><Attendance /></ProtectedRoute>} />

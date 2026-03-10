@@ -27,6 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import type { Exam, Class as ClassType, Institute } from "@/types";
 import { InstituteSelector } from "@/components/InstituteSelector";
+import StudentReports from "@/components/student/StudentReports";
 
 /* ---------- tiny helpers ---------- */
 
@@ -45,7 +46,7 @@ interface ResultRow {
   section?: string;
 }
 
-interface TrendRow { exam: string; average: number; [key: string]: string | number }
+interface TrendRow { exam: string; average: number;[key: string]: string | number }
 
 interface ClassSummaryRow {
   id: string;
@@ -148,6 +149,11 @@ function getRoleConfig(role: string) {
 /* ========================================== */
 export default function Reports() {
   const { user, isRole } = useAuth();
+
+  // ── Students see their own clean stats view, no heavy admin reports ──
+  if (isRole('student')) return <StudentReports />;
+
+
   const [results, setResults] = useState<ResultRow[]>([]);
   const [trend, setTrend] = useState<TrendRow[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);

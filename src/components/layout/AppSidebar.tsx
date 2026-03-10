@@ -64,7 +64,7 @@ const menuItems: MenuItem[] = [
   { title: "Syllabus", url: "/syllabus", icon: BookOpen },
   { title: "Assignments", url: "/assignments", icon: ClipboardList },
   { title: "Exams", url: "/exams", icon: Award },
-  { title: "Reports", url: "/reports", icon: BarChart3, roles: STAFF },
+  { title: "Reports", url: "/reports", icon: BarChart3, roles: [...STAFF, 'student'] },
   { title: "Notices", url: "/notices", icon: Bell },
   { title: "Fees", url: "/fees", icon: DollarSign, roles: [...ADMIN, 'student', 'parent'] },
   { title: "My Profile", url: "/profile", icon: User, roles: ['student'] },
@@ -101,7 +101,7 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="flex flex-col animate-fade-in">
               <span className="text-lg font-bold text-sidebar-foreground tracking-tight">EduYantra</span>
-              <span className="text-[11px] text-sidebar-foreground/60 font-medium">School Management</span>
+              <span className="text-[11px] text-sidebar-foreground/60 font-medium">India's Smartest Platform</span>
             </div>
           )}
         </div>
