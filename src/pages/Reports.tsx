@@ -22,7 +22,17 @@ import {
   GraduationCap, LayoutDashboard, Building2, Brain, RefreshCw, Search,
   Users, School, UserCheck, ClipboardList, ChevronRight
 } from "lucide-react";
-import { getExamResults, getPerformanceTrend, getExams, getClasses, getClassSummary, getAiInsights } from "@/lib/api";
+import { getExamResults, getPerformanceTrend, getExams, getClasses, getClassSummary, getAiInsights, getFeeSummary } from "@/lib/api";
+import {
+  generateProgressReportPDF,
+  generateExamReportPDF,
+  generateSubjectReportPDF,
+  generateFeeSummaryPDF,
+  type ExamResultRow as PdfResultRow,
+  type TrendRow as PdfTrendRow,
+  type ClassSummaryRow as PdfClassSummaryRow,
+  type FeeSummaryRow,
+} from "@/lib/pdfReportGenerator";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import type { Exam, Class as ClassType, Institute } from "@/types";
@@ -119,16 +129,7 @@ function SimpleMarkdown({ text }: { text: string }) {
   );
 }
 
-function handleDownload(reportType: string) {
-  const content = `EduYantra Premium Report\n\nType: ${reportType}\nGenerated: ${new Date().toLocaleDateString()}\n\nPDF export functionality will be available shortly.`;
-  const blob = new Blob([content], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${reportType.toLowerCase().replace(/\s+/g, "-")}-report.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+/* handleDownload removed — replaced by role-based PDF generation below */
 
 /* ── Role-specific header config ── */
 function getRoleConfig(role: string) {
@@ -167,12 +168,15 @@ export default function Reports() {
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [downloadingReport, setDownloadingReport] = useState<string | null>(null);
 
   const role = user?.role || 'student';
   const isSuperAdmin = isRole('super_admin');
   const isAdmin = isRole('super_admin', 'institute_admin');
   const isStaff = isRole('super_admin', 'institute_admin', 'faculty');
   const isStudentOrParent = isRole('student', 'parent');
+  const isParent = isRole('parent');
+  const canDownloadReports = !isParent; // Parents cannot generate/download reports
   const showClassFilter = isStaff;
   const showClassSummary = isStaff;
   const cfg = getRoleConfig(role);
@@ -559,9 +563,11 @@ export default function Reports() {
                     <TabsTrigger value="results" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm py-2.5 px-4">
                       <GraduationCap className="w-4 h-4 mr-2" /> {isStudentOrParent ? "My Results" : "Tabular Results"}
                     </TabsTrigger>
-                    <TabsTrigger value="download" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm py-2.5 px-4">
-                      <Download className="w-4 h-4 mr-2" /> Report Cards
-                    </TabsTrigger>
+                    {canDownloadReports && (
+                      <TabsTrigger value="download" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm py-2.5 px-4">
+                        <Download className="w-4 h-4 mr-2" /> {isRole('student') ? 'My Reports' : 'Download Reports'}
+                      </TabsTrigger>
+                    )}
                     <TabsTrigger value="ai-analysis" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm py-2.5 px-4 relative">
                       <Brain className="w-4 h-4 mr-2 text-primary" /> AI Analysis
                       <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">Gemini</span>
@@ -796,36 +802,110 @@ export default function Reports() {
                     </Card>
                   </TabsContent>
 
-                  {/* ═══ DOWNLOAD TAB ═══ */}
-                  <TabsContent value="download" className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                      {[
-                        { title: isStudentOrParent ? "My Progress Report" : "Full Progress Report", desc: isStudentOrParent ? "Your complete academic performance report with grades & remarks." : "Complete academic performance summary with attendance, grades, and remarks.", type: "Full Progress", gradient: "from-blue-500 to-cyan-500" },
-                        { title: "Exam-wise Report Card", desc: "Detailed scorecard for each exam with subject breakdown.", type: "Exam Report Card", gradient: "from-violet-500 to-purple-500" },
-                        { title: "Subject Performance", desc: "In-depth subject-wise performance analysis across all exams.", type: "Subject Performance", gradient: "from-emerald-500 to-teal-500" },
-                      ].map((report) => (
-                        <Card key={report.type} className="group overflow-hidden shadow-xl border-border/40 bg-card/50 backdrop-blur hover:border-primary/40 transition-all duration-300">
-                          <div className={cn("h-1.5 w-full bg-gradient-to-r opacity-70 group-hover:opacity-100 transition-opacity", report.gradient)} />
-                          <CardHeader className="pb-3">
-                            <div className="flex items-start gap-3">
-                              <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br bg-opacity-10 dark:bg-opacity-20", report.gradient)}>
-                                <FileText className="h-5 w-5 text-white shadow-sm" />
+                  {/* ═══ DOWNLOAD TAB — hidden for parents ═══ */}
+                  {canDownloadReports && (
+                    <TabsContent value="download" className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <div className={cn("grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6", isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}>
+                        {/* ── Role-based report cards ── */}
+                        {((): { title: string; desc: string; type: string; gradient: string }[] => {
+                          if (isRole('student')) return [
+                            { title: "My Progress Report", desc: "Your complete academic performance with grades, trends, and remarks.", type: "progress", gradient: "from-blue-500 to-cyan-500" },
+                            { title: "Exam Scorecard", desc: "Detailed scorecard for each exam with subject breakdown.", type: "exam", gradient: "from-violet-500 to-purple-500" },
+                            { title: "Subject Analysis", desc: "Subject-wise score trends and strength/weakness analysis.", type: "subject", gradient: "from-emerald-500 to-teal-500" },
+                          ];
+                          if (isRole('faculty')) return [
+                            { title: "Class Progress Report", desc: "Performance summary for your assigned classes and students.", type: "progress", gradient: "from-indigo-500 to-blue-500" },
+                            { title: "Exam Results Sheet", desc: "Complete exam-wise results for students in your classes.", type: "exam", gradient: "from-violet-500 to-purple-500" },
+                            { title: "Subject Performance", desc: "Subject-wise analytics for your assigned subjects only.", type: "subject", gradient: "from-emerald-500 to-teal-500" },
+                          ];
+                          // Admin / Super Admin
+                          return [
+                            { title: "Institute Progress Report", desc: "Comprehensive institute-wide class and performance overview.", type: "progress", gradient: "from-violet-600 to-fuchsia-500" },
+                            { title: "Exam Analytics", desc: "Cross-class exam results with ranking and analysis.", type: "exam", gradient: "from-blue-500 to-cyan-500" },
+                            { title: "Subject Performance", desc: "Institute-wide subject comparison and trend analysis.", type: "subject", gradient: "from-emerald-500 to-teal-500" },
+                            { title: "Fee Summary Report", desc: "Fee collection overview with class-wise breakdown and pending amounts.", type: "fee", gradient: "from-amber-500 to-orange-500" },
+                          ];
+                        })().map((report) => (
+                          <Card key={report.type} className="group overflow-hidden shadow-xl border-border/40 bg-card/50 backdrop-blur hover:border-primary/40 transition-all duration-300">
+                            <div className={cn("h-1.5 w-full bg-gradient-to-r opacity-70 group-hover:opacity-100 transition-opacity", report.gradient)} />
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start gap-3">
+                                <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br", report.gradient)}>
+                                  <FileText className="h-5 w-5 text-white" />
+                                </div>
+                                <div>
+                                  <CardTitle className="text-base font-bold">{report.title}</CardTitle>
+                                  <CardDescription className="text-xs mt-1 leading-relaxed">{report.desc}</CardDescription>
+                                </div>
                               </div>
-                              <div>
-                                <CardTitle className="text-base font-bold">{report.title}</CardTitle>
-                                <CardDescription className="text-xs mt-1 leading-relaxed">{report.desc}</CardDescription>
-                              </div>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="mt-auto pt-2 pb-4 px-4 sm:px-6">
-                            <Button variant="outline" className="w-full bg-background/50 border-border/60 hover:bg-primary/5 hover:text-primary transition-colors group-hover:border-primary/30" onClick={() => handleDownload(report.type)}>
-                              <Download className="h-4 w-4 mr-2" /> Select Format & Export
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </TabsContent>
+                            </CardHeader>
+                            <CardContent className="mt-auto pt-2 pb-4 px-4 sm:px-6">
+                              <Button
+                                variant="outline"
+                                disabled={downloadingReport === report.type}
+                                className="w-full bg-background/50 border-border/60 hover:bg-primary/5 hover:text-primary transition-colors group-hover:border-primary/30"
+                                onClick={async () => {
+                                  setDownloadingReport(report.type);
+                                  try {
+                                    const instParams = isSuperAdmin && selectedInstituteId ? { institute_id: selectedInstituteId } : {};
+                                    const studentData = isRole('student') ? {
+                                      name: user?.name,
+                                      class_name: results[0]?.class_name,
+                                      section: results[0]?.section,
+                                      roll_number: results[0]?.roll_number,
+                                    } : undefined;
+
+                                    if (report.type === 'progress') {
+                                      generateProgressReportPDF({
+                                        role,
+                                        results: results as PdfResultRow[],
+                                        trend: trend as PdfTrendRow[],
+                                        classSummary: classSummary as PdfClassSummaryRow[],
+                                        studentData,
+                                        instituteName: user?.institute?.name || 'EduYantra',
+                                      });
+                                    } else if (report.type === 'exam') {
+                                      generateExamReportPDF({
+                                        role,
+                                        results: results as PdfResultRow[],
+                                        studentData,
+                                        instituteName: user?.institute?.name || 'EduYantra',
+                                      });
+                                    } else if (report.type === 'subject') {
+                                      generateSubjectReportPDF({
+                                        role,
+                                        trend: trend as PdfTrendRow[],
+                                        results: results as PdfResultRow[],
+                                        studentData,
+                                        instituteName: user?.institute?.name || 'EduYantra',
+                                      });
+                                    } else if (report.type === 'fee') {
+                                      const feeRes = await getFeeSummary();
+                                      const feeSummary = (feeRes?.data as { feeSummary?: FeeSummaryRow[] })?.feeSummary || [];
+                                      generateFeeSummaryPDF({
+                                        feeSummary,
+                                        instituteName: user?.institute?.name || 'EduYantra',
+                                      });
+                                    }
+                                  } catch (err) {
+                                    console.error('PDF generation error:', err);
+                                  } finally {
+                                    setDownloadingReport(null);
+                                  }
+                                }}
+                              >
+                                {downloadingReport === report.type ? (
+                                  <><div className="h-4 w-4 mr-2 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /> Generating PDF...</>
+                                ) : (
+                                  <><Download className="h-4 w-4 mr-2" /> Download PDF</>
+                                )}
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </TabsContent>
+                  )}
 
                   {/* ═══ AI ANALYSIS TAB ═══ */}
                   <TabsContent value="ai-analysis" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
