@@ -15,7 +15,7 @@ router.get('/structures', authorize('institute_admin', 'super_admin'), asyncHand
   const { class_id, academic_year_id, fee_type } = req.query;
   const params = [instId];
 
-  let sql = `SELECT fs.*, c.name AS class_name, c.section, ay.name AS academic_year
+  let sql = `SELECT fs.*, fs.frequency, c.name AS class_name, c.section, ay.name AS academic_year
              FROM fee_structures fs
              LEFT JOIN classes c ON fs.class_id = c.id
              LEFT JOIN academic_years ay ON fs.academic_year_id = ay.id
@@ -33,14 +33,22 @@ router.get('/structures', authorize('institute_admin', 'super_admin'), asyncHand
 // POST /api/fees/structures — create
 router.post('/structures', authorize('institute_admin', 'super_admin'), asyncHandler(async (req, res) => {
   const instId = req.user.role === 'super_admin' ? req.body.institute_id : req.instituteId;
-  const { name, class_id, academic_year_id, fee_type, amount, due_date, description, installments_allowed } = req.body;
+  const { name, class_id, academic_year_id, fee_type, amount, frequency, due_date, description, installments_allowed } = req.body;
   if (!fee_type || !amount || !name) throw new AppError('name, fee_type, amount required', 400);
+
+  // Auto-resolve academic_year_id from current year if not provided
+  let ayId = academic_year_id;
+  if (!ayId) {
+    const ayRes = await query("SELECT id FROM academic_years WHERE institute_id=$1 AND is_current=true LIMIT 1", [instId]);
+    ayId = ayRes.rows[0]?.id;
+  }
+  if (!ayId) throw new AppError('academic_year_id required (no current academic year found)', 400);
 
   const id = `fs_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
   await query(
-    `INSERT INTO fee_structures (id, institute_id, class_id, academic_year_id, name, fee_type, amount, due_date, description, installments_allowed)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-    [id, instId, class_id || null, academic_year_id || null, name, fee_type, amount, due_date || null, description || null, installments_allowed || false]
+    `INSERT INTO fee_structures (id, institute_id, class_id, academic_year_id, name, fee_type, amount, frequency, due_date, description, installments_allowed)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    [id, instId, class_id || null, ayId, name, fee_type, amount, frequency || 'one_time', due_date || null, description || null, installments_allowed || false]
   );
 
   const { rows } = await query('SELECT * FROM fee_structures WHERE id=$1', [id]);
@@ -54,13 +62,14 @@ router.put('/structures/:id', authorize('institute_admin', 'super_admin'), async
   const existing = await query('SELECT id FROM fee_structures WHERE id=$1 AND institute_id=$2', [req.params.id, instId]);
   if (!existing.rows[0]) throw new AppError('Fee structure not found', 404);
 
-  const { fee_type, amount, due_date, description, installments_allowed } = req.body;
+  const { name, class_id, fee_type, amount, frequency, due_date, description, installments_allowed } = req.body;
   await query(
-    `UPDATE fee_structures SET fee_type=COALESCE($1,fee_type), amount=COALESCE($2,amount),
-     due_date=COALESCE($3,due_date), description=COALESCE($4,description),
-     installments_allowed=COALESCE($5,installments_allowed), updated_at=NOW()
-     WHERE id=$6 AND institute_id=$7`,
-    [fee_type, amount, due_date, description, installments_allowed, req.params.id, instId]
+    `UPDATE fee_structures SET name=COALESCE($1,name), class_id=COALESCE($2,class_id),
+     fee_type=COALESCE($3,fee_type), amount=COALESCE($4,amount), frequency=COALESCE($5,frequency),
+     due_date=COALESCE($6,due_date), description=COALESCE($7,description),
+     installments_allowed=COALESCE($8,installments_allowed), updated_at=NOW()
+     WHERE id=$9 AND institute_id=$10`,
+    [name, class_id, fee_type, amount, frequency, due_date, description, installments_allowed, req.params.id, instId]
   );
 
   const { rows } = await query('SELECT * FROM fee_structures WHERE id=$1', [req.params.id]);

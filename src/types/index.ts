@@ -281,6 +281,7 @@ export interface FeeStructure {
   id: string;
   institute_id: string;
   academic_year_id: string;
+  academic_year?: string;
   class_id?: string;
   class_name?: string;
   section?: string;
