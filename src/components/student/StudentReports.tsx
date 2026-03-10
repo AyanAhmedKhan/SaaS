@@ -20,7 +20,7 @@ import {
     BarChart3, GraduationCap, Target, Trophy, TrendingUp, TrendingDown,
     AlertCircle, RefreshCw, Award, BookOpen, CheckCircle, Minus, FileText,
 } from "lucide-react";
-import { getExamResults, getPerformanceTrend, getAttendanceSubjectWise } from "@/lib/api";
+import { getExamResults, getPerformanceTrend, getAttendanceSubjectWise, getStudentDashboard } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
@@ -113,6 +113,7 @@ export default function StudentReports() {
     const [results, setResults] = useState<ResultRow[]>([]);
     const [trend, setTrend] = useState<TrendRow[]>([]);
     const [attStats, setAttStats] = useState<SubjectStat[]>([]);
+    const [overallAttFromDash, setOverallAttFromDash] = useState<{ total: number; present: number; percentage: number } | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState("overview");
@@ -122,10 +123,11 @@ export default function StudentReports() {
             if (!silent) setLoading(true);
             setError(null);
 
-            const [resRes, trendRes, attRes] = await Promise.all([
+            const [resRes, trendRes, attRes, dashRes] = await Promise.all([
                 getExamResults({}),
                 getPerformanceTrend({}),
                 getAttendanceSubjectWise(),
+                getStudentDashboard(),
             ]);
 
             if (resRes.success && resRes.data)
@@ -142,6 +144,18 @@ export default function StudentReports() {
                     present: parseInt(d.present) || 0,
                     total: parseInt(d.total_classes) || 0,
                 })));
+            }
+
+            // Fetch overall attendance from dashboard as fallback
+            if (dashRes.success && dashRes.data) {
+                const d = dashRes.data as { attendanceSummary?: { total: number; present: number; percentage: number } };
+                if (d.attendanceSummary) {
+                    setOverallAttFromDash({
+                        total: Number(d.attendanceSummary.total) || 0,
+                        present: Number(d.attendanceSummary.present) || 0,
+                        percentage: Number(d.attendanceSummary.percentage) || 0,
+                    });
+                }
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load reports");
@@ -184,12 +198,15 @@ export default function StudentReports() {
         const bestSub = subAvgs.length > 0 ? subAvgs.reduce((a, b) => b.avg > a.avg ? b : a) : { name: "—", avg: 0 };
         const worstSub = subAvgs.length > 0 ? subAvgs.reduce((a, b) => b.avg < a.avg ? b : a) : { name: "—", avg: 0 };
 
+        // Use subject-wise attendance if available, else use overall attendance from dashboard
         const overallAtt = attStats.length > 0
             ? attStats.reduce((s, a) => s + a.percentage, 0) / attStats.length
-            : 0;
+            : (overallAttFromDash?.percentage ?? 0);
 
-        return { pct, total: results.length, delta, bestSub, worstSub, overallAtt, latestAvg };
-    }, [results, trend, attStats]);
+        const attSubjectCount = attStats.length > 0 ? attStats.length : (overallAttFromDash && overallAttFromDash.total > 0 ? -1 : 0);
+
+        return { pct, total: results.length, delta, bestSub, worstSub, overallAtt, latestAvg, attSubjectCount };
+    }, [results, trend, attStats, overallAttFromDash]);
 
     /* ── Loading ── */
     if (loading) {
@@ -269,7 +286,13 @@ export default function StudentReports() {
                         <StatCard
                             label="Avg Attendance"
                             value={`${personalStats.overallAtt.toFixed(1)}%`}
-                            sub={`${attStats.length} subject${attStats.length !== 1 ? "s" : ""} tracked`}
+                            sub={
+                                personalStats.attSubjectCount === -1
+                                    ? `${overallAttFromDash!.present}/${overallAttFromDash!.total} days present`
+                                    : personalStats.attSubjectCount === 0
+                                        ? "No records yet"
+                                        : `${attStats.length} subject${attStats.length !== 1 ? "s" : ""} tracked`
+                            }
                             accent=""
                             icon={CheckCircle}
                             progress={personalStats.overallAtt}
