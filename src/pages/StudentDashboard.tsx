@@ -288,10 +288,10 @@ export default function StudentDashboard() {
 
   /* color helpers */
   const attStroke = attendancePct >= 90 ? "#10b981" : attendancePct >= 75 ? "#f59e0b" : "#ef4444";
-  const attText  = attendancePct >= 90 ? "text-emerald-600" : attendancePct >= 75 ? "text-amber-500" : "text-rose-600";
+  const attText = attendancePct >= 90 ? "text-emerald-600" : attendancePct >= 75 ? "text-amber-500" : "text-rose-600";
   const scoreStroke = avgScore >= 80 ? "#10b981" : avgScore >= 60 ? "#f59e0b" : "#ef4444";
-  const scoreText   = avgScore >= 80 ? "text-emerald-600" : avgScore >= 60 ? "text-amber-500" : "text-rose-600";
-  const scoreSpark  = recentExams.slice(-6).map(e => ((e.marks_obtained ?? 0) / (e.max_marks || 100)) * 100);
+  const scoreText = avgScore >= 80 ? "text-emerald-600" : avgScore >= 60 ? "text-amber-500" : "text-rose-600";
+  const scoreSpark = recentExams.slice(-6).map(e => ((e.marks_obtained ?? 0) / (e.max_marks || 100)) * 100);
 
   return (
     <DashboardLayout>
@@ -566,10 +566,10 @@ export default function StudentDashboard() {
           {/* ═══════════ QUICK ACTIONS ═══════════ */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
             {[
-              { label: "Timetable",  icon: Clock,       path: "/timetable",  accent: "hover:border-blue-400/40",   bg: "bg-blue-500/10",    text: "text-blue-600",    grad: "from-blue-500/10"    },
-              { label: "Attendance", icon: CheckCircle, path: "/attendance", accent: "hover:border-emerald-400/40",bg: "bg-emerald-500/10", text: "text-emerald-600", grad: "from-emerald-500/10" },
-              { label: "Exams",      icon: Award,       path: "/exams",      accent: "hover:border-violet-400/40", bg: "bg-violet-500/10",  text: "text-violet-600",  grad: "from-violet-500/10"  },
-              { label: "Syllabus",   icon: BookOpen,    path: "/syllabus",   accent: "hover:border-amber-400/40",  bg: "bg-amber-500/10",   text: "text-amber-600",   grad: "from-amber-500/10"   },
+              { label: "Timetable", icon: Clock, path: "/timetable", accent: "hover:border-blue-400/40", bg: "bg-blue-500/10", text: "text-blue-600", grad: "from-blue-500/10" },
+              { label: "Attendance", icon: CheckCircle, path: "/attendance", accent: "hover:border-emerald-400/40", bg: "bg-emerald-500/10", text: "text-emerald-600", grad: "from-emerald-500/10" },
+              { label: "Exams", icon: Award, path: "/exams", accent: "hover:border-violet-400/40", bg: "bg-violet-500/10", text: "text-violet-600", grad: "from-violet-500/10" },
+              { label: "Syllabus", icon: BookOpen, path: "/syllabus", accent: "hover:border-amber-400/40", bg: "bg-amber-500/10", text: "text-amber-600", grad: "from-amber-500/10" },
             ].map((action) => (
               <button
                 key={action.path}
@@ -673,7 +673,10 @@ export default function StudentDashboard() {
                     </ResponsiveContainer>
                   </div>
                 ) : (
-                  <div className="h-[100px] flex items-center justify-center text-xs text-muted-foreground">Not enough data</div>
+                  <div className="h-[100px] flex flex-col items-center justify-center text-xs text-muted-foreground bg-muted/20 rounded-xl border border-dashed border-border/50">
+                    <BarChart2 className="h-6 w-6 text-muted-foreground/30 mb-2" />
+                    <span>No attendance records yet</span>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -768,14 +771,14 @@ export default function StudentDashboard() {
                             {/* Timeline Dot */}
                             <div className={cn(
                               "absolute -left-[21px] top-1.5 h-3 w-3 rounded-full border-2 border-background",
-                              status === "ongoing"   ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)] animate-pulse" :
-                              status === "completed" ? "bg-muted-foreground/30" : "bg-primary"
+                              status === "ongoing" ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)] animate-pulse" :
+                                status === "completed" ? "bg-muted-foreground/30" : "bg-primary"
                             )} />
 
                             <div className={cn(
                               "rounded-xl p-3 border transition-colors",
-                              status === "ongoing"   ? "bg-emerald-500/5 border-emerald-500/20" :
-                              status === "completed" ? "bg-card/50 border-border/50 opacity-70" : "bg-card border-border/50 shadow-sm"
+                              status === "ongoing" ? "bg-emerald-500/5 border-emerald-500/20" :
+                                status === "completed" ? "bg-card/50 border-border/50 opacity-70" : "bg-card border-border/50 shadow-sm"
                             )}>
                               <div className="flex justify-between items-start mb-1 gap-2">
                                 <h4 className={cn("text-xs font-bold", status === "completed" ? "text-muted-foreground" : "text-foreground")}>

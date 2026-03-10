@@ -582,7 +582,7 @@ export default function Reports() {
                           <LineChart className="h-10 w-10 text-muted-foreground/40" />
                         </div>
                         <h3 className="text-xl font-bold text-foreground mb-2">Awaiting Analytics</h3>
-                        <p className="text-muted-foreground text-sm max-w-sm mx-auto">Not enough data to plot graphs. Adjust filters or wait for more exams.</p>
+                        <p className="text-muted-foreground text-sm max-w-sm mx-auto">No records found. Adjust filters or wait for exams to be graded.</p>
                       </div>
                     ) : (
                       <>
