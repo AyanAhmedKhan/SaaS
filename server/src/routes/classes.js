@@ -26,6 +26,15 @@ router.get('/', asyncHandler(async (req, res) => {
         sql += ` AND ay.is_current = true`;
     }
 
+    if (req.user.role === 'faculty') {
+        params.push(req.user.id);
+        sql += ` AND c.id IN (
+            SELECT DISTINCT ta.class_id FROM teacher_assignments ta
+            JOIN teachers t ON ta.teacher_id = t.id
+            WHERE t.user_id = $${params.length} AND ta.institute_id = $1
+        )`;
+    }
+
     sql += ' ORDER BY c.name, c.section';
     const { rows } = await query(sql, params);
     res.json({ success: true, data: { classes: rows } });
