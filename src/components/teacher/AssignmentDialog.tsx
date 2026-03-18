@@ -55,7 +55,7 @@ export function AssignmentDialog({
         description: assignment.description || "",
         instructions: assignment.instructions || "",
         class_id: assignment.class_id || "",
-        subject_id: assignment.subject_id || "",
+        subject_id: assignment.subject_id || "none",
         due_date: assignment.due_date ? assignment.due_date.split('T')[0] : "",
         total_marks: String(assignment.total_marks || 100),
         attachment_url: assignment.attachment_url || "",
@@ -68,7 +68,7 @@ export function AssignmentDialog({
         description: "",
         instructions: "",
         class_id: "",
-        subject_id: "",
+        subject_id: "none",
         due_date: "",
         total_marks: "100",
         attachment_url: "",
@@ -85,6 +85,7 @@ export function AssignmentDialog({
     try {
       const payload = {
         ...formData,
+        subject_id: formData.subject_id === "none" ? null : formData.subject_id,
         total_marks: parseInt(formData.total_marks),
         status: formData.status as "draft" | "published" | "closed",
       };
@@ -154,7 +155,7 @@ export function AssignmentDialog({
                   <SelectValue placeholder="Select subject" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {subjects.map(sub => (
                     <SelectItem key={sub.id} value={sub.id}>
                       {sub.name}
