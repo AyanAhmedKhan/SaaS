@@ -30,10 +30,12 @@ router.get('/exam-results', asyncHandler(async (req, res) => {
   // Role-based data scoping
   if (role === 'faculty') {
     params.push(req.user.id);
-    sql += ` AND s.class_id IN (
-      SELECT DISTINCT ta.class_id FROM teacher_assignments ta
+    sql += ` AND EXISTS (
+      SELECT 1 FROM teacher_assignments ta
       JOIN teachers t ON ta.teacher_id = t.id
-      WHERE t.user_id = $${params.length} AND ta.institute_id = $1)`;
+      WHERE t.user_id = $${params.length} AND ta.institute_id = $1
+        AND ta.class_id = s.class_id AND ta.subject_id = e.subject_id
+    )`;
   } else if (role === 'student') {
     params.push(req.user.id);
     sql += ` AND s.user_id = $${params.length}`;
@@ -66,10 +68,12 @@ router.get('/performance-trend', asyncHandler(async (req, res) => {
   // Role-based data scoping
   if (role === 'faculty') {
     params.push(req.user.id);
-    where += ` AND s.class_id IN (
-      SELECT DISTINCT ta.class_id FROM teacher_assignments ta
+    where += ` AND EXISTS (
+      SELECT 1 FROM teacher_assignments ta
       JOIN teachers t ON ta.teacher_id = t.id
-      WHERE t.user_id = $${params.length} AND ta.institute_id = $1)`;
+      WHERE t.user_id = $${params.length} AND ta.institute_id = $1
+        AND ta.class_id = s.class_id AND ta.subject_id = e.subject_id
+    )`;
   } else if (role === 'student') {
     params.push(req.user.id);
     where += ` AND s.user_id = $${params.length}`;
