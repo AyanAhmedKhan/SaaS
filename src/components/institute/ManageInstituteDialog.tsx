@@ -12,6 +12,7 @@ import {
     GraduationCap,
     BookOpen,
     School,
+    Lock,
 } from "lucide-react";
 import {
     Dialog,
@@ -35,7 +36,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { updateInstitute, getInstitute, getPlans } from "@/lib/api";
+import { updateInstitute, getInstitute, getPlans, setInstituteAdminPassword } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import type { Institute, SubscriptionPlan } from "@/types";
 
@@ -72,6 +73,13 @@ interface InstituteStats {
     totalStudents: number;
     totalTeachers: number;
     totalClasses: number;
+}
+
+interface InstituteAdminUser {
+    id: string;
+    name: string;
+    email: string;
+    is_active?: boolean;
 }
 
 const MODULES = [
@@ -126,6 +134,11 @@ export function ManageInstituteDialog({
     const [planDialogOpen, setPlanDialogOpen] = useState(false);
     const [selectedPlan, setSelectedPlan] = useState("starter");
     const [plansLoadFailed, setPlansLoadFailed] = useState(false);
+    const [admins, setAdmins] = useState<InstituteAdminUser[]>([]);
+    const [selectedAdminId, setSelectedAdminId] = useState("");
+    const [newAdminPassword, setNewAdminPassword] = useState("");
+    const [confirmAdminPassword, setConfirmAdminPassword] = useState("");
+    const [isUpdatingAdminPassword, setIsUpdatingAdminPassword] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -152,11 +165,20 @@ export function ManageInstituteDialog({
             getInstitute(institute.id)
                 .then((res) => {
                     if (res.success && res.data) {
-                        const data = res.data as { institute: Institute & { stats?: InstituteStats } };
+                        const data = res.data as {
+                            institute: Institute & { stats?: InstituteStats };
+                            admins?: InstituteAdminUser[];
+                        };
                         if (data.institute.stats) setStats(data.institute.stats);
                         setModulesEnabled({
                             ...DEFAULT_MODULES_ENABLED,
                             ...(data.institute.modules_enabled || {}),
+                        });
+                        const instituteAdmins = data.admins || [];
+                        setAdmins(instituteAdmins);
+                        setSelectedAdminId((prev) => {
+                            if (prev && instituteAdmins.some((admin) => admin.id === prev)) return prev;
+                            return instituteAdmins[0]?.id || "";
                         });
                     }
                 })
@@ -179,6 +201,10 @@ export function ManageInstituteDialog({
                     setPlansLoadFailed(true);
                 })
                 .finally(() => setLoadingPlans(false));
+
+            setNewAdminPassword("");
+            setConfirmAdminPassword("");
+            setIsUpdatingAdminPassword(false);
         }
     }, [open, institute]);
 
@@ -232,6 +258,43 @@ export function ManageInstituteDialog({
 
     const toggleModule = (moduleKey: string, enabled: boolean) => {
         setModulesEnabled((prev) => ({ ...prev, [moduleKey]: enabled }));
+    };
+
+    const handleSetAdminPassword = async () => {
+        if (!selectedAdminId) {
+            toast({ title: "No Admin Selected", description: "Please select an institute admin first.", variant: "destructive" });
+            return;
+        }
+
+        if (newAdminPassword.length < 8) {
+            toast({ title: "Weak Password", description: "Password must be at least 8 characters.", variant: "destructive" });
+            return;
+        }
+
+        if (newAdminPassword !== confirmAdminPassword) {
+            toast({ title: "Password Mismatch", description: "New password and confirm password do not match.", variant: "destructive" });
+            return;
+        }
+
+        setIsUpdatingAdminPassword(true);
+        try {
+            await setInstituteAdminPassword(institute.id, selectedAdminId, newAdminPassword);
+            const selectedAdmin = admins.find((admin) => admin.id === selectedAdminId);
+            toast({
+                title: "Password Updated",
+                description: selectedAdmin ? `Password updated for ${selectedAdmin.email}.` : "Institute admin password updated.",
+            });
+            setNewAdminPassword("");
+            setConfirmAdminPassword("");
+        } catch (err: any) {
+            toast({
+                title: "Error",
+                description: err?.message || "Failed to update institute admin password.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsUpdatingAdminPassword(false);
+        }
     };
 
     return (
@@ -414,6 +477,72 @@ export function ManageInstituteDialog({
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+
+                            <div className="sm:col-span-2 border-t pt-4 mt-1 space-y-3">
+                                <Label className="text-sm font-medium flex items-center gap-1">
+                                    <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                                    Institute Admin Password
+                                </Label>
+
+                                {admins.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground rounded-md border bg-muted/30 px-3 py-2">
+                                        No institute admin found for this institute.
+                                    </p>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <Label className="text-xs text-muted-foreground">Institute Admin</Label>
+                                            <Select value={selectedAdminId} onValueChange={setSelectedAdminId}>
+                                                <SelectTrigger className="mt-1.5 rounded-lg">
+                                                    <SelectValue placeholder="Select institute admin" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {admins.map((admin) => (
+                                                        <SelectItem key={admin.id} value={admin.id}>
+                                                            {admin.name} ({admin.email})
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <Label className="text-xs text-muted-foreground">New Password</Label>
+                                                <Input
+                                                    type="password"
+                                                    value={newAdminPassword}
+                                                    onChange={(e) => setNewAdminPassword(e.target.value)}
+                                                    className="mt-1.5 rounded-lg"
+                                                    placeholder="At least 8 characters"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs text-muted-foreground">Confirm Password</Label>
+                                                <Input
+                                                    type="password"
+                                                    value={confirmAdminPassword}
+                                                    onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                                                    className="mt-1.5 rounded-lg"
+                                                    placeholder="Re-enter password"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-end">
+                                            <Button
+                                                type="button"
+                                                variant="secondary"
+                                                onClick={handleSetAdminPassword}
+                                                disabled={isUpdatingAdminPassword}
+                                            >
+                                                {isUpdatingAdminPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                {isUpdatingAdminPassword ? "Updating..." : "Set Admin Password"}
+                                            </Button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>

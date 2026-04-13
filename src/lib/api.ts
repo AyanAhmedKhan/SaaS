@@ -814,6 +814,10 @@ export async function updateInstitute(id: string, data: Partial<Institute>) {
   return api.put<{ institute: Institute }>(`/institutes/${id}`, data);
 }
 
+export async function setInstituteAdminPassword(instituteId: string, adminId: string, newPassword: string) {
+  return api.put(`/institutes/${instituteId}/admins/${adminId}/password`, { newPassword });
+}
+
 // ═══════════════════════════════════════════
 // SUBSCRIPTION PLANS API
 // ═══════════════════════════════════════════

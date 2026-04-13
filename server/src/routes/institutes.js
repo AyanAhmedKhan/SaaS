@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import { query, getClient } from '../db/connection.js';
 import { authenticate, authorize, logAudit } from '../middleware/auth.js';
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
@@ -61,6 +62,18 @@ router.get('/:id', authenticate, asyncHandler(async (req, res) => {
         query(`SELECT COUNT(*) FROM classes c JOIN academic_years ay ON c.academic_year_id = ay.id WHERE c.institute_id = $1 AND ay.is_current = true`, [rows[0].id]),
     ]);
 
+    let admins = [];
+    if (req.user.role === 'super_admin') {
+        const adminResult = await query(
+            `SELECT id, name, email, is_active, created_at
+             FROM users
+             WHERE institute_id = $1 AND role = 'institute_admin'
+             ORDER BY created_at ASC`,
+            [rows[0].id]
+        );
+        admins = adminResult.rows;
+    }
+
     res.json({
         success: true,
         data: {
@@ -72,7 +85,60 @@ router.get('/:id', authenticate, asyncHandler(async (req, res) => {
                     totalClasses: parseInt(classesCount.rows[0].count),
                 },
             },
+            admins,
         },
+    });
+}));
+
+// ── PUT /api/institutes/:id/admins/:adminId/password – Set institute admin password (super_admin) ──
+router.put('/:id/admins/:adminId/password', authenticate, authorize('super_admin'), asyncHandler(async (req, res) => {
+    const { id, adminId } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || typeof newPassword !== 'string') {
+        throw new AppError('New password is required', 400);
+    }
+
+    if (newPassword.length < 8) {
+        throw new AppError('Password must be at least 8 characters', 400);
+    }
+
+    const instituteResult = await query('SELECT id FROM institutes WHERE id = $1', [id]);
+    if (!instituteResult.rows[0]) {
+        throw new AppError('Institute not found', 404);
+    }
+
+    const adminResult = await query(
+        `SELECT id, institute_id, name, email, role
+         FROM users
+         WHERE id = $1 AND institute_id = $2 AND role = 'institute_admin'`,
+        [adminId, id]
+    );
+
+    if (!adminResult.rows[0]) {
+        throw new AppError('Institute admin not found', 404);
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [passwordHash, adminId]);
+
+    await logAudit({
+        instituteId: id,
+        userId: req.user.id,
+        action: 'set_password',
+        entityType: 'user',
+        entityId: adminId,
+        newValues: {
+            role: 'institute_admin',
+            email: adminResult.rows[0].email,
+            changedBy: 'super_admin',
+        },
+        req,
+    });
+
+    res.json({
+        success: true,
+        message: `Password updated for ${adminResult.rows[0].email}`,
     });
 }));
 
