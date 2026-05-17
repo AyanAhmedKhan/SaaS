@@ -46,11 +46,6 @@ export async function createSchema() {
         UNIQUE(email, institute_id)
       );
 
-      -- Update users_role_check if the table already existed
-      UPDATE users SET role = 'faculty' WHERE role IN ('class_teacher', 'subject_teacher');
-      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-      ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('super_admin','institute_admin','faculty','student','parent'));
-
       -- Academic years
       CREATE TABLE IF NOT EXISTS academic_years (
         id TEXT PRIMARY KEY,
@@ -196,6 +191,20 @@ export async function createSchema() {
         ) THEN
           ALTER TABLE students ADD COLUMN ai_plan_enabled BOOLEAN DEFAULT false;
         END IF;
+      END $$;
+    `);
+
+    // ── SAFE MIGRATION: rename legacy roles → 'faculty' ─────────────────
+    // This is a no-op on fresh DBs (no rows to update, constraint already correct).
+    // On upgraded DBs it migrates 'class_teacher'/'subject_teacher' → 'faculty'.
+    await query(`
+      DO $$ BEGIN
+        UPDATE users SET role = 'faculty' WHERE role IN ('class_teacher', 'subject_teacher');
+        ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+        ALTER TABLE users ADD CONSTRAINT users_role_check
+          CHECK (role IN ('super_admin','institute_admin','faculty','student','parent'));
+      EXCEPTION WHEN others THEN
+        NULL; -- Ignore on fresh schema (constraint already correct)
       END $$;
     `);
 
