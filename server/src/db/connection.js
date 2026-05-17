@@ -34,7 +34,8 @@ export function getPool() {
         pool = new Pool(connectionConfig);
 
         pool.on('connect', () => {
-            console.log('[DB] New client connected to PostgreSQL (Local)');
+            const source = process.env.DATABASE_URL ? 'NeonDB (cloud)' : 'Local PostgreSQL';
+            console.log(`[DB] New client connected to ${source}`);
         });
 
         pool.on('error', (err) => {
